@@ -1,0 +1,32 @@
+{
+  "name": "@abf/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "ABF command-line interface",
+  "license": "MIT",
+  "bin": {
+    "abf": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@abf/core": "workspace:*",
+    "chalk": "^5.4.0",
+    "commander": "^13.1.0",
+    "open": "^11.0.0",
+    "ora": "^8.2.0",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.0"
+  }
+}

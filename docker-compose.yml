@@ -1,0 +1,17 @@
+# ABF Framework — development compose
+# For running a USER PROJECT with Docker, see the docker-compose.yml in your generated project.
+services:
+  abf-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./packages:/app/packages
+    command: ["dev"]
+    environment:
+      - ANTHROPIC_API_KEY
+      - OPENAI_API_KEY
+      - OLLAMA_BASE_URL
