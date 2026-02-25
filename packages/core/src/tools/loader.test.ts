@@ -3,6 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createBuiltinTools, loadToolConfigs } from './loader.js';
+import type { BuiltinToolContext } from './builtin/context.js';
+
+const mockCtx = {
+	vault: { get: async () => undefined, set: async () => {}, delete: async () => {}, list: async () => [] },
+	projectRoot: '/tmp/test',
+	messagingPlugins: [],
+} satisfies BuiltinToolContext;
 
 describe('loadToolConfigs', () => {
 	let tempDir: string;
@@ -96,13 +103,13 @@ parameters:
 
 describe('createBuiltinTools', () => {
 	it('includes web-search stub', () => {
-		const tools = createBuiltinTools();
+		const tools = createBuiltinTools(mockCtx);
 		const webSearch = tools.find((t) => t.definition.id === 'web-search');
 		expect(webSearch).toBeDefined();
 	});
 
 	it('web-search returns stub result', async () => {
-		const tools = createBuiltinTools();
+		const tools = createBuiltinTools(mockCtx);
 		const webSearch = tools.find((t) => t.definition.id === 'web-search')!;
 		const result = await webSearch.execute({ query: 'test' });
 		expect(result.ok).toBe(true);

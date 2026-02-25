@@ -76,6 +76,7 @@ export { FilesystemCredentialVault } from './credentials/index.js';
 
 // ─── Tools ────────────────────────────────────────────────────────────
 export { ToolRegistry, BasicToolSandbox, loadToolConfigs, createBuiltinTools, MCPClient, MCPToolAdapter, loadMCPTools } from './tools/index.js';
+export type { BuiltinToolContext } from './tools/index.js';
 export type { MCPServerConfig, MCPServersFile } from './schemas/mcp-servers.schema.js';
 
 // ─── Messaging ────────────────────────────────────────────────────

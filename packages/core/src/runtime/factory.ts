@@ -82,18 +82,25 @@ export async function createRuntime(
 	const toolRegistry = new ToolRegistry();
 	const toolSandbox = new BasicToolSandbox();
 
+	// Load messaging plugins from interfaces/ dir (needed by tool context)
+	const { loadMessagingRouter } = await import('../messaging/loader.js');
+	const messagingRouter = await loadMessagingRouter(join(projectRoot, 'interfaces'));
+
+	// Build tool context with all dependencies
+	const toolContext: import('../tools/builtin/context.js').BuiltinToolContext = {
+		vault,
+		projectRoot,
+		messagingPlugins: messagingRouter.pluginEntries,
+	};
+
 	// Register built-in tools
-	for (const tool of createBuiltinTools()) {
+	for (const tool of createBuiltinTools(toolContext)) {
 		toolRegistry.register(tool);
 	}
 
 	// Load MCP tools (if mcp-servers.yaml exists)
 	const { loadMCPTools } = await import('../tools/mcp/loader.js');
 	await loadMCPTools(join(projectRoot, config.toolsDir), toolRegistry);
-
-	// Load messaging plugins from interfaces/ dir
-	const { loadMessagingRouter } = await import('../messaging/loader.js');
-	const messagingRouter = await loadMessagingRouter(join(projectRoot, 'interfaces'));
 
 	// 8. Provider registry — register all available providers
 	const providerRegistry = new ProviderRegistry();
