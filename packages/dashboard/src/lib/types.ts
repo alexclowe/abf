@@ -282,3 +282,143 @@ export interface WorkflowRun {
   completedAt?: string;
   steps: WorkflowStepResult[];
 }
+
+// ── Seed-to-Company Types ──────────────────────────────────────────────
+// Mirror of core/src/seed/types.ts — independent definitions for the dashboard.
+
+export interface CompanyInfo {
+  name: string;
+  description: string;
+  mission?: string;
+  targetCustomer?: string;
+  revenueModel?: string;
+  industry?: string;
+  stage?: 'idea' | 'pre-launch' | 'launched' | 'growing' | 'established';
+}
+
+export interface TriggerPlan {
+  type: 'cron' | 'manual' | 'message' | 'webhook' | 'event' | 'heartbeat';
+  schedule?: string;
+  interval?: number;
+  task: string;
+  from?: string;
+}
+
+export interface KPIPlan {
+  metric: string;
+  target: string;
+  review: 'daily' | 'weekly' | 'monthly';
+}
+
+export interface BoundsPlan {
+  allowedActions: string[];
+  forbiddenActions: string[];
+  maxCostPerSession: string;
+  requiresApproval: string[];
+}
+
+export interface AgentPlan {
+  name: string;
+  displayName: string;
+  role: string;
+  description: string;
+  charter: string;
+  provider: string;
+  model: string;
+  temperature: number;
+  team: string;
+  reportsTo: string | null;
+  tools: string[];
+  triggers: TriggerPlan[];
+  kpis: KPIPlan[];
+  behavioralBounds: BoundsPlan;
+}
+
+export interface TeamPlan {
+  name: string;
+  displayName: string;
+  description: string;
+  orchestrator: string;
+  members: string[];
+}
+
+export interface WorkflowStepPlan {
+  id: string;
+  agent: string;
+  task: string;
+  dependsOn?: string[];
+}
+
+export interface WorkflowPlan {
+  name: string;
+  displayName: string;
+  description: string;
+  steps: WorkflowStepPlan[];
+  timeout: number;
+  onFailure: 'stop' | 'skip' | 'escalate';
+}
+
+export interface EscalationRule {
+  condition: string;
+  target: 'human' | string;
+  description: string;
+}
+
+export interface ToolGap {
+  capability: string;
+  mentionedIn: string;
+  suggestion: string;
+  priority: 'required' | 'important' | 'nice-to-have';
+}
+
+export interface CompanyPlan {
+  company: CompanyInfo;
+  agents: AgentPlan[];
+  teams: TeamPlan[];
+  knowledge: Record<string, string>;
+  workflows: WorkflowPlan[];
+  escalationRules: EscalationRule[];
+  toolGaps: ToolGap[];
+  generatedAt: string;
+  seedVersion: number;
+  seedText: string;
+}
+
+export interface InterviewAnswer {
+  question: string;
+  answer: string;
+  timestamp: string;
+}
+
+export interface InterviewSession {
+  id: string;
+  status: 'active' | 'completed' | 'abandoned';
+  companyType: 'new' | 'existing';
+  answers: InterviewAnswer[];
+  seedText?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InterviewStep {
+  question: string | null;
+  progress: string;
+  complete: boolean;
+  seedText?: string;
+}
+
+export interface SeedUploadResponse {
+  text: string;
+  wordCount: number;
+}
+
+export interface SeedApplyResponse {
+  success: boolean;
+  filesWritten: string[];
+  agents: { id: string; name: string; displayName: string; role: string }[];
+}
+
+export interface SeedInterviewStartResponse {
+  sessionId: string;
+  step: InterviewStep;
+}

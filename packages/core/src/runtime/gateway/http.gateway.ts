@@ -22,6 +22,7 @@ import type { IApprovalStore } from '../../types/approval.js';
 import type { ICredentialVault } from '../../credentials/vault.js';
 import type { IGateway, IDispatcher, IScheduler } from '../interfaces.js';
 import { registerAuthRoutes } from './auth.routes.js';
+import { registerSeedRoutes } from './seed.routes.js';
 import { registerSetupRoutes } from './setup.routes.js';
 
 /** Timing-safe API key comparison to prevent timing attacks. */
@@ -128,6 +129,11 @@ export class HttpGateway implements IGateway {
 		// -- Setup routes (project creation from wizard) --------------------------
 		if (deps.scheduler) {
 			registerSetupRoutes(app, { ...deps, scheduler: deps.scheduler });
+		}
+
+		// -- Seed routes (seed-to-company pipeline) --------------------------------
+		if (deps.scheduler) {
+			registerSeedRoutes(app, { ...deps, scheduler: deps.scheduler });
 		}
 
 		// -- Health ---------------------------------------------------------------

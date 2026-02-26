@@ -1,6 +1,10 @@
+> **Deprecation Notice**: CiteRank has been superseded by PickleCoachAI as ABF's reference implementation. PickleCoachAI is generated automatically via the Seed-to-Company pipeline (not hand-built), which better demonstrates ABF's capabilities. This document is preserved for historical reference. The tools described here (web-search, knowledge-search, send-message, database-query, database-write, browse, reschedule) are all implemented as built-in ABF tools available to any agent.
+
+---
+
 # CiteRank Tools Spec
 
-**Status:** Draft
+**Status:** Superseded
 **Author:** Alex + Claude
 **Date:** 2026-02-25
 

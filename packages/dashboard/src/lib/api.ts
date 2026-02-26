@@ -15,6 +15,12 @@ import type {
   ProviderAuthStatus,
   OllamaDetectResponse,
   ConnectKeyResponse,
+  CompanyPlan,
+  InterviewStep,
+  InterviewSession,
+  SeedUploadResponse,
+  SeedApplyResponse,
+  SeedInterviewStartResponse,
 } from './types';
 
 const BASE = process.env.NEXT_PUBLIC_ABF_API_URL ?? 'http://localhost:3000';
@@ -154,6 +160,23 @@ export const api = {
   projects: {
     create: (body: { template: string; projectName: string; provider: string; apiKey?: string }) =>
       post<{ success: boolean; agents: AgentConfig[] }>('/api/projects', body),
+  },
+
+  seed: {
+    upload: (body: { text?: string; format?: string }) =>
+      post<SeedUploadResponse>('/api/seed/upload', body),
+    analyze: (body: { seedText: string; provider?: string; model?: string }) =>
+      post<CompanyPlan>('/api/seed/analyze', body),
+    apply: (body: { plan: CompanyPlan; provider?: string; model?: string }) =>
+      post<SeedApplyResponse>('/api/seed/apply', body),
+    interviewStart: (body: { companyType: 'new' | 'existing'; provider?: string; model?: string }) =>
+      post<SeedInterviewStartResponse>('/api/seed/interview/start', body),
+    interviewRespond: (sessionId: string, answer: string) =>
+      post<InterviewStep>(`/api/seed/interview/${sessionId}/respond`, { answer }),
+    interviewGet: (sessionId: string) =>
+      get<InterviewSession>(`/api/seed/interview/${sessionId}`),
+    reanalyze: (body: { originalSeedText: string; updatedSeedText: string; currentPlan: CompanyPlan; provider?: string; model?: string }) =>
+      post<CompanyPlan>('/api/seed/reanalyze', body),
   },
 
   kpis: {

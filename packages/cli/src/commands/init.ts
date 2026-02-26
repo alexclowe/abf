@@ -1,9 +1,17 @@
 /**
  * abf init — initialize a new ABF project.
+ *
+ * Supports two modes:
+ *   1. Template-based: `abf init --template solo-founder`
+ *   2. Seed-based:     `abf init --seed ./my-plan.md`
+ *
+ * When --seed is provided, the template flag is ignored and the
+ * seed-to-company pipeline runs instead (parse -> analyze -> apply).
  */
 
+import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import chalk from 'chalk';
 import ora from 'ora';
 import { stringify } from 'yaml';
@@ -11,9 +19,270 @@ import { stringify } from 'yaml';
 interface InitOptions {
 	template: string;
 	name?: string | undefined;
+	seed?: string | undefined;
 }
 
 export async function initCommand(options: InitOptions): Promise<void> {
+	// ── Seed-based init ──────────────────────────────────────────────
+	if (options.seed) {
+		await initFromSeed(options);
+		return;
+	}
+
+	// ── Template-based init (existing behavior) ──────────────────────
+	await initFromTemplate(options);
+}
+
+// ─── Seed-based project generation ───────────────────────────────────
+
+async function initFromSeed(options: InitOptions): Promise<void> {
+	const seedPath = resolve(process.cwd(), options.seed!);
+
+	// 1. Validate the seed file exists
+	if (!existsSync(seedPath)) {
+		console.error(chalk.red(`\n  Error: Seed file not found: ${seedPath}\n`));
+		process.exit(1);
+	}
+
+	// 2. Check format is supported
+	const { detectFormat } = await import('@abf/core');
+	const format = detectFormat(seedPath);
+	if (!format) {
+		console.error(
+			chalk.red(
+				`\n  Error: Unsupported seed document format. Supported: .docx, .pdf, .txt, .md\n`,
+			),
+		);
+		process.exit(1);
+	}
+
+	// 3. Parse the seed document
+	const parseSpinner = ora('Reading seed document...').start();
+	let seedText: string;
+	try {
+		const { extractText } = await import('@abf/core');
+		seedText = await extractText(seedPath);
+	} catch (err) {
+		parseSpinner.fail(chalk.red('Failed to read seed document'));
+		console.error(err instanceof Error ? err.message : err);
+		process.exit(1);
+	}
+
+	const wordCount = seedText.split(/\s+/).filter(Boolean).length;
+	parseSpinner.succeed(chalk.green(`Seed document loaded (${wordCount.toLocaleString()} words)`));
+
+	// Show a preview
+	const preview = seedText.slice(0, 200).replace(/\n/g, ' ');
+	console.log(chalk.dim(`  ${preview}${seedText.length > 200 ? '...' : ''}`));
+	console.log();
+
+	// 4. Check for LLM provider
+	const { createVault, ProviderRegistry, AnthropicProvider, OpenAIProvider, OllamaProvider } =
+		await import('@abf/core');
+
+	let vault: import('@abf/core').ICredentialVault;
+	try {
+		vault = await createVault();
+	} catch {
+		// If vault creation fails, create a minimal fallback that only checks env vars
+		vault = {
+			async get(provider: string, key: string) {
+				const envKey = `${provider.toUpperCase()}_${key.toUpperCase().replace(/-/g, '_')}`;
+				return process.env[envKey] ?? undefined;
+			},
+			async set() {},
+			async delete() {},
+			async list() {
+				return [];
+			},
+		} as import('@abf/core').ICredentialVault;
+	}
+
+	const providerRegistry = new ProviderRegistry();
+	providerRegistry.register(new AnthropicProvider(vault));
+	providerRegistry.register(new OpenAIProvider(vault));
+	providerRegistry.register(new OllamaProvider(vault));
+
+	// Detect which provider to use
+	let providerId = 'anthropic';
+	let model = 'claude-sonnet-4-5';
+
+	const hasAnthropicKey =
+		!!process.env['ANTHROPIC_API_KEY'] || !!(await vault.get('anthropic', 'api_key'));
+	const hasOpenAIKey =
+		!!process.env['OPENAI_API_KEY'] || !!(await vault.get('openai', 'api_key'));
+
+	if (hasAnthropicKey) {
+		providerId = 'anthropic';
+		model = 'claude-sonnet-4-5';
+	} else if (hasOpenAIKey) {
+		providerId = 'openai';
+		model = 'gpt-4o';
+	} else {
+		console.error(
+			chalk.red(
+				`\n  Error: No LLM provider configured. Run ${chalk.cyan('abf auth anthropic')} first, or set ANTHROPIC_API_KEY.\n`,
+			),
+		);
+		process.exit(1);
+	}
+
+	// 5. Analyze the seed document with LLM
+	const analyzeSpinner = ora(
+		`Analyzing seed document with ${providerId}/${model}...`,
+	).start();
+
+	let plan: import('@abf/core').CompanyPlan;
+	try {
+		const { analyzeSeedDoc } = await import('@abf/core');
+		plan = await analyzeSeedDoc(providerRegistry, {
+			provider: providerId,
+			model,
+			seedText,
+		});
+	} catch (err) {
+		analyzeSpinner.fail(chalk.red('Failed to analyze seed document'));
+		console.error(err instanceof Error ? err.message : err);
+		process.exit(1);
+	}
+
+	analyzeSpinner.succeed(chalk.green('Company plan generated'));
+	console.log();
+
+	// 6. Show plan summary
+	const companyName = plan.company.name;
+	const agentNames = plan.agents.map((a) => a.name).join(', ');
+	const teamCount = plan.teams.length;
+	const knowledgeCount = Object.keys(plan.knowledge).length;
+	const toolGapCount = plan.toolGaps.length;
+
+	console.log(chalk.bold(`  Company: ${companyName}`));
+	console.log(
+		`  Agents: ${plan.agents.length} (${agentNames})`,
+	);
+	console.log(
+		`  Teams: ${teamCount} (${plan.teams.map((t) => t.name).join(', ')})`,
+	);
+	console.log(`  Knowledge files: ${knowledgeCount}`);
+	if (toolGapCount > 0) {
+		console.log(`  Tool gaps: ${toolGapCount} (${plan.toolGaps.map((g) => g.capability).join(', ')})`);
+	}
+	console.log();
+
+	// 7. Determine project name
+	const projectName =
+		options.name ??
+		(companyName
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '-')
+			.replace(/^-|-$/g, '') || 'my-business');
+
+	const root = join(process.cwd(), projectName);
+
+	// 8. Apply the plan
+	const applySpinner = ora(`Creating project: ${projectName}`).start();
+
+	try {
+		const { applyCompanyPlan } = await import('@abf/core');
+		await applyCompanyPlan(plan, root, providerId, model);
+
+		// Generate abf.config.yaml (applyCompanyPlan doesn't create this)
+		const config = {
+			name: projectName,
+			version: '0.1.0',
+			description: `${companyName} — powered by ABF`,
+			storage: { backend: 'filesystem' },
+			bus: { backend: 'in-process' },
+			security: {
+				injection_detection: true,
+				bounds_enforcement: true,
+				audit_logging: true,
+			},
+			gateway: {
+				enabled: true,
+				port: 3000,
+			},
+			logging: {
+				level: 'info',
+				format: 'pretty',
+			},
+		};
+		await writeFile(join(root, 'abf.config.yaml'), stringify(config), 'utf-8');
+
+		// Write tool-gaps.md if there are gaps
+		if (plan.toolGaps.length > 0) {
+			const gapLines = plan.toolGaps.map(
+				(g) =>
+					`### ${g.capability}\n- **Priority**: ${g.priority}\n- **Mentioned in**: ${g.mentionedIn}\n- **Suggestion**: ${g.suggestion}\n`,
+			);
+			const toolGapsMd = `# Tool Gaps\n\nCapabilities mentioned in the seed document that need custom tools or MCP servers.\n\n${gapLines.join('\n')}`;
+			await mkdir(join(root, 'knowledge'), { recursive: true });
+			await writeFile(join(root, 'knowledge', 'tool-gaps.md'), toolGapsMd, 'utf-8');
+		}
+	} catch (err) {
+		applySpinner.fail(chalk.red('Failed to create project'));
+		console.error(err instanceof Error ? err.message : err);
+		process.exit(1);
+	}
+
+	applySpinner.succeed(chalk.green(`Project created: ${root}`));
+	console.log();
+
+	// 9. Show success summary
+	console.log(chalk.bold(`  ${companyName} — powered by ABF`));
+	console.log();
+
+	// Group agents by team
+	const teamAgentMap = new Map<string, string[]>();
+	for (const agent of plan.agents) {
+		const teamName = agent.team || 'unassigned';
+		const existing = teamAgentMap.get(teamName) ?? [];
+		existing.push(agent.name);
+		teamAgentMap.set(teamName, existing);
+	}
+
+	console.log(
+		`  ${plan.agents.length} agents across ${plan.teams.length} team${plan.teams.length === 1 ? '' : 's'}:`,
+	);
+	for (const team of plan.teams) {
+		const members = teamAgentMap.get(team.name) ?? [];
+		const orchestratorMark = (name: string) =>
+			name === team.orchestrator ? `${name} (orchestrator)` : name;
+		console.log(
+			`    ${team.name}: ${members.map(orchestratorMark).join(', ')}`,
+		);
+	}
+	console.log();
+
+	if (plan.toolGaps.length > 0) {
+		console.log(
+			`  ${plan.toolGaps.length} tool gap${plan.toolGaps.length === 1 ? '' : 's'} identified (see knowledge/tool-gaps.md):`,
+		);
+		for (const gap of plan.toolGaps) {
+			console.log(`    ${chalk.dim('\u2022')} ${gap.capability} (${gap.priority})`);
+		}
+		console.log();
+	}
+
+	console.log(chalk.dim('  Next steps:'));
+	console.log(`    ${chalk.cyan('cd')} ${projectName}`);
+	if (!hasAnthropicKey && !hasOpenAIKey) {
+		console.log(
+			`    ${chalk.cyan('abf auth anthropic')}          Configure your LLM`,
+		);
+	}
+	console.log(
+		`    ${chalk.cyan('abf status')}                  Verify agents loaded`,
+	);
+	console.log(
+		`    ${chalk.cyan('abf dev')}                     Start the runtime`,
+	);
+	console.log();
+}
+
+// ─── Template-based project generation (existing behavior) ───────────
+
+async function initFromTemplate(options: InitOptions): Promise<void> {
 	const projectName = options.name ?? 'my-business';
 	const spinner = ora(`Creating ABF project: ${projectName}`).start();
 

@@ -65,6 +65,55 @@ Move into the project directory:
 cd my-business
 ```
 
+### Alternative: Create from a Seed Document
+
+If you have a business plan, pitch deck, or company description document, ABF can generate a custom agent team tailored to your business:
+
+```bash
+abf init --seed ./my-business-plan.md
+```
+
+ABF accepts `.docx`, `.pdf`, `.txt`, and `.md` files. The pipeline:
+
+1. **Parses** the document (extracts text from any format)
+2. **Analyzes** it with an LLM to design the optimal agent team
+3. **Generates** agents, teams, knowledge base, workflows, and project structure
+4. **Identifies tool gaps** -- capabilities your business needs that require custom tools
+
+Example output:
+
+```
+Seed document loaded (1,847 words)
+  PickleCoachAI is a digital coaching platform that uses AI...
+
+Analyzing seed document with anthropic/claude-sonnet-4-5...
+Company plan generated
+
+  Company: PickleCoachAI
+  Agents: 7 (head-coach, scout, content-creator, community-manager, performance-analyst, support-agent, architect)
+  Teams: 2 (coaching, operations)
+  Knowledge files: 4
+  Tool gaps: 2 (Video analysis platform, Payment processing integration)
+
+Creating project: picklecoachai
+Project created: /home/user/picklecoachai
+
+  7 agents across 2 teams:
+    coaching: head-coach (orchestrator), scout, content-creator, community-manager
+    operations: performance-analyst, support-agent, architect
+
+  2 tool gaps identified (see knowledge/tool-gaps.md):
+    • Video analysis platform (required)
+    • Payment processing integration (important)
+
+  Next steps:
+    cd picklecoachai
+    abf status                  Verify agents loaded
+    abf dev                     Start the runtime
+```
+
+The generated project includes a **Company Architect** meta-agent that runs weekly self-assessments, comparing your seed document against the current agent team to identify coverage gaps and recommend improvements.
+
 ---
 
 ## 3. Explore the Project Structure
@@ -202,6 +251,8 @@ You will see the ABF Dashboard with:
 - **Teams** -- The "founders" team with Compass as orchestrator
 
 Click on an agent to see its details: charter, configuration, KPIs, and an inbox form to send tasks.
+
+If you created your project from a seed document, the Dashboard shows all your generated agents with their auto-created charters, KPIs, and team assignments.
 
 ---
 
@@ -358,6 +409,49 @@ After creating the agent, edit the YAML file to customize its charter, tools, an
 
 ---
 
+## 10b. Use the Interactive Interview
+
+If you don't have a business plan document, ABF can interview you to build one. From the Dashboard setup wizard:
+
+1. Choose your AI provider and enter your API key
+2. Select **"Start a new company from an idea"**
+3. Answer 8-12 questions about your business -- vision, customers, revenue model, operations, metrics, brand voice
+4. Review the generated company plan -- agents, teams, knowledge, tool gaps
+5. Click **Create Project**
+
+The interview generates a comprehensive seed document (800-2000 words) that feeds into the same analyzer pipeline as `--seed`. You can also access the interview via the API:
+
+```bash
+# Start an interview
+curl -X POST http://localhost:3000/api/seed/interview/start \
+  -H 'Content-Type: application/json' \
+  -d '{"companyType": "new"}'
+
+# Answer questions
+curl -X POST http://localhost:3000/api/seed/interview/{sessionId}/respond \
+  -H 'Content-Type: application/json' \
+  -d '{"answer": "We are building a SaaS platform for..."}'
+```
+
+### Re-analyzing After Changes
+
+If your business plan evolves, update your seed document and re-analyze:
+
+```bash
+# Via the API
+curl -X POST http://localhost:3000/api/seed/reanalyze \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "originalSeedText": "...",
+    "updatedSeedText": "...",
+    "currentPlan": { ... }
+  }'
+```
+
+The re-analyzer focuses on the delta -- it preserves existing agents and only adds, removes, or modifies what changed. The seed version number increments with each re-analysis.
+
+---
+
 ## 11. Next Steps
 
 ### Add a workflow
@@ -445,3 +539,4 @@ This opens the Dashboard's setup wizard in your browser, where you can configure
 - [CLAUDE.md](../CLAUDE.md) -- Complete framework documentation
 - [Deployment Guide](deployment.md) -- Production deployment instructions
 - [CLI help](https://github.com/your-org/abf) -- Run `abf --help` for all commands
+- [Seed-to-Company Pipeline](../CLAUDE.md#seed-to-company-pipeline) -- How the analyzer, interview engine, and applicator work
