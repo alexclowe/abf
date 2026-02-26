@@ -20,8 +20,9 @@ import type { IAuditStore } from '../../types/security.js';
 import { createActivationId, toISOTimestamp } from '../../util/id.js';
 import type { IApprovalStore } from '../../types/approval.js';
 import type { ICredentialVault } from '../../credentials/vault.js';
-import type { IGateway, IDispatcher } from '../interfaces.js';
+import type { IGateway, IDispatcher, IScheduler } from '../interfaces.js';
 import { registerAuthRoutes } from './auth.routes.js';
+import { registerSetupRoutes } from './setup.routes.js';
 
 /** Timing-safe API key comparison to prevent timing attacks. */
 function isValidApiKey(received: string | undefined, required: string): boolean {
@@ -47,6 +48,7 @@ export interface GatewayDeps {
 	readonly inbox?: import('../../types/inbox.js').IInbox | undefined;
 	readonly metricsCollector?: import('../../metrics/collector.js').MetricsCollector | undefined;
 	readonly vault?: ICredentialVault | undefined;
+	readonly scheduler?: IScheduler | undefined;
 }
 
 /** @deprecated Use GatewayDeps instead. Kept for backwards compatibility. */
@@ -121,6 +123,11 @@ export class HttpGateway implements IGateway {
 		// -- Auth routes ----------------------------------------------------------
 		if (deps.vault) {
 			registerAuthRoutes(app, { vault: deps.vault });
+		}
+
+		// -- Setup routes (project creation from wizard) --------------------------
+		if (deps.scheduler) {
+			registerSetupRoutes(app, { ...deps, scheduler: deps.scheduler });
 		}
 
 		// -- Health ---------------------------------------------------------------

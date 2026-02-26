@@ -219,6 +219,7 @@ export async function createRuntime(
 		inbox,
 		metricsCollector,
 		vault,
+		scheduler,
 	});
 
 	const components: RuntimeComponents = {
