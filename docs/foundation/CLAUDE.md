@@ -39,8 +39,20 @@ my-business/
 │   ├── agents/{name}/charter.md, history.md
 │   ├── decisions.md
 │   └── knowledge/
+├── knowledge/                    # Shared knowledge base (*.md files)
+│   ├── company.md
+│   ├── brand-voice.md
+│   └── seed.md                  # Original seed document (if created from seed)
+├── outputs/                      # Cross-agent session outputs
+│   └── {agentName}/
+├── datastore/                    # Business database
+│   ├── schemas/
+│   └── migrations/
 ├── workflows/                    # Multi-agent workflow definitions
 │   └── onboarding.workflow.yaml
+├── monitors/                     # External URL monitors
+│   └── *.monitor.yaml
+├── templates/messages/           # Message templates
 ├── logs/                         # Audit trail
 │   ├── bus/, sessions/, escalations/
 ├── interfaces/                   # Plugin configs (cli, dashboard, slack)
@@ -50,15 +62,15 @@ my-business/
 ## Agent Definition Format
 ```yaml
 name: scout
-display_name: Research & Analytics
-role: Citation Monitor
-description: Monitors AI search engine citations for client brands.
+display_name: Research Analyst
+role: Researcher
+description: Researches market trends, competitor activity, and industry news.
 provider: anthropic
 model: claude-sonnet-4-5
 temperature: 0.3
-team: product
-reports_to: atlas
-tools: [llm-orchestration, database, redis-cache, web-search]
+team: founders
+reports_to: compass
+tools: [web-search, knowledge-search, browse]
 triggers:
   - type: cron
     schedule: '0 */2 * * *'
@@ -79,8 +91,8 @@ kpis:
     target: 100%
     review: daily
 charter: |
-  # Scout — Citation Monitor
-  You are Scout, the Citation Monitor...
+  # Scout — Research Analyst
+  You are Scout, the Research Analyst...
 ```
 
 ## Runtime Architecture
@@ -170,6 +182,16 @@ Everything logged: sessions, tool calls, messages, memory writes, escalations, s
 ## Business Templates
 Templates are complete pre-configured agent teams: SaaS, Marketing Agency, E-Commerce, Content Studio, Consulting, Solo Founder, Custom. `abf init --template saas` generates full project.
 
+## Seed-to-Company Pipeline
+Three ways to create a project:
+1. **Template** — `abf init --template solo-founder` for pre-built teams
+2. **Seed document** — `abf init --seed ./plan.md` to generate agents from a business plan
+3. **Interactive interview** — Dashboard wizard asks 8-12 questions, generates a seed doc, then analyzes it
+
+Pipeline: Parse (docx/pdf/txt/md) → Analyze (LLM → CompanyPlan JSON) → Review (dashboard) → Apply (YAML files + knowledge + workflows)
+
+The analyzer produces: agents with charters, teams with orchestrators, knowledge base files, workflows, escalation rules, and tool gap analysis. A Company Architect meta-agent is auto-injected to run weekly coverage assessments against the seed document.
+
 ## Workflows
 Multi-agent coordination defined in YAML. Sequential, parallel, conditional steps. Timeouts and failure handling. Dashboard shows visual flowchart.
 
@@ -184,14 +206,15 @@ Multi-agent coordination defined in YAML. Sequential, parallel, conditional step
 - **Cloud**: `abf deploy --target railway` — one-click
 - **ABF Cloud**: Managed hosting (future)
 
-## Reference Implementation: CiteRank
-14 agents across 4 teams (Product, GTM, CS, Finance) running an AI citation tracking business. Agents: atlas, scout, lens, sage, sentinel, vanguard, hunter, herald, signal, bridge, anchor, dispatch, guardian, ledger. Plus 3 shared services: scribe, radar, clerk.
+## Reference Implementation: PickleCoachAI
+Generated from a seed document via the Seed-to-Company pipeline. PickleCoachAI is a digital pickleball coaching platform with AI agents handling coaching, content creation, community management, performance analytics, and customer support. The agent team was designed entirely by ABF's analyzer — not hand-built — demonstrating that any business described in a seed document can be turned into a running agent team.
 
 ## Build Phases
 1. **v0.1 Foundation**: Runtime (scheduler, dispatcher, sessions, bus), agent definitions, file memory, provider plugins (Anthropic/OpenAI/Ollama), CLI, basic Dashboard, 1 template
 2. **v0.2 Usability**: Setup wizard, full Dashboard, messaging plugins, MCP integration, more templates, Docker deploy
 3. **v0.3 Scale**: Redis/BullMQ bus, Postgres memory, visual workflow builder, KPI dashboards, cloud deploy
 4. **v1.0 Platform**: ABF Cloud, agent marketplace, workflow marketplace, mobile app, enterprise features
+5. **v0.4 Seed-to-Company**: Seed document parser (docx/pdf/txt/md), LLM-powered business analyzer, interactive interview engine, Company Architect meta-agent, tool gap analysis, seed versioning, 6-step dashboard setup wizard
 
 ## Key Design Decisions
 - Files are the underlying API (YAML, Markdown, JSON) — git-trackable, inspectable

@@ -284,6 +284,85 @@ Multi-agent coordination defined in YAML. Sequential, parallel, conditional step
 - Types: `MonitorDefinition`, `MonitorSnapshot`
 - Schema: `monitorYamlSchema`, `transformMonitorYaml()`
 
+## Seed-to-Company Pipeline
+
+The core differentiator: start a company from just an idea or a business plan document.
+
+### Architecture
+- `packages/core/src/seed/` — 6 modules: types, prompts, parser, analyzer, interview, apply
+- Pipeline: Parse → Analyze (LLM) → Review (dashboard) → Apply (generate files)
+- Intermediate representation: `CompanyPlan` (JSON) — agents, teams, knowledge, workflows, tool gaps, escalation rules
+
+### Parser (`parser.ts`)
+- `extractText(input, format?)` — accepts file path, Buffer, or raw text
+- Formats: `.docx` (mammoth), `.pdf` (pdf-parse v2), `.txt`, `.md`
+- Auto-detects file paths vs raw content via heuristic (< 1024 chars, no newlines, has extension)
+- Normalizes whitespace (collapses 3+ newlines to 2, trims)
+
+### Analyzer (`analyzer.ts`)
+- `analyzeSeedDoc(registry, options)` — sends seed text to LLM with `ANALYZER_SYSTEM_PROMPT`, returns `CompanyPlan`
+- `reanalyzeSeedDoc(registry, options)` — for seed versioning: compares original vs updated seed, increments `seedVersion`
+- Retries on JSON parse failure (up to `maxRetries`, default 2) — sends malformed response back to LLM for correction
+- Strips markdown code fences from LLM output before parsing
+- Validates required shape: company (name, description), non-empty agents[], non-empty teams[]
+
+### Interview Engine (`interview.ts`)
+- `InterviewEngine` class — stateful conversation engine for building seed docs through Q&A
+- `start(companyType)` → `{ sessionId, step }` — kicks off interview, returns first question
+- `respond(sessionId, answer)` → `InterviewStep` — processes answer, returns next question or completed seed doc
+- 8-12 questions covering vision, customer, revenue, operations, KPIs, brand voice, governance
+- Forces completion at MAX_QUESTIONS (15) with increased maxTokens (8192) for seed doc generation
+- Session expiry: 1 hour. States: active, completed, abandoned
+
+### Apply (`apply.ts`)
+- `applyCompanyPlan(plan, projectRoot, provider, model)` → writes all project files
+- Generates: agent YAML, team YAML, knowledge files, workflow YAML, `knowledge/seed.md` (with frontmatter), `memory/decisions.md`
+- `generateArchitectAgent()` — meta-agent injected automatically: weekly cron (Monday 10am), reviews seed doc for coverage gaps
+- Creates 14 project directories (agents/, teams/, knowledge/, workflows/, memory/, outputs/, logs/, tools/, etc.)
+- camelCase `AgentPlan` → snake_case YAML (matching ABF agent schema)
+
+### Prompts (`prompts.ts`)
+- `ANALYZER_SYSTEM_PROMPT` — detailed instructions for producing CompanyPlan JSON from seed text
+- `INTERVIEW_SYSTEM_PROMPT` — interview flow with question arc and JSON response format
+- `REANALYZE_SYSTEM_PROMPT` — delta-focused re-analysis of updated seed docs
+
+### Gateway Routes (`seed.routes.ts`)
+- `POST /api/seed/upload` — parse document (text or base64 binary), returns extracted text + word count
+- `POST /api/seed/analyze` — LLM analysis → CompanyPlan JSON
+- `POST /api/seed/apply` — write files + reload agents into runtime (scheduler + dispatcher)
+- `POST /api/seed/interview/start` — begin interview session
+- `POST /api/seed/interview/:sessionId/respond` — answer question
+- `GET /api/seed/interview/:sessionId` — get session state
+- `POST /api/seed/reanalyze` — re-analyze updated seed doc against existing plan
+
+### Dashboard Setup Wizard (6 steps)
+- Step 1: Choose AI provider (Anthropic, OpenAI, Ollama)
+- Step 2: API key configuration
+- Step 3: Company type (A: new idea/interview, B: has document, C: existing company, D: template)
+- Step 4: Depends on choice: A=InterviewChat, B/C=SeedDocumentInput (paste/upload), D=template selection
+- Step 5: Seed flow: PlanReview (agents, teams, knowledge, tool gaps, workflows). Template flow: project name + create
+- Step 6: Seed flow: CreatingStep (apply + results with file count, agent list)
+- Components: InterviewChat (chat UI), SeedDocumentInput (paste/upload tabs), PlanReview (expandable agent rows with charter preview, tool gaps with priority badges), CreatingStep (progress animation)
+
+### CLI `--seed` Flag
+- `abf init --seed ./plan.md` — parse, analyze, apply in one command
+- Auto-detects provider from vault/env vars (Anthropic > OpenAI)
+- Shows plan summary: company name, agents, teams, knowledge files, tool gaps
+- Generates `abf.config.yaml` + `knowledge/tool-gaps.md` (if gaps exist)
+- Derives project name from company name if `--name` not provided
+
+### Company Architect (Meta-Agent)
+- Auto-injected by `applyCompanyPlan()` into first team
+- Weekly self-assessment: reads `knowledge/seed.md`, evaluates agent coverage vs business needs
+- Reports: coverage score, gaps, redundancies, recommendations, priority actions
+- Cannot modify agents directly — only recommends changes for human approval
+- Tools: `knowledge-search`, `web-search`
+
+### Tool Gap Analysis
+- Analyzer compares seed doc capabilities against available ABF tools
+- `ToolGap`: capability, mentionedIn, suggestion, priority (required/important/nice-to-have)
+- Surfaced in CLI summary, dashboard PlanReview (colored priority badges), and `knowledge/tool-gaps.md`
+
 ## Key Design Decisions
 - Files are the underlying API (YAML, Markdown, JSON) — git-trackable, inspectable
 - Dashboard generates and manages files — operators never see them

@@ -20,11 +20,14 @@ ABF serves two users:
 - **Operators** (non-technical): Interact entirely through a web Dashboard. Setup wizard, visual agent management, approval queues, metrics, one-click deployment. Never touch a config file.
 - **Builders** (developers): Full filesystem access. YAML agent definitions, custom tools, MCP servers, TypeScript SDK. Use the Dashboard, CLI, and files together.
 
+ABF's Seed-to-Company pipeline is its most powerful feature: describe your business in plain English -- through an interactive interview or a document you've already written -- and ABF generates a complete AI agent team, knowledge base, workflows, and project structure. No configuration required. The pipeline analyzes your business plan, identifies the roles needed, creates agent charters, maps tools to business functions, and flags any capabilities that need custom development.
+
 ---
 
 ## Key Features
 
 - **Multi-agent teams** -- Agents with roles, tools, memory, and triggers organized into teams with orchestrators. Agents communicate through a typed message bus.
+- **Seed-to-Company pipeline** -- Describe your business idea and ABF generates a complete agent team. Upload a business plan (.docx, .pdf, .txt, .md), use the interactive interview, or paste text. The analyzer creates agents, teams, knowledge files, workflows, and identifies tool gaps. A Company Architect meta-agent runs weekly assessments of team coverage.
 - **Provider-agnostic LLM access** -- Anthropic, OpenAI, Google, Ollama, or any OpenAI-compatible endpoint. Mix providers per agent. Swap models with a config change.
 - **Dashboard for operators** -- 11-page Next.js dashboard with setup wizard, agent management, workflow visualization, approval queues, metrics, KPI tracking, and logs.
 - **YAML-as-code agent definitions** -- Every agent is a YAML file with an embedded charter. Git-trackable, diffable, reviewable.
@@ -58,6 +61,16 @@ abf dev
 ```
 
 See the full [Quickstart Guide](docs/quickstart.md) for a detailed walkthrough.
+
+### From a Business Plan
+
+Already have a business plan or seed document? Skip templates entirely:
+
+```bash
+abf init --seed ./my-business-plan.md
+```
+
+ABF will analyze your document with an LLM, generate the optimal agent team, and create a complete project -- agents, teams, knowledge base, and workflows.
 
 ---
 
@@ -196,6 +209,8 @@ ABF ships with three starter templates. Each generates a complete project with a
 | **SaaS Startup** | `--template saas` | 5 (atlas, scout, scribe, signal, herald) | 2 | Early-stage SaaS with product and go-to-market teams |
 | **Marketing Agency** | `--template marketing-agency` | 4 (director, strategist, copywriter, analyst) | 1 | Marketing agencies with campaign planning, copywriting, and analytics |
 
+For custom businesses, use the Seed-to-Company pipeline instead of templates. Write a business plan document (or let ABF interview you), and the analyzer generates a tailored agent team -- often more precise than a template because it's designed specifically for your business. See the [Quickstart Guide](docs/quickstart.md) for details.
+
 ---
 
 ## Dashboard
@@ -212,7 +227,7 @@ The ABF Dashboard is a Next.js application that provides a visual interface for 
 - **KPIs** -- Agent performance tracking
 - **Providers** -- LLM provider configuration
 - **Logs** -- Session and audit logs
-- **Setup** -- Visual setup wizard for first-time configuration
+- **Setup** -- 6-step setup wizard: choose provider, configure API key, select company type (new idea, existing document, existing company, or template), interview or upload, review generated plan, and create project
 
 The Dashboard connects to the Gateway API (default port 3000) and runs on port 3001 in development.
 
@@ -222,7 +237,7 @@ The Dashboard connects to the Gateway API (default port 3000) and runs on port 3
 
 | Command | Description |
 |---|---|
-| `abf init` | Initialize a new ABF project (with `--template` and `--name` options) |
+| `abf init` | Initialize a new ABF project (with `--template`, `--name`, or `--seed` options) |
 | `abf dev` | Start the runtime in development mode (with `--port` for gateway port) |
 | `abf run <agent>` | Manually trigger an agent (with `--task` option) |
 | `abf status` | Show agent and system status (with `--verbose` for details) |

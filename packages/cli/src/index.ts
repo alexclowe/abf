@@ -11,6 +11,7 @@ program
 	.description('Initialize a new ABF project')
 	.option('-t, --template <template>', 'Business template to use', 'custom')
 	.option('-n, --name <name>', 'Project name')
+	.option('--seed <path>', 'Path to a seed document (.docx, .pdf, .txt, .md) to generate agents from')
 	.action(async (options) => {
 		const { initCommand } = await import('./commands/init.js');
 		await initCommand(options);

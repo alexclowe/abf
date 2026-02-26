@@ -139,6 +139,38 @@ export {
 } from './security/index.js';
 export type { BoundsCheckInput, BoundsCheckResult } from './security/index.js';
 
+// ─── Seed-to-Company Pipeline ────────────────────────────────────────
+export {
+	extractText,
+	detectFormat,
+	applyCompanyPlan,
+	generateArchitectAgent,
+	ANALYZER_SYSTEM_PROMPT,
+	REANALYZE_SYSTEM_PROMPT,
+	INTERVIEW_SYSTEM_PROMPT,
+	analyzeSeedDoc,
+	reanalyzeSeedDoc,
+	InterviewEngine,
+} from './seed/index.js';
+export type {
+	CompanyPlan,
+	CompanyInfo,
+	AgentPlan as SeedAgentPlan,
+	TeamPlan,
+	WorkflowPlan,
+	ToolGap,
+	EscalationRule as SeedEscalationRule,
+	InterviewSession,
+	InterviewAnswer,
+	InterviewStep,
+	SeedMetadata,
+	TriggerPlan,
+	KPIPlan,
+	BoundsPlan,
+	WorkflowStepPlan,
+} from './seed/types.js';
+export type { AnalyzerOptions, ReanalyzeOptions } from './seed/analyzer.js';
+
 // ─── Utilities ────────────────────────────────────────────────────────
 export {
 	collectResults,
