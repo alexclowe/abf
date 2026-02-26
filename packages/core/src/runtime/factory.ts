@@ -24,6 +24,7 @@ import { OllamaProvider } from '../providers/adapters/ollama.js';
 import { OpenAIProvider } from '../providers/adapters/openai.js';
 import { ProviderRegistry } from '../providers/registry.js';
 import { FileAuditStore } from '../security/audit.js';
+import { InMemoryApprovalStore } from '../approval/store.js';
 import { createBuiltinTools } from '../tools/loader.js';
 import { BasicToolSandbox } from '../tools/sandbox.js';
 import { ToolRegistry } from '../tools/registry.js';
@@ -86,11 +87,50 @@ export async function createRuntime(
 	const { loadMessagingRouter } = await import('../messaging/loader.js');
 	const messagingRouter = await loadMessagingRouter(join(projectRoot, 'interfaces'));
 
+	// Approval store (in-memory, shared across tools and gateway)
+	const approvalStore = new InMemoryApprovalStore();
+
+	// Datastore (optional — only if configured)
+	let datastore: import('../types/datastore.js').IDatastore | undefined;
+	if (config.datastore) {
+		const { createDatastore, loadDatastoreSchemas, loadMigrationFiles, runMigrations } =
+			await import('../datastore/index.js');
+		const dsConfig = { ...config.datastore };
+		// Default sqlite path relative to project root
+		if (dsConfig.backend === 'sqlite' && !dsConfig.sqlitePath) {
+			(dsConfig as { sqlitePath?: string }).sqlitePath = join(projectRoot, 'data.db');
+		}
+		datastore = createDatastore(dsConfig);
+		const initResult = await datastore.initialize();
+		if (initResult.ok) {
+			// Apply schemas
+			const schemasDir = join(projectRoot, config.datastore.schemasDir ?? 'datastore/schemas');
+			const schemas = loadDatastoreSchemas(schemasDir);
+			if (schemas.length > 0) {
+				await datastore.applySchemas(schemas);
+			}
+			// Run migrations
+			const migrationsDir = join(projectRoot, config.datastore.migrationsDir ?? 'datastore/migrations');
+			const migrations = loadMigrationFiles(migrationsDir);
+			if (migrations.length > 0) {
+				await runMigrations(datastore, migrations);
+			}
+		}
+	}
+
+	// Load message templates (if templates/messages/ exists)
+	const { MessageTemplateRegistry } = await import('../messaging/templates.js');
+	const messageTemplates = new MessageTemplateRegistry();
+	messageTemplates.load(join(projectRoot, 'templates', 'messages'));
+
 	// Build tool context with all dependencies
 	const toolContext: import('../tools/builtin/context.js').BuiltinToolContext = {
 		vault,
 		projectRoot,
 		messagingPlugins: messagingRouter.pluginEntries,
+		approvalStore,
+		datastore,
+		messageTemplates,
 	};
 
 	// Register built-in tools
@@ -108,6 +148,14 @@ export async function createRuntime(
 	providerRegistry.register(new OpenAIProvider(vault));
 	providerRegistry.register(new OllamaProvider(vault));
 
+	// Outputs manager for cross-agent memory
+	const { OutputsManager } = await import('../memory/outputs.js');
+	const outputsManager = new OutputsManager(join(projectRoot, config.outputsDir));
+
+	// Agent inbox
+	const { InMemoryInbox } = await import('../inbox/store.js');
+	const inbox = new InMemoryInbox();
+
 	// 9. Session manager — receives shared agentsMap
 	const sessionManager = new SessionManager({
 		agents: agentsMap,
@@ -119,6 +167,9 @@ export async function createRuntime(
 		auditStore,
 		sessionTimeoutMs: config.runtime.sessionTimeoutMs,
 		messagingRouter,
+		knowledgeDir: join(projectRoot, config.knowledgeDir),
+		outputsManager,
+		inbox,
 	});
 
 	// 10. Dispatcher — receives shared agentsMap
@@ -137,6 +188,18 @@ export async function createRuntime(
 	const workflowRunner = new WorkflowRunner(dispatcher, agentsMap);
 	const workflowsDir = join(projectRoot, 'workflows');
 
+	// Monitor runner (external source monitoring)
+	const { MonitorRunner } = await import('../monitor/runner.js');
+	const monitorRunner = new MonitorRunner();
+	monitorRunner.loadMonitors(join(projectRoot, 'monitors'));
+	monitorRunner.start((activation) => {
+		void dispatcher.dispatch(activation);
+	});
+
+	// Metrics collector
+	const { MetricsCollector } = await import('../metrics/collector.js');
+	const metricsCollector = new MetricsCollector(dispatcher, agentsMap);
+
 	// 13. Gateway
 	const gateway = new HttpGateway(config.gateway, {
 		agentsMap,
@@ -149,6 +212,9 @@ export async function createRuntime(
 		teamsDir: join(projectRoot, config.teamsDir),
 		workflowsDir,
 		workflowRunner,
+		approvalStore,
+		inbox,
+		metricsCollector,
 	});
 
 	const components: RuntimeComponents = {

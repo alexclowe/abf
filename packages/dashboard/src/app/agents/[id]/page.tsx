@@ -17,6 +17,9 @@ export default function AgentDetailPage() {
   const [showRun, setShowRun] = useState(false);
   const [task, setTask] = useState('');
   const [runResult, setRunResult] = useState<string | null>(null);
+  const [inboxSubject, setInboxSubject] = useState('');
+  const [inboxBody, setInboxBody] = useState('');
+  const [inboxStatus, setInboxStatus] = useState<string | null>(null);
 
   async function handleRun() {
     if (!task.trim()) return;
@@ -187,6 +190,48 @@ export default function AgentDetailPage() {
               </div>
             </div>
           )}
+
+          {/* Send Task (Inbox) */}
+          <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
+            <h3 className="text-sm font-medium text-slate-400 mb-2">Send Task to Inbox</h3>
+            <div className="space-y-2">
+              <input
+                value={inboxSubject}
+                onChange={(e) => setInboxSubject(e.target.value)}
+                placeholder="Subject"
+                className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+              />
+              <textarea
+                value={inboxBody}
+                onChange={(e) => setInboxBody(e.target.value)}
+                placeholder="Task body..."
+                rows={3}
+                className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-sky-500 resize-none"
+              />
+              <div className="flex justify-between items-center">
+                {inboxStatus && (
+                  <span className="text-xs text-sky-400">{inboxStatus}</span>
+                )}
+                <button
+                  onClick={async () => {
+                    if (!inboxSubject.trim() || !inboxBody.trim()) return;
+                    try {
+                      await api.inbox.push(id, { subject: inboxSubject, body: inboxBody });
+                      setInboxStatus('Task queued');
+                      setInboxSubject('');
+                      setInboxBody('');
+                      setTimeout(() => setInboxStatus(null), 3000);
+                    } catch (e) {
+                      setInboxStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
+                    }
+                  }}
+                  className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors ml-auto"
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

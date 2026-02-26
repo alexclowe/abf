@@ -43,4 +43,6 @@ export const DEFAULT_CONFIG: AbfConfig = {
 	toolsDir: 'tools',
 	memoryDir: 'memory',
 	logsDir: 'logs',
+	knowledgeDir: 'knowledge',
+	outputsDir: 'outputs',
 };

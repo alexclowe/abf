@@ -59,6 +59,47 @@ export type {
 	GatewayHandlers,
 } from './runtime/index.js';
 
+// ─── Knowledge ────────────────────────────────────────────────────────
+export { loadKnowledgeFiles } from './knowledge/loader.js';
+
+// ─── Archetypes ───────────────────────────────────────────────────────
+export { BUILTIN_ARCHETYPES, listArchetypes, getArchetype } from './archetypes/index.js';
+export type { ArchetypeDefaults } from './archetypes/index.js';
+
+// ─── Approval ─────────────────────────────────────────────────────────
+export { InMemoryApprovalStore } from './approval/index.js';
+export type { ApprovalRequest, ApprovalStatus, IApprovalStore } from './types/approval.js';
+
+// ─── Datastore ────────────────────────────────────────────────────
+export { createDatastore, loadDatastoreSchemas, loadMigrationFiles, runMigrations } from './datastore/index.js';
+export type { IDatastore, DatastoreConfig, DatastoreSchema, DatastoreQueryResult, DatastoreWriteResult } from './types/datastore.js';
+export { datastoreSchemaYaml, transformDatastoreSchema } from './schemas/datastore.schema.js';
+
+// ─── Workflow Templates ───────────────────────────────────────────────
+export { BUILTIN_WORKFLOW_TEMPLATES, getWorkflowTemplate } from './workflows/templates.js';
+export type { WorkflowTemplateDefinition, WorkflowTemplateStep } from './workflows/templates.js';
+
+// ─── Message Templates ───────────────────────────────────────────────
+export { MessageTemplateRegistry } from './messaging/templates.js';
+export { messageTemplateSchema } from './schemas/message-template.schema.js';
+export type { MessageTemplate } from './schemas/message-template.schema.js';
+
+// ─── Inbox ────────────────────────────────────────────────────────────
+export { InMemoryInbox } from './inbox/index.js';
+export type { IInbox, InboxItem, InboxItemPriority, InboxItemSource } from './types/inbox.js';
+
+// ─── Outputs ──────────────────────────────────────────────────────────
+export { OutputsManager } from './memory/outputs.js';
+export type { OutputEntry } from './memory/outputs.js';
+
+// ─── Monitors ────────────────────────────────────────────────────────
+export { MonitorRunner } from './monitor/index.js';
+export type { MonitorDefinition, MonitorSnapshot } from './types/monitor.js';
+export { monitorYamlSchema, transformMonitorYaml } from './schemas/monitor.schema.js';
+
+// ─── Metrics ─────────────────────────────────────────────────────────
+export { MetricsCollector } from './metrics/collector.js';
+
 // ─── Memory ───────────────────────────────────────────────────────────
 export { FilesystemMemoryStore, PostgresMemoryStore } from './memory/index.js';
 

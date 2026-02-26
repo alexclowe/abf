@@ -39,8 +39,19 @@ my-business/
 │   ├── agents/{name}/charter.md, history.md
 │   ├── decisions.md
 │   └── knowledge/
+├── knowledge/                    # Shared knowledge base (Markdown files)
+│   ├── company.md
+│   └── brand-voice.md
+├── outputs/                      # Cross-agent session outputs
+│   └── {agentName}/             # Timestamped .md files per agent
+├── datastore/                    # Business database
+│   ├── schemas/                 # *.schema.yaml table definitions
+│   └── migrations/              # Numbered *.sql migrations
 ├── workflows/                    # Multi-agent workflow definitions
 │   └── onboarding.workflow.yaml
+├── monitors/                     # External URL monitors
+│   └── *.monitor.yaml
+├── templates/messages/           # Message templates (*.template.yaml)
 ├── logs/                         # Audit trail
 │   ├── bus/, sessions/, escalations/
 ├── interfaces/                   # Plugin configs (cli, dashboard, slack)
@@ -192,6 +203,86 @@ Multi-agent coordination defined in YAML. Sequential, parallel, conditional step
 2. **v0.2 Usability**: Setup wizard, full Dashboard, messaging plugins, MCP integration, more templates, Docker deploy
 3. **v0.3 Scale**: Redis/BullMQ bus, Postgres memory, visual workflow builder, KPI dashboards, cloud deploy
 4. **v1.0 Platform**: ABF Cloud, agent marketplace, workflow marketplace, mobile app, enterprise features
+
+## P0 Framework Features (Completed)
+
+### Knowledge Base
+- `knowledge/` directory at project root with `*.md` files
+- Session manager loads knowledge files and injects into prompt ("Knowledge Base" section)
+- `knowledge-search` tool searches both agent memory and project-level knowledge
+- Templates generate starter files: `company.md`, `brand-voice.md`
+- Config: `knowledge_dir` (default: `'knowledge'`)
+
+### Approval Queue
+- Tools with `requiresApproval` queue instead of executing directly
+- `InMemoryApprovalStore` (Map-based, capped at 1000 entries)
+- `send-message` tool checks approval store before sending
+- Gateway routes: `GET /api/approvals`, `GET /api/approvals/:id`, `POST /api/approvals/:id/approve`, `POST /api/approvals/:id/reject`
+- Dashboard page at `/approvals` with filter, approve/reject buttons
+- Types: `ApprovalRequest`, `ApprovalStatus`, `IApprovalStore`
+
+### Business Database (Datastore)
+- Config-driven database: `sqlite` (better-sqlite3) or `postgres` (pg)
+- Schema YAML files in `datastore/schemas/` — `*.schema.yaml` with name + columns
+- SQL migrations in `datastore/migrations/` — numbered `*.sql` files, tracked in `_migrations` table
+- `database-query` tool (SELECT only) and `database-write` tool (INSERT/UPDATE/DELETE — no DROP/ALTER)
+- `abf migrate` CLI command: loads config, creates datastore, applies schemas + migrations
+- Factory auto-initializes datastore on `abf dev` if configured
+- Config: `datastore.backend`, `datastore.connection_string`, `datastore.sqlite_path`, `datastore.schemas_dir`, `datastore.migrations_dir`
+
+## P1 Framework Features (Completed)
+
+### Role Archetypes
+- 10 built-in archetypes: researcher, writer, orchestrator, analyst, customer-support, developer, marketer, finance, monitor, generalist
+- Agent YAML `role_archetype` field merges defaults (explicit values win): temperature, tools, behavioral bounds, charter template
+- `abf agent add --name <name> --archetype <type> --team <team>` scaffolds new agents
+- Gateway route: `GET /api/archetypes` lists all archetypes
+- Charter templates use `{{name}}` placeholder, auto-expanded
+
+### Cross-Agent Memory (Outputs)
+- `OutputsManager` writes session outputs to `outputs/<agentName>/` as timestamped `.md` files
+- Session manager reads recent teammate outputs and injects into prompt ("Recent Teammate Outputs" section)
+- Output written automatically after each session in step 6
+- Config: `outputs_dir` (default: `'outputs'`)
+
+### Agent Inbox
+- `InMemoryInbox` — priority-sorted (urgent > high > normal > low), 500 items per agent cap
+- Session manager drains inbox at session start, includes in prompt
+- Gateway routes: `GET /api/agents/:id/inbox` (peek), `POST /api/agents/:id/inbox` (push task)
+- Dashboard "Send Task to Inbox" form on agent detail page
+- Types: `InboxItem`, `IInbox`, `InboxItemPriority`, `InboxItemSource`
+
+## P2 Framework Features (Completed)
+
+### Metrics Dashboard
+- `MetricsCollector` aggregates runtime stats from dispatcher (active sessions, escalations, agent states)
+- Gateway routes: `GET /api/metrics/runtime`, `GET /api/metrics/agents`, `GET /api/metrics/kpis`
+- Dashboard page at `/metrics` with gauge cards and agent states table
+- Auto-refreshes every 5 seconds
+
+### Communication Router (Message Templates)
+- `MessageTemplateRegistry` loads `*.template.yaml` from `templates/messages/`
+- Templates use `{{variable}}` syntax, resolved at send time
+- `send-message` tool accepts `template` and `variables` parameters
+- Schema: `{ name, description?, channel, subject?, body, variables[] }`
+
+### Workflow Templates
+- 3 built-in templates: `fan-out-synthesize`, `sequential-pipeline`, `event-triggered`
+- `abf workflow add --template <name>` scaffolds a workflow YAML
+- Gateway route: `GET /api/workflow-templates`
+- Templates export `BUILTIN_WORKFLOW_TEMPLATES`, `getWorkflowTemplate()`
+
+## P3 Framework Features (Completed)
+
+### External Monitoring
+- `MonitorRunner` watches external URLs, hashes content, triggers agents on change
+- Monitor definitions in `monitors/*.monitor.yaml` — name, url, interval, agent, task
+- Interval format: `30s`, `5m`, `1h` (parsed to milliseconds)
+- On content change: dispatches activation with `trigger.type: 'event'`, `event: 'monitor:<name>'`
+- Payload includes `previousHash`, `currentHash`, `statusCode`
+- Factory creates runner, loads from `monitors/` dir, starts polling on `abf dev`
+- Types: `MonitorDefinition`, `MonitorSnapshot`
+- Schema: `monitorYamlSchema`, `transformMonitorYaml()`
 
 ## Key Design Decisions
 - Files are the underlying API (YAML, Markdown, JSON) — git-trackable, inspectable

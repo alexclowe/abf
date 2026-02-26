@@ -3,6 +3,9 @@
  * Routes to configured messaging plugins (from interfaces/*.interface.yaml).
  * Default requiresApproval: true -- agents must list 'send_client_email' in
  * behavioral_bounds.allowed_actions to use this without escalation.
+ *
+ * If an approval store is available and the tool is in the agent's
+ * requires_approval list, the action is queued for human review.
  */
 import type { ITool, ToolDefinition } from '../../types/tool.js';
 import type { AgentId, SessionId, ToolId, USDCents } from '../../types/common.js';
@@ -48,6 +51,18 @@ export function createSendMessageTool(ctx: BuiltinToolContext): ITool {
 				description: 'Message subject (required for email)',
 				required: false,
 			},
+			{
+				name: 'template',
+				type: 'string',
+				description: 'Name of a message template to use (from templates/messages/)',
+				required: false,
+			},
+			{
+				name: 'variables',
+				type: 'object',
+				description: 'Variables to resolve in the template (key-value pairs)',
+				required: false,
+			},
 		],
 		estimatedCost: 0 as USDCents,
 		timeout: 15_000,
@@ -59,7 +74,18 @@ export function createSendMessageTool(ctx: BuiltinToolContext): ITool {
 		async execute(args) {
 			const channel = args['channel'];
 			const to = args['to'];
-			const body = args['body'];
+			let body = args['body'];
+			let subject = args['subject'];
+
+			// Resolve message template if provided
+			if (typeof args['template'] === 'string' && ctx.messageTemplates) {
+				const vars = (args['variables'] as Record<string, string>) ?? {};
+				const resolved = ctx.messageTemplates.resolve(args['template'], vars);
+				if (resolved) {
+					body = resolved.body;
+					if (resolved.subject) subject = resolved.subject;
+				}
+			}
 
 			if (typeof channel !== 'string') {
 				return Err(
@@ -76,7 +102,7 @@ export function createSendMessageTool(ctx: BuiltinToolContext): ITool {
 					new ToolError('TOOL_EXECUTION_FAILED', 'send-message: body is required', {}),
 				);
 			}
-			if (channel === 'email' && typeof args['subject'] !== 'string') {
+			if (channel === 'email' && typeof subject !== 'string') {
 				return Err(
 					new ToolError(
 						'TOOL_EXECUTION_FAILED',
@@ -84,6 +110,24 @@ export function createSendMessageTool(ctx: BuiltinToolContext): ITool {
 						{},
 					),
 				);
+			}
+
+			// Check if this action should be queued for approval
+			if (ctx.approvalStore) {
+				const approvalId = ctx.approvalStore.create({
+					agentId: (args['_agentId'] as AgentId) ?? ('unknown' as AgentId),
+					sessionId: (args['_sessionId'] as SessionId) ?? ('unknown' as SessionId),
+					toolId: 'send-message' as ToolId,
+					toolName: 'send-message',
+					arguments: { channel, to, body, subject: args['subject'] },
+					createdAt: toISOTimestamp(),
+				});
+				return Ok({
+					sent: false,
+					queued: true,
+					approvalId,
+					message: 'Message queued for approval. An operator must approve before delivery.',
+				});
 			}
 
 			// Find the matching plugin
@@ -124,7 +168,7 @@ export function createSendMessageTool(ctx: BuiltinToolContext): ITool {
 				context: {
 					to,
 					channel,
-					...(typeof args['subject'] === 'string' ? { subject: args['subject'] } : {}),
+					...(typeof subject === 'string' ? { subject: subject } : {}),
 				},
 			};
 

@@ -72,8 +72,49 @@ export const api = {
     resolve: (id: string) => post<{ resolved: boolean }>(`/api/escalations/${id}/resolve`),
   },
 
+  approvals: {
+    list: (status?: string, agentId?: string) => {
+      const qs = new URLSearchParams();
+      if (status) qs.set('status', status);
+      if (agentId) qs.set('agentId', agentId);
+      return get<import('./types').ApprovalItem[]>(`/api/approvals?${qs}`);
+    },
+    get: (id: string) => get<import('./types').ApprovalItem>(`/api/approvals/${id}`),
+    approve: (id: string) => post<{ approved: boolean }>(`/api/approvals/${id}/approve`),
+    reject: (id: string) => post<{ rejected: boolean }>(`/api/approvals/${id}/reject`),
+  },
+
   providers: {
     list: () => get<ProviderStatus[]>('/api/providers'),
+  },
+
+  metrics: {
+    runtime: () => get<Record<string, unknown>>('/api/metrics/runtime'),
+    agents: () => get<Record<string, unknown>[]>('/api/metrics/agents'),
+    kpis: (agentId?: string) => {
+      const qs = agentId ? `?agentId=${agentId}` : '';
+      return get<Record<string, unknown>[]>(`/api/metrics/kpis${qs}`);
+    },
+  },
+
+  archetypes: {
+    list: () =>
+      get<
+        {
+          name: string;
+          temperature: number;
+          tools: string[];
+          allowedActions: string[];
+          forbiddenActions: string[];
+        }[]
+      >('/api/archetypes'),
+  },
+
+  inbox: {
+    peek: (agentId: string) =>
+      get<import('./types').InboxItem[]>(`/api/agents/${agentId}/inbox`),
+    push: (agentId: string, body: { subject: string; body: string; priority?: string; from?: string }) =>
+      post<{ id: string; queued: boolean }>(`/api/agents/${agentId}/inbox`, body),
   },
 
   projects: {

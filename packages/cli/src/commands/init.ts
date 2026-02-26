@@ -27,8 +27,13 @@ export async function initCommand(options: InitOptions): Promise<void> {
 			'tools',
 			'memory/agents',
 			'memory/knowledge',
+			'knowledge',
+			'outputs',
+			'datastore/schemas',
+			'datastore/migrations',
 			'logs',
 			'workflows',
+			'monitors',
 			'interfaces',
 			'templates',
 		];
@@ -36,6 +41,13 @@ export async function initCommand(options: InitOptions): Promise<void> {
 		for (const dir of dirs) {
 			await mkdir(join(root, dir), { recursive: true });
 		}
+
+		// Knowledge base starter files (shared across templates)
+		const knowledgeCompany = `# Company Overview\n\nDescribe your company here. This file is shared with all agents.\n\n## Mission\n\n## Product\n\n## Target Market\n\n## Key Metrics\n`;
+		const knowledgeBrandVoice = `# Brand Voice\n\nDefine your brand voice and communication style here.\n\n## Tone\n\n## Do's\n\n## Don'ts\n\n## Examples\n`;
+
+		// Starter datastore schema
+		const starterSchema = `name: contacts\ncolumns:\n  - { name: id, type: integer, primary_key: true }\n  - { name: name, type: text }\n  - { name: email, type: text }\n  - { name: notes, type: text }\n  - { name: created_at, type: timestamp, default: CURRENT_TIMESTAMP }\n`;
 
 		if (options.template === 'solo-founder') {
 			const { soloFounderTemplate } = await import('../templates/solo-founder.js');
@@ -46,6 +58,9 @@ export async function initCommand(options: InitOptions): Promise<void> {
 			await writeFile(join(root, 'agents', 'scribe.agent.yaml'), files.scribe, 'utf-8');
 			await writeFile(join(root, 'teams', 'founders.team.yaml'), files.foundersTeam, 'utf-8');
 			await writeFile(join(root, 'memory', 'decisions.md'), files.decisions, 'utf-8');
+			await writeFile(join(root, 'knowledge', 'company.md'), knowledgeCompany, 'utf-8');
+			await writeFile(join(root, 'knowledge', 'brand-voice.md'), knowledgeBrandVoice, 'utf-8');
+			await writeFile(join(root, 'datastore', 'schemas', 'contacts.schema.yaml'), starterSchema, 'utf-8');
 			await writeFile(join(root, 'README.md'), files.readme, 'utf-8');
 			await writeFile(join(root, 'docker-compose.yml'), files.dockerCompose, 'utf-8');
 
@@ -75,6 +90,9 @@ export async function initCommand(options: InitOptions): Promise<void> {
 			await writeFile(join(root, 'teams', 'product.team.yaml'), files.productTeam, 'utf-8');
 			await writeFile(join(root, 'teams', 'gtm.team.yaml'), files.gtmTeam, 'utf-8');
 			await writeFile(join(root, 'memory', 'decisions.md'), files.decisions, 'utf-8');
+			await writeFile(join(root, 'knowledge', 'company.md'), knowledgeCompany, 'utf-8');
+			await writeFile(join(root, 'knowledge', 'brand-voice.md'), knowledgeBrandVoice, 'utf-8');
+			await writeFile(join(root, 'datastore', 'schemas', 'contacts.schema.yaml'), starterSchema, 'utf-8');
 			await writeFile(join(root, 'README.md'), files.readme, 'utf-8');
 			await writeFile(join(root, 'docker-compose.yml'), files.dockerCompose, 'utf-8');
 
@@ -104,6 +122,9 @@ export async function initCommand(options: InitOptions): Promise<void> {
 			await writeFile(join(root, 'agents', 'analyst.agent.yaml'), files.analyst, 'utf-8');
 			await writeFile(join(root, 'teams', 'agency.team.yaml'), files.agencyTeam, 'utf-8');
 			await writeFile(join(root, 'memory', 'decisions.md'), files.decisions, 'utf-8');
+			await writeFile(join(root, 'knowledge', 'company.md'), knowledgeCompany, 'utf-8');
+			await writeFile(join(root, 'knowledge', 'brand-voice.md'), knowledgeBrandVoice, 'utf-8');
+			await writeFile(join(root, 'datastore', 'schemas', 'contacts.schema.yaml'), starterSchema, 'utf-8');
 			await writeFile(join(root, 'README.md'), files.readme, 'utf-8');
 			await writeFile(join(root, 'docker-compose.yml'), files.dockerCompose, 'utf-8');
 

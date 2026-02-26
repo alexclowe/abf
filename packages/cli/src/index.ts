@@ -72,6 +72,37 @@ program
 	});
 
 program
+	.command('migrate')
+	.description('Run datastore schema and SQL migrations')
+	.action(async () => {
+		const { migrateCommand } = await import('./commands/migrate.js');
+		await migrateCommand();
+	});
+
+const workflow = program.command('workflow').description('Manage workflows');
+workflow
+	.command('add')
+	.description('Scaffold a workflow from a built-in template')
+	.requiredOption('-t, --template <template>', 'Workflow template (fan-out-synthesize, sequential-pipeline, event-triggered)')
+	.option('-n, --name <name>', 'Custom workflow name')
+	.action(async (options: { template: string; name?: string }) => {
+		const { workflowAddCommand } = await import('./commands/workflow.js');
+		await workflowAddCommand(options);
+	});
+
+const agent = program.command('agent').description('Manage agents');
+agent
+	.command('add')
+	.description('Scaffold a new agent (optionally from an archetype)')
+	.requiredOption('-n, --name <name>', 'Agent name')
+	.option('-a, --archetype <type>', 'Role archetype (researcher, writer, orchestrator, analyst, customer-support, developer, marketer, finance, monitor, generalist)')
+	.option('-t, --team <team>', 'Team to assign the agent to')
+	.action(async (options: { name: string; archetype?: string; team?: string }) => {
+		const { agentAddCommand } = await import('./commands/agent.js');
+		await agentAddCommand(options);
+	});
+
+program
 	.command('deploy')
 	.description('Generate cloud deployment configuration')
 	.requiredOption('-t, --target <target>', 'Deployment target (railway, render, fly)')

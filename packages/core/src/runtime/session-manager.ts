@@ -25,6 +25,7 @@ import type { Escalation, KPIReport, SessionResult, SessionStatus } from '../typ
 import type { IToolRegistry, IToolSandbox, ToolCall, ToolResult } from '../types/tool.js';
 import type { Activation } from '../types/trigger.js';
 import { createSessionId, toISOTimestamp } from '../util/id.js';
+import { loadKnowledgeFiles } from '../knowledge/loader.js';
 import type { ISessionManager } from './interfaces.js';
 
 function evaluateKPI(
@@ -80,6 +81,9 @@ export interface SessionManagerDeps {
 	readonly auditStore: IAuditStore;
 	readonly sessionTimeoutMs: number;
 	readonly messagingRouter?: MessagingRouter | undefined;
+	readonly knowledgeDir?: string | undefined;
+	readonly outputsManager?: import('../memory/outputs.js').OutputsManager | undefined;
+	readonly inbox?: import('../types/inbox.js').IInbox | undefined;
 }
 
 export class SessionManager implements ISessionManager {
@@ -160,9 +164,23 @@ export class SessionManager implements ISessionManager {
 		const status: SessionStatus = 'completed';
 
 		// Step 1: Load context
-		const memoryResult = await this.deps.memoryStore.loadContext(activation.agentId);
+		const [memoryResult, knowledgeFiles, teammateOutputs] = await Promise.all([
+			this.deps.memoryStore.loadContext(activation.agentId),
+			this.deps.knowledgeDir
+				? loadKnowledgeFiles(this.deps.knowledgeDir)
+				: Promise.resolve({} as Record<string, string>),
+			this.deps.outputsManager
+				? this.deps.outputsManager.readTeamRecent(agent.name, 3)
+				: Promise.resolve([]),
+		]);
 		if (!memoryResult.ok) return memoryResult;
 		const memory = memoryResult.value;
+
+		// Merge project-level knowledge into memory context
+		const mergedKnowledge = { ...memory.knowledge, ...knowledgeFiles };
+
+		// Drain inbox items
+		const inboxItems = this.deps.inbox ? this.deps.inbox.drain(activation.agentId) : [];
 
 		// Log session start
 		await this.deps.auditStore.log({
@@ -175,7 +193,7 @@ export class SessionManager implements ISessionManager {
 		});
 
 		// Step 2: Build prompt
-		const messages: ChatMessage[] = this.buildPrompt(agent, memory, activation);
+		const messages: ChatMessage[] = this.buildPrompt(agent, memory, activation, mergedKnowledge, teammateOutputs, inboxItems);
 
 		// Step 3: Execute LLM call
 		const provider = this.deps.providerRegistry.getBySlug(agent.provider);
@@ -292,7 +310,7 @@ export class SessionManager implements ISessionManager {
 			await this.deps.messagingRouter.send(notification);
 		}
 
-		// Step 6: Write memory
+		// Step 6: Write memory + outputs
 		const lastMessage = messages[messages.length - 1];
 		if (lastMessage && lastMessage.role === 'assistant' && typeof lastMessage.content === 'string') {
 			await this.deps.memoryStore.append(
@@ -300,6 +318,14 @@ export class SessionManager implements ISessionManager {
 				'history',
 				`Task: ${activation.trigger.task}\n\n${lastMessage.content}`,
 			);
+
+			// Write to outputs/ for cross-agent sharing
+			if (this.deps.outputsManager) {
+				await this.deps.outputsManager.write(
+					agent.name,
+					`# ${activation.trigger.task}\n\n${lastMessage.content}`,
+				);
+			}
 		}
 
 		// Step 7: Check escalations
@@ -409,7 +435,35 @@ export class SessionManager implements ISessionManager {
 		agent: AgentConfig,
 		memory: import('../types/memory.js').AgentMemoryContext,
 		activation: Activation,
+		knowledge?: Readonly<Record<string, string>>,
+		teammateOutputs?: readonly import('../memory/outputs.js').OutputEntry[],
+		inboxItems?: readonly import('../types/inbox.js').InboxItem[],
 	): ChatMessage[] {
+		// Build knowledge base section (truncate each entry to ~2000 chars)
+		const knowledgeEntries = Object.entries(knowledge ?? {});
+		const knowledgeSection =
+			knowledgeEntries.length > 0
+				? [
+						'Knowledge Base:',
+						...knowledgeEntries.map(
+							([name, content]) =>
+								`### ${name}\n${content.length > 2000 ? `${content.slice(0, 2000)}…` : content}`,
+						),
+					].join('\n')
+				: '';
+
+		// Build teammate outputs section
+		const outputsSection =
+			teammateOutputs && teammateOutputs.length > 0
+				? [
+						'Recent Teammate Outputs:',
+						...teammateOutputs.map(
+							(o) =>
+								`### ${o.agent} (${o.timestamp})\n${o.content.length > 1500 ? `${o.content.slice(0, 1500)}…` : o.content}`,
+						),
+					].join('\n')
+				: '';
+
 		const systemContent = [
 			agent.charter,
 			'',
@@ -422,6 +476,17 @@ export class SessionManager implements ISessionManager {
 				: '',
 			memory.decisions.length > 0
 				? `Team Decisions:\n${memory.decisions.map((d) => d.content).join('\n')}`
+				: '',
+			knowledgeSection,
+			outputsSection,
+			inboxItems && inboxItems.length > 0
+				? [
+						`Inbox (${inboxItems.length} items):`,
+						...inboxItems.map(
+							(item) =>
+								`- [${item.priority.toUpperCase()}] ${item.subject}${item.from ? ` (from: ${item.from})` : ''}\n  ${item.body.length > 500 ? `${item.body.slice(0, 500)}…` : item.body}`,
+						),
+					].join('\n')
 				: '',
 			memory.pendingMessages > 0 ? `You have ${memory.pendingMessages} pending messages.` : '',
 			'',

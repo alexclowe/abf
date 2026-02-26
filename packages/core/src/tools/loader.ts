@@ -21,6 +21,8 @@ import { createDataTransformTool } from './builtin/data-transform.js';
 import { createKnowledgeSearchTool } from './builtin/knowledge-search.js';
 import { createSendMessageTool } from './builtin/send-message.js';
 import { createBrowseTool } from './builtin/browse.js';
+import { createDatabaseQueryTool } from './builtin/database-query.js';
+import { createDatabaseWriteTool } from './builtin/database-write.js';
 
 /** A no-op tool that records its invocation and returns metadata. Used for v0.1 scaffolding. */
 class NoOpTool implements ITool {
@@ -72,7 +74,7 @@ export function createBuiltinTools(ctx: BuiltinToolContext): readonly ITool[] {
 		},
 	};
 
-	return [
+	const tools: ITool[] = [
 		createWebSearchTool(ctx),
 		createWebFetchTool(ctx),
 		createFileWriteTool(ctx),
@@ -83,6 +85,14 @@ export function createBuiltinTools(ctx: BuiltinToolContext): readonly ITool[] {
 		createBrowseTool(ctx),
 		reschedule,
 	];
+
+	// Conditional: database tools only if datastore is configured
+	const dbQuery = createDatabaseQueryTool(ctx);
+	if (dbQuery) tools.push(dbQuery);
+	const dbWrite = createDatabaseWriteTool(ctx);
+	if (dbWrite) tools.push(dbWrite);
+
+	return tools;
 }
 
 /** Load all *.tool.yaml files from a directory and return ITool instances. */

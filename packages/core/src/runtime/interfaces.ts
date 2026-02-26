@@ -14,6 +14,8 @@ import type { IProviderRegistry } from '../types/provider.js';
 import type { IAuditStore, SecurityContext } from '../types/security.js';
 import type { EscalationType, KPIReport, SessionResult, WorkSession } from '../types/session.js';
 import type { IToolRegistry, IToolSandbox } from '../types/tool.js';
+import type { IApprovalStore } from '../types/approval.js';
+import type { IDatastore } from '../types/datastore.js';
 import type { Activation } from '../types/trigger.js';
 
 // ─── Escalation Item (mutable wrapper for API) ──────────────────────
@@ -86,6 +88,9 @@ export interface RuntimeComponents {
 	readonly dispatcher: IDispatcher;
 	readonly sessionManager: ISessionManager;
 	readonly gateway: IGateway;
+	readonly approvalStore?: IApprovalStore | undefined;
+	readonly datastore?: IDatastore | undefined;
+	readonly inbox?: import('../types/inbox.js').IInbox | undefined;
 }
 
 export interface IRuntime {

@@ -73,6 +73,39 @@ async function loadOrComputeEmbeddings(
 	return embedded;
 }
 
+/** Search all *.md files in a directory and add results to candidates. */
+async function searchDirectory(
+	dir: string,
+	sourcePrefix: string,
+	queryEmbedding: number[],
+	client: EmbeddingClient,
+	candidates: SearchResult[],
+): Promise<number> {
+	if (!existsSync(dir)) return 0;
+	let files: string[] = [];
+	try {
+		files = (await readdir(dir)).filter(f => f.endsWith('.md'));
+	} catch {
+		return 0;
+	}
+
+	let totalSearched = 0;
+	for (const file of files) {
+		const filePath = join(dir, file);
+		const content = await readFile(filePath, 'utf-8');
+		const chunks = await loadOrComputeEmbeddings(filePath, content, client);
+		totalSearched += chunks.length;
+		for (const { text, embedding } of chunks) {
+			candidates.push({
+				content: text,
+				source: `${sourcePrefix}/${file}`,
+				similarity: cosineSimilarity(queryEmbedding, embedding),
+			});
+		}
+	}
+	return totalSearched;
+}
+
 export function createKnowledgeSearchTool(ctx: BuiltinToolContext): ITool {
 	const definition: ToolDefinition = {
 		id: 'knowledge-search' as ToolId,
@@ -91,7 +124,7 @@ export function createKnowledgeSearchTool(ctx: BuiltinToolContext): ITool {
 			{
 				name: 'scope',
 				type: 'string',
-				description: 'Where to search: "all", "decisions", "history:agentName", "knowledge"',
+				description: 'Where to search: "all", "decisions", "history:agentName", "knowledge", "outputs", "outputs:agentName"',
 				required: false,
 			},
 			{
@@ -153,6 +186,7 @@ export function createKnowledgeSearchTool(ctx: BuiltinToolContext): ITool {
 			const searchHistory = scope === 'all' || scope.startsWith('history:');
 			const searchDecisions = scope === 'all' || scope === 'decisions';
 			const searchKnowledge = scope === 'all' || scope === 'knowledge';
+			const searchOutputs = scope === 'all' || scope.startsWith('outputs');
 
 			if (searchDecisions) {
 				const decisionsPath = join(memoryDir, 'decisions.md');
@@ -204,26 +238,37 @@ export function createKnowledgeSearchTool(ctx: BuiltinToolContext): ITool {
 			}
 
 			if (searchKnowledge) {
-				const knowledgeDir = join(memoryDir, 'knowledge');
-				if (existsSync(knowledgeDir)) {
-					let files: string[] = [];
-					try {
-						files = (await readdir(knowledgeDir)).filter(f => f.endsWith('.md'));
-					} catch {
-						/* no knowledge dir */
-					}
+				// Search memory/knowledge/ (agent-level)
+				totalSearched += await searchDirectory(
+					join(memoryDir, 'knowledge'), 'knowledge', queryEmbedding, client, candidates,
+				);
 
-					for (const file of files) {
-						const filePath = join(knowledgeDir, file);
-						const content = await readFile(filePath, 'utf-8');
-						const chunks = await loadOrComputeEmbeddings(filePath, content, client);
-						totalSearched += chunks.length;
-						for (const { text, embedding } of chunks) {
-							candidates.push({
-								content: text,
-								source: `knowledge/${file}`,
-								similarity: cosineSimilarity(queryEmbedding, embedding),
-							});
+				// Search project-level knowledge/ dir
+				const projectKnowledgeDir = join(ctx.projectRoot, 'knowledge');
+				if (projectKnowledgeDir !== join(memoryDir, 'knowledge')) {
+					totalSearched += await searchDirectory(
+						projectKnowledgeDir, 'project-knowledge', queryEmbedding, client, candidates,
+					);
+				}
+			}
+
+			if (searchOutputs) {
+				const outputsDir = join(ctx.projectRoot, 'outputs');
+				if (existsSync(outputsDir)) {
+					if (scope.startsWith('outputs:')) {
+						// Search specific agent outputs
+						const targetAgent = scope.slice('outputs:'.length);
+						totalSearched += await searchDirectory(
+							join(outputsDir, targetAgent), `outputs:${targetAgent}`, queryEmbedding, client, candidates,
+						);
+					} else {
+						// Search all agent outputs
+						let agentDirs: string[] = [];
+						try { agentDirs = await readdir(outputsDir); } catch { /* */ }
+						for (const agentName of agentDirs) {
+							totalSearched += await searchDirectory(
+								join(outputsDir, agentName), `outputs:${agentName}`, queryEmbedding, client, candidates,
+							);
 						}
 					}
 				}
