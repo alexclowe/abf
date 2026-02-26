@@ -44,7 +44,7 @@ export async function escalationsCommand(options: EscalationsOptions = {}): Prom
 				console.log(chalk.red('  Could not reach runtime. Is `abf dev` running?'));
 				return;
 			}
-			escalations = await res.json();
+			escalations = (await res.json()) as typeof escalations;
 		} catch {
 			console.log(chalk.red('  Could not reach runtime. Is `abf dev` running?'));
 			return;
