@@ -75,15 +75,23 @@ describe('VaultV2', () => {
 	let tempDir: string;
 	let vaultPath: string;
 	let keychain: InMemoryKeychain;
+	let savedAnthropicKey: string | undefined;
 
 	beforeEach(async () => {
 		tempDir = await mkdtemp(join(tmpdir(), 'abf-vault-v2-test-'));
 		vaultPath = join(tempDir, 'credentials.enc');
 		keychain = new InMemoryKeychain(true);
+		// Isolate tests from real env vars that override vault.get()
+		savedAnthropicKey = process.env['ANTHROPIC_API_KEY'];
+		delete process.env['ANTHROPIC_API_KEY'];
 	});
 
 	afterEach(async () => {
 		await rm(tempDir, { recursive: true, force: true });
+		// Restore env var
+		if (savedAnthropicKey !== undefined) {
+			process.env['ANTHROPIC_API_KEY'] = savedAnthropicKey;
+		}
 	});
 
 	// ─── Keychain backend tests ─────────────────────────────────────

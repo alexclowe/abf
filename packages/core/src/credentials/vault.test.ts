@@ -7,14 +7,22 @@ import { FilesystemCredentialVault } from './vault.js';
 describe('FilesystemCredentialVault', () => {
 	let tempDir: string;
 	let vault: FilesystemCredentialVault;
+	let savedAnthropicKey: string | undefined;
 
 	beforeEach(async () => {
 		tempDir = await mkdtemp(join(tmpdir(), 'abf-vault-test-'));
 		vault = new FilesystemCredentialVault(join(tempDir, 'credentials.enc'));
+		// Isolate tests from real env vars that override vault.get()
+		savedAnthropicKey = process.env['ANTHROPIC_API_KEY'];
+		delete process.env['ANTHROPIC_API_KEY'];
 	});
 
 	afterEach(async () => {
 		await rm(tempDir, { recursive: true, force: true });
+		// Restore env var
+		if (savedAnthropicKey !== undefined) {
+			process.env['ANTHROPIC_API_KEY'] = savedAnthropicKey;
+		}
 	});
 
 	it('stores and retrieves a key', async () => {
