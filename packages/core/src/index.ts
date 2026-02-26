@@ -113,7 +113,12 @@ export {
 
 // ─── Credentials ──────────────────────────────────────────────────────
 export type { ICredentialVault } from './credentials/index.js';
-export { FilesystemCredentialVault } from './credentials/index.js';
+export { FilesystemCredentialVault, VaultV2, createVault, createKeychain } from './credentials/index.js';
+export type { IKeychain } from './credentials/index.js';
+
+// ─── Cloud Proxy ──────────────────────────────────────────────────────
+export { CloudProxyProvider } from './providers/adapters/cloud-proxy.js';
+export type { CloudConfig } from './types/config.js';
 
 // ─── Tools ────────────────────────────────────────────────────────────
 export { ToolRegistry, BasicToolSandbox, loadToolConfigs, createBuiltinTools, MCPClient, MCPToolAdapter, loadMCPTools } from './tools/index.js';

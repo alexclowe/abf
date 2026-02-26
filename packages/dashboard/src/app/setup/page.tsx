@@ -40,11 +40,15 @@ export default function SetupPage() {
     setCreating(true);
     setError('');
     try {
+      // Store API key through vault v2 auth flow before project creation
+      if (selectedProvider?.needsKey && apiKey) {
+        await api.auth.connectKey(provider, apiKey);
+      }
+
       await api.projects.create({
         template,
         projectName: projectName.trim(),
         provider,
-        apiKey: selectedProvider?.needsKey ? apiKey : undefined,
       });
       router.push('/');
     } catch (e) {

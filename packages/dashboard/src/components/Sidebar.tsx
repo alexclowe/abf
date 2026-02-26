@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bot, LayoutDashboard, Users, AlertTriangle, ScrollText, Layers, GitBranch, TrendingUp, ShieldCheck, BarChart3 } from 'lucide-react';
+import { Bot, LayoutDashboard, Users, AlertTriangle, ScrollText, Layers, GitBranch, TrendingUp, ShieldCheck, BarChart3, KeyRound } from 'lucide-react';
 import clsx from 'clsx';
 
 const nav = [
@@ -14,6 +14,7 @@ const nav = [
   { href: '/escalations', label: 'Escalations', icon: AlertTriangle },
   { href: '/metrics', label: 'Metrics', icon: BarChart3 },
   { href: '/kpis', label: 'KPIs', icon: TrendingUp },
+  { href: '/settings/providers', label: 'Providers', icon: KeyRound },
   { href: '/logs', label: 'Logs', icon: ScrollText },
 ];
 
