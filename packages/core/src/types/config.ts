@@ -3,6 +3,7 @@
  */
 
 import type { LogLevel } from './common.js';
+import type { DatastoreConfig } from './datastore.js';
 
 // ─── Storage Config ───────────────────────────────────────────────────
 
@@ -78,9 +79,12 @@ export interface AbfConfig {
 		readonly level: LogLevel;
 		readonly format: 'json' | 'pretty';
 	};
+	readonly datastore?: DatastoreConfig | undefined;
 	readonly agentsDir: string;
 	readonly teamsDir: string;
 	readonly toolsDir: string;
 	readonly memoryDir: string;
 	readonly logsDir: string;
+	readonly knowledgeDir: string;
+	readonly outputsDir: string;
 }

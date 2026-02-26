@@ -51,6 +51,16 @@ const loggingSchema = z.object({
 	format: z.enum(['json', 'pretty']).default('pretty'),
 });
 
+const datastoreSchema = z
+	.object({
+		backend: z.enum(['sqlite', 'postgres']).default('sqlite'),
+		connection_string: z.string().optional(),
+		sqlite_path: z.string().optional(),
+		schemas_dir: z.string().default('datastore/schemas'),
+		migrations_dir: z.string().default('datastore/migrations'),
+	})
+	.optional();
+
 export const configYamlSchema = z.object({
 	name: z.string(),
 	version: z.string().default('0.1.0'),
@@ -61,11 +71,14 @@ export const configYamlSchema = z.object({
 	gateway: gatewaySchema.default({}),
 	runtime: runtimeSchema.default({}),
 	logging: loggingSchema.default({}),
+	datastore: datastoreSchema,
 	agents_dir: z.string().default('agents'),
 	teams_dir: z.string().default('teams'),
 	tools_dir: z.string().default('tools'),
 	memory_dir: z.string().default('memory'),
 	logs_dir: z.string().default('logs'),
+	knowledge_dir: z.string().default('knowledge'),
+	outputs_dir: z.string().default('outputs'),
 });
 
 export type ConfigYamlInput = z.input<typeof configYamlSchema>;
@@ -104,10 +117,25 @@ export function transformConfigYaml(parsed: z.output<typeof configYamlSchema>): 
 			healthCheckIntervalMs: parsed.runtime.health_check_interval_ms,
 		},
 		logging: parsed.logging,
+		datastore: parsed.datastore
+			? {
+					backend: parsed.datastore.backend as 'sqlite' | 'postgres',
+					...(parsed.datastore.connection_string != null && {
+						connectionString: parsed.datastore.connection_string,
+					}),
+					...(parsed.datastore.sqlite_path != null && {
+						sqlitePath: parsed.datastore.sqlite_path,
+					}),
+					schemasDir: parsed.datastore.schemas_dir,
+					migrationsDir: parsed.datastore.migrations_dir,
+				}
+			: undefined,
 		agentsDir: parsed.agents_dir,
 		teamsDir: parsed.teams_dir,
 		toolsDir: parsed.tools_dir,
 		memoryDir: parsed.memory_dir,
 		logsDir: parsed.logs_dir,
+		knowledgeDir: parsed.knowledge_dir,
+		outputsDir: parsed.outputs_dir,
 	};
 }

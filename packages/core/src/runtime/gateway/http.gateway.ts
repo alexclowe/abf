@@ -8,6 +8,7 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { loadTeamConfigs } from '../../config/loader.js';
+import { BUILTIN_ARCHETYPES } from '../../archetypes/registry.js';
 import type { AgentConfig } from '../../types/agent.js';
 import type { AgentId, ISOTimestamp } from '../../types/common.js';
 import type { GatewayConfig } from '../../types/config.js';
@@ -16,6 +17,7 @@ import type { IBus } from '../../types/message.js';
 import type { IProviderRegistry } from '../../types/provider.js';
 import type { IAuditStore } from '../../types/security.js';
 import { createActivationId, toISOTimestamp } from '../../util/id.js';
+import type { IApprovalStore } from '../../types/approval.js';
 import type { IGateway, IDispatcher } from '../interfaces.js';
 
 export interface GatewayDeps {
@@ -30,6 +32,9 @@ export interface GatewayDeps {
 	readonly onWebhook?: ((path: string, body: unknown) => Promise<unknown>) | undefined;
 	readonly workflowsDir?: string | undefined;
 	readonly workflowRunner?: import('../workflow-runner.js').WorkflowRunner | undefined;
+	readonly approvalStore?: IApprovalStore | undefined;
+	readonly inbox?: import('../../types/inbox.js').IInbox | undefined;
+	readonly metricsCollector?: import('../../metrics/collector.js').MetricsCollector | undefined;
 }
 
 /** @deprecated Use GatewayDeps instead. Kept for backwards compatibility. */
@@ -234,6 +239,39 @@ export class HttpGateway implements IGateway {
 			return c.json([...reports].slice(-limitN));
 		});
 
+		// -- Approvals ------------------------------------------------------------
+		if (deps.approvalStore) {
+			const store = deps.approvalStore;
+
+			app.get('/api/approvals', (c) => {
+				const { status, agentId } = c.req.query();
+				const filter: { status?: 'pending' | 'approved' | 'rejected'; agentId?: AgentId } = {};
+				if (status === 'pending' || status === 'approved' || status === 'rejected') {
+					filter.status = status;
+				}
+				if (agentId) filter.agentId = agentId as AgentId;
+				return c.json(store.list(filter));
+			});
+
+			app.get('/api/approvals/:id', (c) => {
+				const item = store.get(c.req.param('id'));
+				if (!item) return c.json({ error: 'Approval not found' }, 404);
+				return c.json(item);
+			});
+
+			app.post('/api/approvals/:id/approve', (c) => {
+				const found = store.approve(c.req.param('id'), 'operator');
+				if (!found) return c.json({ error: 'Approval not found or already resolved' }, 404);
+				return c.json({ approved: true });
+			});
+
+			app.post('/api/approvals/:id/reject', (c) => {
+				const found = store.reject(c.req.param('id'), 'operator');
+				if (!found) return c.json({ error: 'Approval not found or already resolved' }, 404);
+				return c.json({ rejected: true });
+			});
+		}
+
 		// -- Providers ------------------------------------------------------------
 		app.get('/api/providers', async (c) => {
 			// Return cached response if still fresh (1 hour TTL)
@@ -258,6 +296,73 @@ export class HttpGateway implements IGateway {
 			providerCacheRef.current = { data: statuses, expiresAt: Date.now() + 3_600_000 };
 			return c.json(statuses);
 		});
+
+		// -- Archetypes -----------------------------------------------------------
+		app.get('/api/archetypes', (c) => {
+			return c.json(
+				Object.entries(BUILTIN_ARCHETYPES).map(([name, defaults]) => ({
+					name,
+					temperature: defaults.temperature,
+					tools: defaults.tools,
+					allowedActions: defaults.allowedActions,
+					forbiddenActions: defaults.forbiddenActions,
+				})),
+			);
+		});
+
+		// -- Workflow Templates ----------------------------------------------------
+		app.get('/api/workflow-templates', async (c) => {
+			const { BUILTIN_WORKFLOW_TEMPLATES } = await import('../../workflows/templates.js');
+			return c.json(
+				BUILTIN_WORKFLOW_TEMPLATES.map((t) => ({
+					name: t.name,
+					displayName: t.displayName,
+					description: t.description,
+					pattern: t.pattern,
+					stepsCount: t.steps.length,
+				})),
+			);
+		});
+
+		// -- Metrics --------------------------------------------------------------
+		if (deps.metricsCollector) {
+			const mc = deps.metricsCollector;
+			app.get('/api/metrics/runtime', (c) => c.json(mc.collect()));
+			app.get('/api/metrics/agents', (c) => c.json(mc.collectAgentStates()));
+			app.get('/api/metrics/kpis', (c) => {
+				const agentId = c.req.query('agentId');
+				return c.json(mc.collectKPIs(agentId));
+			});
+		}
+
+		// -- Agent Inbox ----------------------------------------------------------
+		if (deps.inbox) {
+			const inbox = deps.inbox;
+			app.get('/api/agents/:id/inbox', (c) => {
+				const agentId = c.req.param('id') as AgentId;
+				const items = inbox.peek(agentId);
+				return c.json(items);
+			});
+
+			app.post('/api/agents/:id/inbox', async (c) => {
+				const agentId = c.req.param('id') as AgentId;
+				const body = (await c.req.json()) as {
+					subject: string;
+					body: string;
+					priority?: string;
+					from?: string;
+				};
+				const id = inbox.push({
+					agentId,
+					source: 'human',
+					priority: (body.priority as 'low' | 'normal' | 'high' | 'urgent') ?? 'normal',
+					subject: body.subject,
+					body: body.body,
+					...(body.from != null && { from: body.from }),
+				});
+				return c.json({ id, queued: true });
+			});
+		}
 
 		// -- Webhook passthrough --------------------------------------------------
 		app.post('/webhook/*', async (c) => {

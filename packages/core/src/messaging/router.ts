@@ -37,4 +37,8 @@ export class MessagingRouter {
 	get hasPlugins(): boolean {
 		return this.entries.length > 0;
 	}
+
+	get pluginEntries(): readonly PluginWithConfig[] {
+		return this.entries;
+	}
 }

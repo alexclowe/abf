@@ -152,6 +152,35 @@ export interface EscalationItem {
   resolved: boolean;
 }
 
+// ── Approvals ───────────────────────────────────────────────────────
+
+export interface ApprovalItem {
+  id: string;
+  agentId: string;
+  sessionId: string;
+  toolId: string;
+  toolName: string;
+  arguments: Record<string, unknown>;
+  createdAt: string;
+  status: 'pending' | 'approved' | 'rejected';
+  resolvedAt?: string;
+  resolvedBy?: string;
+}
+
+// ── Inbox ───────────────────────────────────────────────────────────
+
+export interface InboxItem {
+  id: string;
+  agentId: string;
+  source: 'human' | 'webhook' | 'bus' | 'agent';
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  subject: string;
+  body: string;
+  from?: string;
+  createdAt: string;
+  consumed: boolean;
+}
+
 export interface StatusResponse {
   version: string;
   uptime: number;

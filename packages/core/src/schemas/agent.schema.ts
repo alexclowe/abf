@@ -7,6 +7,7 @@ import { z } from 'zod';
 import type { AgentConfig } from '../types/agent.js';
 import type { AgentId, TeamId, USDCents } from '../types/common.js';
 import type { TriggerConfig } from '../types/trigger.js';
+import { getArchetype } from '../archetypes/registry.js';
 
 // ─── Cost Parser ──────────────────────────────────────────────────────
 
@@ -96,6 +97,7 @@ export const agentYamlSchema = z.object({
 	display_name: z.string(),
 	role: z.string(),
 	description: z.string(),
+	role_archetype: z.string().optional(),
 	provider: z.string().default('anthropic'),
 	model: z.string().default('claude-sonnet-4-5'),
 	temperature: z.number().min(0).max(2).optional(),
@@ -114,18 +116,46 @@ export type AgentYamlInput = z.input<typeof agentYamlSchema>;
 // ─── Transform to AgentConfig ─────────────────────────────────────────
 
 export function transformAgentYaml(parsed: z.output<typeof agentYamlSchema>): AgentConfig {
+	// Look up archetype defaults (explicit YAML values always win)
+	const archetype = parsed.role_archetype ? getArchetype(parsed.role_archetype) : undefined;
+
+	// Merge tools: archetype defaults + explicit tools (deduplicated)
+	const mergedTools = archetype
+		? [...new Set([...archetype.tools, ...parsed.tools])]
+		: parsed.tools;
+
+	// Merge behavioral bounds: explicit values win, archetype fills gaps
+	const explicitAllowed = parsed.behavioral_bounds.allowed_actions;
+	const explicitForbidden = parsed.behavioral_bounds.forbidden_actions;
+
+	const mergedAllowed =
+		explicitAllowed.length > 0
+			? explicitAllowed
+			: (archetype?.allowedActions ?? []);
+	const mergedForbidden =
+		explicitForbidden.length > 0
+			? explicitForbidden
+			: (archetype?.forbiddenActions ?? []);
+
+	// Charter: use explicit charter, or expand archetype template
+	let charter = parsed.charter;
+	if (!charter && archetype) {
+		charter = archetype.charterTemplate.replace(/\{\{name\}\}/g, parsed.name);
+	}
+
 	return {
 		name: parsed.name,
 		id: parsed.name as AgentId,
 		displayName: parsed.display_name,
 		role: parsed.role,
 		description: parsed.description,
+		...(parsed.role_archetype != null && { roleArchetype: parsed.role_archetype }),
 		provider: parsed.provider,
 		model: parsed.model,
-		temperature: parsed.temperature,
+		temperature: parsed.temperature ?? archetype?.temperature,
 		team: parsed.team as TeamId | undefined,
 		reportsTo: parsed.reports_to as AgentId | undefined,
-		tools: parsed.tools,
+		tools: mergedTools,
 		triggers: parsed.triggers as unknown as readonly TriggerConfig[],
 		escalationRules: parsed.escalation_rules.map((r) => ({
 			condition: r.condition,
@@ -133,13 +163,13 @@ export function transformAgentYaml(parsed: z.output<typeof agentYamlSchema>): Ag
 			message: r.message,
 		})),
 		behavioralBounds: {
-			allowedActions: parsed.behavioral_bounds.allowed_actions,
-			forbiddenActions: parsed.behavioral_bounds.forbidden_actions,
+			allowedActions: mergedAllowed as string[],
+			forbiddenActions: mergedForbidden as string[],
 			maxCostPerSession: parseDollarsToCents(parsed.behavioral_bounds.max_cost_per_session),
 			maxExternalRequests: parsed.behavioral_bounds.max_external_requests,
 			requiresApproval: parsed.behavioral_bounds.requires_approval,
 		},
 		kpis: parsed.kpis,
-		charter: parsed.charter,
+		charter,
 	};
 }

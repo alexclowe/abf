@@ -45,6 +45,7 @@ export interface AgentConfig {
 	readonly displayName: string;
 	readonly role: string;
 	readonly description: string;
+	readonly roleArchetype?: string | undefined;
 	readonly provider: string;
 	readonly model: string;
 	readonly temperature?: number | undefined;

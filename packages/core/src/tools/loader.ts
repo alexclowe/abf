@@ -12,6 +12,17 @@ import type { ABFError, Result } from '../types/errors.js';
 import { ABFError as ABFErrorClass, Ok } from '../types/errors.js';
 import type { ITool, ToolDefinition } from '../types/tool.js';
 import { toolYamlSchema, transformToolYaml } from '../schemas/tool.schema.js';
+import type { BuiltinToolContext } from './builtin/context.js';
+import { createWebSearchTool } from './builtin/web-search.js';
+import { createWebFetchTool } from './builtin/web-fetch.js';
+import { createFileWriteTool } from './builtin/file-write.js';
+import { createFileReadTool } from './builtin/file-read.js';
+import { createDataTransformTool } from './builtin/data-transform.js';
+import { createKnowledgeSearchTool } from './builtin/knowledge-search.js';
+import { createSendMessageTool } from './builtin/send-message.js';
+import { createBrowseTool } from './builtin/browse.js';
+import { createDatabaseQueryTool } from './builtin/database-query.js';
+import { createDatabaseWriteTool } from './builtin/database-write.js';
 
 /** A no-op tool that records its invocation and returns metadata. Used for v0.1 scaffolding. */
 class NoOpTool implements ITool {
@@ -28,28 +39,9 @@ class NoOpTool implements ITool {
 	}
 }
 
-/** Built-in stub tools registered by default. */
-export function createBuiltinTools(): readonly ITool[] {
-	const webSearch: ITool = {
-		definition: {
-			id: 'web-search' as ToolId,
-			name: 'web-search',
-			description: 'Search the web for information',
-			source: 'registry',
-			parameters: [
-				{ name: 'query', type: 'string', description: 'Search query', required: true },
-			],
-		},
-		execute: async (_args) => {
-			return Ok({
-				results: [],
-				note: 'web-search is a stub in v0.1. Real search available in v0.2.',
-			});
-		},
-	};
-
-	// reschedule — lets agents request to be re-run after a delay.
-	// The session manager reads the result and stores it in SessionResult.rescheduleIn.
+/** All built-in tools — real implementations wired to external services. */
+export function createBuiltinTools(ctx: BuiltinToolContext): readonly ITool[] {
+	// reschedule — self-scheduling heartbeat. No external deps; kept inline.
 	const reschedule: ITool = {
 		definition: {
 			id: 'reschedule' as ToolId,
@@ -82,7 +74,25 @@ export function createBuiltinTools(): readonly ITool[] {
 		},
 	};
 
-	return [webSearch, reschedule];
+	const tools: ITool[] = [
+		createWebSearchTool(ctx),
+		createWebFetchTool(ctx),
+		createFileWriteTool(ctx),
+		createFileReadTool(ctx),
+		createDataTransformTool(ctx),
+		createKnowledgeSearchTool(ctx),
+		createSendMessageTool(ctx),
+		createBrowseTool(ctx),
+		reschedule,
+	];
+
+	// Conditional: database tools only if datastore is configured
+	const dbQuery = createDatabaseQueryTool(ctx);
+	if (dbQuery) tools.push(dbQuery);
+	const dbWrite = createDatabaseWriteTool(ctx);
+	if (dbWrite) tools.push(dbWrite);
+
+	return tools;
 }
 
 /** Load all *.tool.yaml files from a directory and return ITool instances. */
