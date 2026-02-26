@@ -2,6 +2,8 @@
 
 Patterns that emerged from designing multi-agent systems that were generalized into ABF framework features. All 10 abstractions have been implemented as of v0.3.
 
+> **Note:** The examples below reference "CiteRank", the original reference design used during development. The current reference implementation is generated via the Seed-to-Company pipeline.
+
 ---
 
 ## 1. Company Brain (Framework Feature: Knowledge Base)

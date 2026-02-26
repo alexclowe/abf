@@ -23,9 +23,12 @@ import type { ICredentialVault } from '../../credentials/vault.js';
 import type { IGateway, IDispatcher, IScheduler } from '../interfaces.js';
 import { registerAuthRoutes } from './auth.routes.js';
 import { registerSeedRoutes } from './seed.routes.js';
+import { registerEventRoutes } from './events.routes.js';
 import { registerSetupRoutes } from './setup.routes.js';
 
 /** Timing-safe API key comparison to prevent timing attacks. */
+const ABF_VERSION = '1.0.0';
+
 function isValidApiKey(received: string | undefined, required: string): boolean {
 	if (!received) return false;
 	const expected = `Bearer ${required}`;
@@ -136,6 +139,9 @@ export class HttpGateway implements IGateway {
 			registerSeedRoutes(app, { ...deps, scheduler: deps.scheduler });
 		}
 
+		// -- SSE Events -----------------------------------------------------------
+		registerEventRoutes(app, deps);
+
 		// -- Health ---------------------------------------------------------------
 		app.get('/health', (c) => {
 			const active = deps.dispatcher.getActiveSessions().length;
@@ -150,7 +156,7 @@ export class HttpGateway implements IGateway {
 		// -- Status ---------------------------------------------------------------
 		app.get('/api/status', (c) =>
 			c.json({
-				version: '0.2.0',
+				version: ABF_VERSION,
 				uptime: process.uptime(),
 				name: 'ABF Runtime',
 				agents: deps.agentsMap.size,
@@ -420,6 +426,13 @@ export class HttpGateway implements IGateway {
 			return c.json(result.ok ? result.value : []);
 		});
 
+		// Static prefix route must come BEFORE dynamic :name to avoid "runs" matching as :name
+		app.get('/api/workflows/runs/:runId', (c) => {
+			const run = workflowRuns.get(c.req.param('runId'));
+			if (!run) return c.json({ error: 'Run not found' }, 404);
+			return c.json(run);
+		});
+
 		app.get('/api/workflows/:name', async (c) => {
 			if (!deps.workflowsDir) return c.json({ error: 'Workflows not configured' }, 404);
 			const { loadWorkflowConfigs } = await import('../../config/loader.js');
@@ -445,7 +458,7 @@ export class HttpGateway implements IGateway {
 			const runId = nanoid();
 
 			void deps.workflowRunner.run(wf, body.input ?? {}).then((run) => {
-				workflowRuns.set(run.id, run);
+				workflowRuns.set(runId, run);
 				if (workflowRuns.size > 100) {
 					const first = workflowRuns.keys().next().value;
 					if (first !== undefined) workflowRuns.delete(first);
@@ -453,12 +466,6 @@ export class HttpGateway implements IGateway {
 			});
 
 			return c.json({ runId }, 202);
-		});
-
-		app.get('/api/workflows/runs/:runId', (c) => {
-			const run = workflowRuns.get(c.req.param('runId'));
-			if (!run) return c.json({ error: 'Run not found' }, 404);
-			return c.json(run);
 		});
 
 		// 404 fallback

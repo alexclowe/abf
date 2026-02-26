@@ -2,20 +2,29 @@
 
 import useSWR from 'swr';
 import { api } from '@/lib/api';
+import { useEventStream } from '@/lib/use-event-stream';
 
 export default function MetricsPage() {
-  const { data: runtime } = useSWR('metrics-runtime', () => api.metrics.runtime(), {
+  const { data: stream } = useEventStream();
+
+  // SSE provides runtime + agent states in real time; fall back to SWR if SSE not connected
+  const { data: swrRuntime } = useSWR(!stream ? 'metrics-runtime' : null, () => api.metrics.runtime(), {
     refreshInterval: 5000,
   });
-  const { data: agents } = useSWR('metrics-agents', () => api.metrics.agents(), {
+  const { data: swrAgents } = useSWR(!stream ? 'metrics-agents' : null, () => api.metrics.agents(), {
     refreshInterval: 5000,
   });
 
-  const activeSessions = (runtime?.activeSessions as number) ?? 0;
-  const agentCount = (runtime?.agentCount as number) ?? 0;
-  const totalEscalations = (runtime?.totalEscalations as number) ?? 0;
-  const resolvedEscalations = (runtime?.resolvedEscalations as number) ?? 0;
-  const sessionHistory = (runtime?.sessionHistory as { agentId: string; sessionId: string; startedAt: string }[]) ?? [];
+  const runtime = stream?.runtime ?? swrRuntime;
+  const agents = stream?.agents ?? swrAgents;
+
+  const activeSessions = Number(runtime?.activeSessions ?? 0);
+  const agentCount = Number(runtime?.agentCount ?? 0);
+  const totalEscalations = Number(runtime?.totalEscalations ?? 0);
+  const resolvedEscalations = Number(runtime?.resolvedEscalations ?? 0);
+  const sessionHistory = Array.isArray(runtime?.sessionHistory)
+    ? (runtime.sessionHistory as { agentId: string; sessionId: string; startedAt: string }[])
+    : [];
 
   return (
     <div className="p-6 space-y-6">
@@ -49,29 +58,32 @@ export default function MetricsPage() {
             </tr>
           </thead>
           <tbody>
-            {(agents ?? []).map((a: Record<string, unknown>, i: number) => (
-              <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30">
-                <td className="px-4 py-2 font-medium">{String(a.id)}</td>
-                <td className="px-4 py-2">
-                  <span
-                    className={`px-2 py-0.5 rounded text-xs font-medium ${
-                      a.status === 'active'
-                        ? 'bg-green-500/20 text-green-400'
-                        : a.status === 'error'
-                          ? 'bg-red-500/20 text-red-400'
-                          : 'bg-slate-700 text-slate-400'
-                    }`}
-                  >
-                    {String(a.status)}
-                  </span>
-                </td>
-                <td className="px-4 py-2 text-right">{String(a.sessionsCompleted ?? 0)}</td>
-                <td className="px-4 py-2 text-right text-red-400">{String(a.errorCount ?? 0)}</td>
-                <td className="px-4 py-2 text-right">
-                  ${(((a.totalCost as number) ?? 0) / 100).toFixed(2)}
-                </td>
-              </tr>
-            ))}
+            {(agents ?? []).map((a: Record<string, unknown>, i: number) => {
+              const costCents = Number(a.totalCost ?? 0);
+              return (
+                <tr key={String(a.id ?? i)} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                  <td className="px-4 py-2 font-medium">{String(a.id)}</td>
+                  <td className="px-4 py-2">
+                    <span
+                      className={`px-2 py-0.5 rounded text-xs font-medium ${
+                        a.status === 'active'
+                          ? 'bg-green-500/20 text-green-400'
+                          : a.status === 'error'
+                            ? 'bg-red-500/20 text-red-400'
+                            : 'bg-slate-700 text-slate-400'
+                      }`}
+                    >
+                      {String(a.status)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2 text-right">{String(a.sessionsCompleted ?? 0)}</td>
+                  <td className="px-4 py-2 text-right text-red-400">{String(a.errorCount ?? 0)}</td>
+                  <td className="px-4 py-2 text-right">
+                    ${(costCents / 100).toFixed(2)}
+                  </td>
+                </tr>
+              );
+            })}
             {(!agents || agents.length === 0) && (
               <tr>
                 <td colSpan={5} className="px-4 py-6 text-center text-slate-500">

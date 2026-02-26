@@ -159,7 +159,7 @@ describe('HttpGateway', () => {
 		const res = await fetch(`${baseUrl}/api/status`);
 		expect(res.status).toBe(200);
 		const body = await res.json();
-		expect(body.version).toBe('0.2.0');
+		expect(body.version).toBe('1.0.0');
 		expect(body.name).toBe('ABF Runtime');
 		expect(typeof body.uptime).toBe('number');
 		expect(body.agents).toBe(2);
@@ -355,7 +355,7 @@ describe('HttpGateway — API Key Auth', () => {
 		});
 		expect(res.status).toBe(200);
 		const body = await res.json();
-		expect(body.version).toBe('0.2.0');
+		expect(body.version).toBe('1.0.0');
 	});
 
 	it('allows /health without auth (not under /api/*)', async () => {

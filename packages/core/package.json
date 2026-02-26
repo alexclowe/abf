@@ -1,9 +1,19 @@
 {
   "name": "@abf/core",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
-  "description": "ABF runtime, types, and engine",
+  "description": "ABF runtime, types, and engine — the core of the Agentic Business Framework",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alexclowe/abf.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/alexclowe/abf#readme",
+  "bugs": "https://github.com/alexclowe/abf/issues",
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "import": "./dist/index.js",

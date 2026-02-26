@@ -142,6 +142,16 @@ export async function createRuntime(
 	const { loadMCPTools } = await import('../tools/mcp/loader.js');
 	await loadMCPTools(join(projectRoot, config.toolsDir), toolRegistry);
 
+	// Load custom tools (*.tool.yaml + optional *.tool.js)
+	const { loadToolConfigs } = await import('../tools/loader.js');
+	const customToolCtx = { projectRoot, vault, datastore, log: (msg: string) => console.log(`[tools] ${msg}`) };
+	const customToolsResult = await loadToolConfigs(join(projectRoot, config.toolsDir), customToolCtx);
+	if (customToolsResult.ok) {
+		for (const tool of customToolsResult.value) {
+			toolRegistry.register(tool);
+		}
+	}
+
 	// 8. Provider registry — register all available providers
 	const providerRegistry = new ProviderRegistry();
 	providerRegistry.register(new AnthropicProvider(vault));

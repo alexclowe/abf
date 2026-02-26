@@ -3,7 +3,11 @@ import chalk from 'chalk';
 
 const program = new Command();
 
-program.name('abf').description('ABF — Agentic Business Framework CLI').version('0.1.0');
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const pkg = require('../package.json') as { version: string };
+
+program.name('abf').description('ABF — Agentic Business Framework CLI').version(pkg.version);
 
 // Lazy-load commands to keep startup fast
 program
@@ -101,6 +105,15 @@ agent
 	.action(async (options: { name: string; archetype?: string; team?: string }) => {
 		const { agentAddCommand } = await import('./commands/agent.js');
 		await agentAddCommand(options);
+	});
+
+program
+	.command('escalations')
+	.description('View and resolve agent escalations')
+	.option('-r, --resolve <id>', 'Resolve an escalation by ID')
+	.action(async (options: { resolve?: string }) => {
+		const { escalationsCommand } = await import('./commands/escalations.js');
+		await escalationsCommand(options);
 	});
 
 program

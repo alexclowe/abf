@@ -195,8 +195,8 @@ Multi-agent coordination defined in YAML. Sequential, parallel, conditional step
 - **Cloud**: `abf deploy --target railway` — one-click
 - **ABF Cloud**: Managed hosting (future)
 
-## Reference Implementation: CiteRank
-14 agents across 4 teams (Product, GTM, CS, Finance) running an AI citation tracking business. Agents: atlas, scout, lens, sage, sentinel, vanguard, hunter, herald, signal, bridge, anchor, dispatch, guardian, ledger. Plus 3 shared services: scribe, radar, clerk.
+## Reference Implementation
+Generated from a seed document via the Seed-to-Company pipeline. The reference app is a digital coaching platform with AI agents handling coaching, content creation, community management, performance analytics, and customer support. The agent team was designed entirely by ABF's analyzer — not hand-built — demonstrating that any business described in a seed document can be turned into a running agent team.
 
 ## Build Phases
 1. **v0.1 Foundation**: Runtime (scheduler, dispatcher, sessions, bus), agent definitions, file memory, provider plugins (Anthropic/OpenAI/Ollama), CLI, basic Dashboard, 1 template

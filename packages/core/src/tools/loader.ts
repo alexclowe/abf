@@ -1,11 +1,12 @@
 /**
  * Tool loader — reads *.tool.yaml files from a directory and registers them.
- * For v0.1, YAML-defined tools execute as NoOpTool (records call, returns metadata).
- * Real .tool.ts execution comes in v0.2.
+ * If a co-located .tool.js file exists, it is dynamically imported and
+ * wrapped as a CustomTool with real execution. Otherwise falls back to NoOpTool.
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { parse } from 'yaml';
 import type { ToolId } from '../types/common.js';
 import type { ABFError, Result } from '../types/errors.js';
@@ -23,8 +24,10 @@ import { createSendMessageTool } from './builtin/send-message.js';
 import { createBrowseTool } from './builtin/browse.js';
 import { createDatabaseQueryTool } from './builtin/database-query.js';
 import { createDatabaseWriteTool } from './builtin/database-write.js';
+import { CustomTool, isCustomToolModule } from './custom-tool.js';
+import type { CustomToolContext } from './custom-tool.js';
 
-/** A no-op tool that records its invocation and returns metadata. Used for v0.1 scaffolding. */
+/** A no-op tool that records its invocation. Used when no .tool.js file is provided. */
 class NoOpTool implements ITool {
 	constructor(readonly definition: ToolDefinition) {}
 
@@ -34,7 +37,7 @@ class NoOpTool implements ITool {
 			toolId: this.definition.id,
 			toolName: this.definition.name,
 			args,
-			note: 'NoOpTool: real execution available in v0.2',
+			note: 'NoOpTool: provide a co-located .tool.js file to enable real execution',
 		});
 	}
 }
@@ -95,9 +98,12 @@ export function createBuiltinTools(ctx: BuiltinToolContext): readonly ITool[] {
 	return tools;
 }
 
-/** Load all *.tool.yaml files from a directory and return ITool instances. */
+/** Load all *.tool.yaml files from a directory and return ITool instances.
+ *  If a co-located .tool.js file exists for a YAML definition, it is dynamically
+ *  imported and the tool gets real execution. Otherwise it falls back to NoOpTool. */
 export async function loadToolConfigs(
 	toolsDir: string,
+	customCtx?: CustomToolContext,
 ): Promise<Result<readonly ITool[], ABFError>> {
 	let files: string[];
 	try {
@@ -127,6 +133,26 @@ export async function loadToolConfigs(
 		}
 
 		const definition = transformToolYaml(parsed.data);
+
+		// Check for co-located .tool.js implementation
+		const baseName = filename.replace(/\.tool\.yaml$/, '');
+		const jsPath = join(toolsDir, `${baseName}.tool.js`);
+
+		if (existsSync(jsPath) && customCtx) {
+			try {
+				const mod = await import(pathToFileURL(jsPath).href);
+				if (isCustomToolModule(mod)) {
+					tools.push(new CustomTool(definition, mod, customCtx));
+					continue;
+				}
+				// Module exists but doesn't export execute() — warn and fall back to NoOp
+				customCtx.log(`Warning: ${baseName}.tool.js does not export an execute() function, using NoOp`);
+			} catch (e) {
+				const message = e instanceof Error ? e.message : String(e);
+				customCtx.log(`Warning: Failed to import ${baseName}.tool.js: ${message}, using NoOp`);
+			}
+		}
+
 		tools.push(new NoOpTool(definition));
 	}
 
