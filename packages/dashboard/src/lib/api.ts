@@ -11,12 +11,25 @@ import type {
   AuditEntry,
   EscalationItem,
   ProviderStatus,
+  ProviderAuthConfig,
+  ProviderAuthStatus,
+  OllamaDetectResponse,
+  ConnectKeyResponse,
 } from './types';
 
 const BASE = process.env.NEXT_PUBLIC_ABF_API_URL ?? 'http://localhost:3000';
 
+function headers(extra?: Record<string, string>): Record<string, string> {
+  const h: Record<string, string> = { ...extra };
+  const apiKey = process.env.NEXT_PUBLIC_ABF_API_KEY;
+  if (apiKey) {
+    h['Authorization'] = `Bearer ${apiKey}`;
+  }
+  return h;
+}
+
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { cache: 'no-store' });
+  const res = await fetch(`${BASE}${path}`, { cache: 'no-store', headers: headers() });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json() as Promise<T>;
 }
@@ -24,9 +37,15 @@ async function get<T>(path: string): Promise<T> {
 async function post<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: headers({ 'Content-Type': 'application/json' }),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json() as Promise<T>;
+}
+
+async function del<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, { method: 'DELETE', headers: headers() });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json() as Promise<T>;
 }
@@ -86,6 +105,21 @@ export const api = {
 
   providers: {
     list: () => get<ProviderStatus[]>('/api/providers'),
+  },
+
+  auth: {
+    /** List available provider configs (display names, key prefixes, deep links) */
+    providers: () => get<ProviderAuthConfig[]>('/auth/providers'),
+    /** Connection status for all providers including Ollama */
+    status: () => get<Record<string, ProviderAuthStatus>>('/auth/status'),
+    /** Validate and store an API key */
+    connectKey: (provider: string, key: string) =>
+      post<ConnectKeyResponse>(`/auth/key/${provider}`, { key }),
+    /** Remove a provider's stored key */
+    disconnect: (provider: string) =>
+      del<{ disconnected: boolean }>(`/auth/${provider}`),
+    /** Dedicated Ollama probe with model details */
+    ollamaDetect: () => get<OllamaDetectResponse>('/auth/ollama/detect'),
   },
 
   metrics: {

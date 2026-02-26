@@ -14,7 +14,18 @@ export class AnthropicProvider implements IProvider {
 	readonly slug = 'anthropic';
 	readonly authType = 'api_key' as const;
 
+	private cachedClient: { key: string; client: Anthropic } | null = null;
+
 	constructor(private readonly vault: ICredentialVault) {}
+
+	private getClient(apiKey: string): Anthropic {
+		if (this.cachedClient?.key === apiKey) {
+			return this.cachedClient.client;
+		}
+		const client = new Anthropic({ apiKey });
+		this.cachedClient = { key: apiKey, client };
+		return client;
+	}
 
 	private async getApiKey(): Promise<string> {
 		const fromVault = await this.vault.get('anthropic', 'api_key');
@@ -37,7 +48,7 @@ export class AnthropicProvider implements IProvider {
 			return;
 		}
 
-		const client = new Anthropic({ apiKey });
+		const client = this.getClient(apiKey);
 
 		// Transform messages to Anthropic format
 		const systemMessage = request.messages.find((m) => m.role === 'system');

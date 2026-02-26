@@ -64,6 +64,13 @@ export interface RuntimeConfig {
 	readonly healthCheckIntervalMs: number;
 }
 
+// ─── Cloud Config ─────────────────────────────────────────────────────
+
+export interface CloudConfig {
+	readonly token: string;
+	readonly endpoint?: string | undefined;
+}
+
 // ─── ABF Config (top-level) ───────────────────────────────────────────
 
 export interface AbfConfig {
@@ -87,4 +94,5 @@ export interface AbfConfig {
 	readonly logsDir: string;
 	readonly knowledgeDir: string;
 	readonly outputsDir: string;
+	readonly cloud?: CloudConfig | undefined;
 }

@@ -91,6 +91,7 @@ export interface RuntimeComponents {
 	readonly approvalStore?: IApprovalStore | undefined;
 	readonly datastore?: IDatastore | undefined;
 	readonly inbox?: import('../types/inbox.js').IInbox | undefined;
+	readonly monitorRunner?: import('../monitor/runner.js').MonitorRunner | undefined;
 }
 
 export interface IRuntime {

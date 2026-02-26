@@ -17,7 +17,7 @@
  */
 
 import { join } from 'node:path';
-import { FilesystemCredentialVault } from '../credentials/vault.js';
+import { createVault } from '../credentials/vault-v2.js';
 import { FilesystemMemoryStore } from '../memory/filesystem.store.js';
 import { AnthropicProvider } from '../providers/adapters/anthropic.js';
 import { OllamaProvider } from '../providers/adapters/ollama.js';
@@ -46,8 +46,8 @@ export async function createRuntime(
 	config: AbfConfig,
 	projectRoot: string,
 ): Promise<Runtime> {
-	// 1. Credential vault
-	const vault = new FilesystemCredentialVault();
+	// 1. Credential vault (v2 — OS Keychain or scrypt)
+	const vault = await createVault();
 
 	// 2. Shared agents map (single source of truth for both dispatcher + session manager)
 	const agentsMap = new Map<string, AgentConfig>();
@@ -148,6 +148,12 @@ export async function createRuntime(
 	providerRegistry.register(new OpenAIProvider(vault));
 	providerRegistry.register(new OllamaProvider(vault));
 
+	// Register ABF Cloud provider if cloud config is present (Path 4)
+	if (config.cloud) {
+		const { CloudProxyProvider } = await import('../providers/adapters/cloud-proxy.js');
+		providerRegistry.register(new CloudProxyProvider(config.cloud, vault));
+	}
+
 	// Outputs manager for cross-agent memory
 	const { OutputsManager } = await import('../memory/outputs.js');
 	const outputsManager = new OutputsManager(join(projectRoot, config.outputsDir));
@@ -188,13 +194,10 @@ export async function createRuntime(
 	const workflowRunner = new WorkflowRunner(dispatcher, agentsMap);
 	const workflowsDir = join(projectRoot, 'workflows');
 
-	// Monitor runner (external source monitoring)
+	// Monitor runner (external source monitoring) — load configs only; start() deferred to Runtime.start()
 	const { MonitorRunner } = await import('../monitor/runner.js');
 	const monitorRunner = new MonitorRunner();
 	monitorRunner.loadMonitors(join(projectRoot, 'monitors'));
-	monitorRunner.start((activation) => {
-		void dispatcher.dispatch(activation);
-	});
 
 	// Metrics collector
 	const { MetricsCollector } = await import('../metrics/collector.js');
@@ -215,6 +218,7 @@ export async function createRuntime(
 		approvalStore,
 		inbox,
 		metricsCollector,
+		vault,
 	});
 
 	const components: RuntimeComponents = {
@@ -230,6 +234,7 @@ export async function createRuntime(
 		dispatcher,
 		sessionManager,
 		gateway,
+		monitorRunner,
 	};
 
 	return new Runtime(config, projectRoot, components, vault);

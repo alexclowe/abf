@@ -14,7 +14,18 @@ export class OpenAIProvider implements IProvider {
 	readonly slug = 'openai';
 	readonly authType = 'api_key' as const;
 
+	private cachedClient: { key: string; client: OpenAI } | null = null;
+
 	constructor(private readonly vault: ICredentialVault) {}
+
+	private getClient(apiKey: string): OpenAI {
+		if (this.cachedClient?.key === apiKey) {
+			return this.cachedClient.client;
+		}
+		const client = new OpenAI({ apiKey });
+		this.cachedClient = { key: apiKey, client };
+		return client;
+	}
 
 	private async getApiKey(): Promise<string> {
 		const fromVault = await this.vault.get('openai', 'api_key');
@@ -37,7 +48,7 @@ export class OpenAIProvider implements IProvider {
 			return;
 		}
 
-		const client = new OpenAI({ apiKey });
+		const client = this.getClient(apiKey);
 
 		// Build tool definitions
 		const tools: OpenAI.Chat.ChatCompletionTool[] | undefined =

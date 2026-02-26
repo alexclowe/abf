@@ -190,6 +190,36 @@ export interface StatusResponse {
   configured: boolean;
 }
 
+// ── Auth / Providers ──────────────────────────────────────────────────
+
+export interface ProviderAuthConfig {
+  id: string;
+  displayName: string;
+  keyPrefix: string;
+  deepLink: string;
+  optional: boolean;
+  description?: string;
+}
+
+export interface ProviderAuthStatus {
+  connected: boolean;
+  optional?: boolean;
+  description?: string;
+  local?: boolean;
+  models?: string[];
+}
+
+export interface OllamaDetectResponse {
+  detected: boolean;
+  models?: { name: string; size: number }[];
+  baseUrl?: string;
+}
+
+export interface ConnectKeyResponse {
+  connected: boolean;
+  error?: string;
+}
+
 export interface ModelInfo {
   id: string;
   name: string;

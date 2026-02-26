@@ -32,12 +32,22 @@ export class Runtime implements IRuntime {
 		}
 
 		this.components.scheduler.start();
+
+		// Start monitor polling AFTER agents are loaded to avoid dispatching
+		// activations for agents that don't exist yet (race condition M5).
+		if (this.components.monitorRunner) {
+			this.components.monitorRunner.start((activation) => {
+				void this.components.dispatcher.dispatch(activation);
+			});
+		}
 	}
 
 	async stop(): Promise<void> {
 		this.components.scheduler.stop();
 		// Clear any pending heartbeat timers before shutdown
 		this.components.dispatcher.clearHeartbeats();
+		// Stop monitor polling to clean up interval timers
+		this.components.monitorRunner?.stop();
 
 		if (this.config.gateway.enabled) {
 			await this.components.gateway.stop();

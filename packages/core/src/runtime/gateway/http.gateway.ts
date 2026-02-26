@@ -5,6 +5,7 @@
 
 import type { ServerType } from '@hono/node-server';
 import { serve } from '@hono/node-server';
+import { timingSafeEqual } from 'node:crypto';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { loadTeamConfigs } from '../../config/loader.js';
@@ -18,7 +19,17 @@ import type { IProviderRegistry } from '../../types/provider.js';
 import type { IAuditStore } from '../../types/security.js';
 import { createActivationId, toISOTimestamp } from '../../util/id.js';
 import type { IApprovalStore } from '../../types/approval.js';
+import type { ICredentialVault } from '../../credentials/vault.js';
 import type { IGateway, IDispatcher } from '../interfaces.js';
+import { registerAuthRoutes } from './auth.routes.js';
+
+/** Timing-safe API key comparison to prevent timing attacks. */
+function isValidApiKey(received: string | undefined, required: string): boolean {
+	if (!received) return false;
+	const expected = `Bearer ${required}`;
+	if (received.length !== expected.length) return false;
+	return timingSafeEqual(Buffer.from(received), Buffer.from(expected));
+}
 
 export interface GatewayDeps {
 	readonly agentsMap: ReadonlyMap<string, AgentConfig>;
@@ -35,6 +46,7 @@ export interface GatewayDeps {
 	readonly approvalStore?: IApprovalStore | undefined;
 	readonly inbox?: import('../../types/inbox.js').IInbox | undefined;
 	readonly metricsCollector?: import('../../metrics/collector.js').MetricsCollector | undefined;
+	readonly vault?: ICredentialVault | undefined;
 }
 
 /** @deprecated Use GatewayDeps instead. Kept for backwards compatibility. */
@@ -71,17 +83,16 @@ export class HttpGateway implements IGateway {
 			cors({
 				origin: (origin) =>
 					allowedOrigins.includes(origin) ? origin : (allowedOrigins[0] ?? ''),
-				allowMethods: ['GET', 'POST', 'OPTIONS'],
+				allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
 				allowHeaders: ['Content-Type', 'Authorization'],
 			}),
 		);
 
-		// Auth middleware — protects /api/* and /webhook/* if ABF_API_KEY env var is set
+		// Auth middleware — protects /api/*, /webhook/*, and /auth/* if ABF_API_KEY env var is set
 		app.use('/api/*', async (c, next) => {
 			const requiredKey = process.env['ABF_API_KEY'];
 			if (!requiredKey) return next();
-			const auth = c.req.header('Authorization');
-			if (auth !== `Bearer ${requiredKey}`) {
+			if (!isValidApiKey(c.req.header('Authorization'), requiredKey)) {
 				return c.json(
 					{ error: 'Unauthorized. Set Authorization: Bearer {ABF_API_KEY}' },
 					401,
@@ -92,12 +103,25 @@ export class HttpGateway implements IGateway {
 		app.use('/webhook/*', async (c, next) => {
 			const requiredKey = process.env['ABF_API_KEY'];
 			if (!requiredKey) return next();
-			const auth = c.req.header('Authorization');
-			if (auth !== `Bearer ${requiredKey}`) {
+			if (!isValidApiKey(c.req.header('Authorization'), requiredKey)) {
 				return c.json({ error: 'Unauthorized' }, 401);
 			}
 			return next();
 		});
+		// Protect /auth/* routes when ABF_API_KEY is configured (allow unauthenticated during first-time setup)
+		app.use('/auth/*', async (c, next) => {
+			const requiredKey = process.env['ABF_API_KEY'];
+			if (!requiredKey) return next();
+			if (!isValidApiKey(c.req.header('Authorization'), requiredKey)) {
+				return c.json({ error: 'Unauthorized' }, 401);
+			}
+			return next();
+		});
+
+		// -- Auth routes ----------------------------------------------------------
+		if (deps.vault) {
+			registerAuthRoutes(app, { vault: deps.vault });
+		}
 
 		// -- Health ---------------------------------------------------------------
 		app.get('/health', (c) => {

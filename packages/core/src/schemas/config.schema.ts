@@ -61,6 +61,13 @@ const datastoreSchema = z
 	})
 	.optional();
 
+const cloudSchema = z
+	.object({
+		token: z.string(),
+		endpoint: z.string().optional(),
+	})
+	.optional();
+
 export const configYamlSchema = z.object({
 	name: z.string(),
 	version: z.string().default('0.1.0'),
@@ -79,6 +86,7 @@ export const configYamlSchema = z.object({
 	logs_dir: z.string().default('logs'),
 	knowledge_dir: z.string().default('knowledge'),
 	outputs_dir: z.string().default('outputs'),
+	cloud: cloudSchema,
 });
 
 export type ConfigYamlInput = z.input<typeof configYamlSchema>;
@@ -137,5 +145,11 @@ export function transformConfigYaml(parsed: z.output<typeof configYamlSchema>): 
 		logsDir: parsed.logs_dir,
 		knowledgeDir: parsed.knowledge_dir,
 		outputsDir: parsed.outputs_dir,
+		...(parsed.cloud != null && {
+			cloud: {
+				token: parsed.cloud.token,
+				...(parsed.cloud.endpoint != null && { endpoint: parsed.cloud.endpoint }),
+			},
+		}),
 	};
 }
