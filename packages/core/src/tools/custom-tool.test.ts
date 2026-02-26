@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { join } from 'node:path';
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, } from 'node:fs';
 import { tmpdir } from 'node:os';
 import type { ToolId } from '../types/common.js';
 import type { ToolDefinition } from '../types/tool.js';

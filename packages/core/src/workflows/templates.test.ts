@@ -5,7 +5,6 @@ import {
 	fanOutSynthesize,
 	sequentialPipeline,
 	eventTriggered,
-	type WorkflowTemplateDefinition,
 } from './templates.js';
 
 describe('Workflow Templates', () => {

@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import { FilesystemCredentialVault } from '../../credentials/vault.js';
+import type { FilesystemCredentialVault } from '../../credentials/vault.js';
 
 // Build a fake streaming response that mimics the openai stream API
 const buildFakeStream = () => {

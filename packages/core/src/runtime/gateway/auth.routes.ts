@@ -107,7 +107,7 @@ async function validateProviderKey(
 		};
 
 		let url: string;
-		let method = 'GET';
+		const method = 'GET';
 
 		if (provider === 'anthropic') {
 			url = 'https://api.anthropic.com/v1/models';

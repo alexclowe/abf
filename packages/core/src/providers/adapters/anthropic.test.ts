@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import { FilesystemCredentialVault } from '../../credentials/vault.js';
+import type { FilesystemCredentialVault } from '../../credentials/vault.js';
 
 // Mock the Anthropic SDK before importing the provider
 vi.mock('@anthropic-ai/sdk', () => {

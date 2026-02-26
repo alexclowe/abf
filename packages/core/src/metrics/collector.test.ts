@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, } from 'vitest';
 import { MetricsCollector } from './collector.js';
 import type { IDispatcher, EscalationItem } from '../runtime/interfaces.js';
 import type { AgentState } from '../types/agent.js';

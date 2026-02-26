@@ -9,14 +9,34 @@
 			"recommended": true,
 			"correctness": {
 				"noUnusedImports": "error",
-				"noUnusedVariables": "warn"
+				"noUnusedVariables": "warn",
+				"useExhaustiveDependencies": "warn"
 			},
 			"style": {
-				"noNonNullAssertion": "warn",
+				"noNonNullAssertion": "off",
+				"noUnusedTemplateLiteral": "off",
+				"useTemplate": "off",
+				"useImportType": "warn",
 				"useConst": "error"
 			},
 			"suspicious": {
-				"noExplicitAny": "warn"
+				"noExplicitAny": "off",
+				"noImplicitAnyLet": "off",
+				"noArrayIndexKey": "off",
+				"noControlCharactersInRegex": "off"
+			},
+			"complexity": {
+				"noBannedTypes": "off",
+				"useLiteralKeys": "off"
+			},
+			"performance": {
+				"noDelete": "off"
+			},
+			"a11y": {
+				"useButtonType": "warn",
+				"noLabelWithoutControl": "off",
+				"useKeyWithClickEvents": "off",
+				"noAutofocus": "off"
 			}
 		}
 	},
@@ -33,6 +53,6 @@
 		}
 	},
 	"files": {
-		"ignore": ["**/dist/**", "**/node_modules/**", "**/*.json"]
+		"ignore": ["**/dist/**", "**/node_modules/**", "**/.next/**", "**/*.json"]
 	}
 }

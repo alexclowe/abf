@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, } from 'vitest';
 import type { IProviderRegistry } from '../types/provider.js';
 import type { ChatChunk, ChatRequest } from '../types/provider.js';
 import { InterviewEngine } from './interview.js';
