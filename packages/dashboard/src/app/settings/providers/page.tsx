@@ -4,7 +4,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
 import type { ProviderAuthConfig, ProviderAuthStatus } from '@/lib/types';
-import { KeyRound, ExternalLink, Check, X, Loader2, Cpu, Trash2 } from 'lucide-react';
+import { KeyRound, ExternalLink, Check, Loader2, Cpu, Trash2 } from 'lucide-react';
 
 // ── Connect Modal ───────────────────────────────────────────────────
 

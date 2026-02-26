@@ -7,7 +7,6 @@ import { api } from '@/lib/api';
 import type {
   CompanyPlan,
   AgentPlan,
-  InterviewStep,
   InterviewAnswer,
 } from '@/lib/types';
 import clsx from 'clsx';
@@ -17,7 +16,6 @@ import {
   X,
   Upload,
   FileText,
-  MessageSquare,
   Loader2,
   CheckCircle2,
   AlertTriangle,

@@ -7,6 +7,7 @@ import type { ApprovalItem } from '@/lib/types';
 
 export default function ApprovalsPage() {
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | ''>('pending');
+  const [actionError, setActionError] = useState<string | null>(null);
   const { data: approvals, error, mutate } = useSWR(
     `approvals-${filter}`,
     () => api.approvals.list(filter || undefined),
@@ -14,13 +15,23 @@ export default function ApprovalsPage() {
   );
 
   async function handleApprove(id: string) {
-    await api.approvals.approve(id);
-    mutate();
+    try {
+      setActionError(null);
+      await api.approvals.approve(id);
+      mutate();
+    } catch (e) {
+      setActionError(`Failed to approve: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   async function handleReject(id: string) {
-    await api.approvals.reject(id);
-    mutate();
+    try {
+      setActionError(null);
+      await api.approvals.reject(id);
+      mutate();
+    } catch (e) {
+      setActionError(`Failed to reject: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   return (
@@ -47,6 +58,13 @@ export default function ApprovalsPage() {
       {error && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
           Failed to load approvals: {error.message}
+        </div>
+      )}
+
+      {actionError && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm flex items-center justify-between">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
         </div>
       )}
 

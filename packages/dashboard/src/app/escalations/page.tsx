@@ -1,20 +1,28 @@
 'use client';
 
+import { useState } from 'react';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
+import { useEventStream } from '@/lib/use-event-stream';
 import { AlertTriangle } from 'lucide-react';
 
 export default function EscalationsPage() {
-  const { data: escalations, error, mutate } = useSWR('escalations', () => api.escalations.list(), {
-    refreshInterval: 3000,
-  });
+  const { data: stream } = useEventStream();
+  const { data: swrEscalations, error, mutate } = useSWR(
+    !stream ? 'escalations' : null,
+    () => api.escalations.list(),
+    { refreshInterval: 3000 },
+  );
+  const escalations = stream?.escalations ?? swrEscalations;
+  const [actionError, setActionError] = useState<string | null>(null);
 
   async function resolve(id: string) {
     try {
+      setActionError(null);
       await api.escalations.resolve(id);
       mutate();
     } catch (e) {
-      alert(`Failed to resolve: ${e instanceof Error ? e.message : String(e)}`);
+      setActionError(`Failed to resolve: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -28,6 +36,13 @@ export default function EscalationsPage() {
       {error && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
           Failed to load escalations: {error.message}
+        </div>
+      )}
+
+      {actionError && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm flex items-center justify-between">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
         </div>
       )}
 

@@ -291,7 +291,7 @@ ABF supports multiple deployment targets:
 - **Render**: `abf deploy --target render`
 - **Fly.io**: `abf deploy --target fly`
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy?repo=https://github.com/your-org/abf&branch=main)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy?repo=https://github.com/alexclowe/abf&branch=main)
 
 See the [deployment guide](docs/deployment.md) for detailed instructions.
 
@@ -303,7 +303,7 @@ Contributions are welcome. To get started:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/abf.git
+git clone https://github.com/alexclowe/abf.git
 cd abf
 
 # Install dependencies (requires pnpm 10+)

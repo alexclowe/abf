@@ -1,9 +1,22 @@
 {
   "name": "@abf/cli",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
-  "description": "ABF command-line interface",
+  "description": "ABF command-line interface — build and manage agentic businesses",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alexclowe/abf.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/alexclowe/abf#readme",
+  "bugs": "https://github.com/alexclowe/abf/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "bin": {
     "abf": "./dist/index.js"
   },

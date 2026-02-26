@@ -36,11 +36,15 @@ function WorkflowGraph({ workflow }: { workflow: WorkflowDefinition }) {
 export default function WorkflowsPage() {
   const { data: workflows, error } = useSWR('workflows', () => api.workflows.list(), { refreshInterval: 10000 });
   const [running, setRunning] = useState<string | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
 
   const handleRun = async (name: string) => {
     setRunning(name);
+    setRunError(null);
     try {
       await api.workflows.run(name, {});
+    } catch (e) {
+      setRunError(`Failed to run "${name}": ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setRunning(null);
     }
@@ -53,6 +57,13 @@ export default function WorkflowsPage() {
       {error && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
           Failed to load workflows: {error.message}
+        </div>
+      )}
+
+      {runError && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm flex items-center justify-between">
+          <span>{runError}</span>
+          <button onClick={() => setRunError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
         </div>
       )}
 
