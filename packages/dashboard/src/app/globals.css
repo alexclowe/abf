@@ -1,7 +1,8 @@
+@import 'streamdown/styles.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-@import 'streamdown/styles.css';
 
 :root {
   --background: #0f172a;

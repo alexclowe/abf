@@ -11,8 +11,6 @@ import { ChatMessageBubble } from '@/components/ChatMessage';
 import { ChatInput } from '@/components/ChatInput';
 import { ChatSidebar } from '@/components/ChatSidebar';
 import {
-  Send,
-  Square,
   Trash2,
   ArrowLeft,
   RefreshCw,
@@ -96,11 +94,12 @@ function ChatBody({ agentId, onClear }: { agentId: string; onClear: () => void }
   const isLoading = status === 'submitted' || status === 'streaming';
 
   // Auto-scroll to bottom on new messages
+  const messageCount = messages.length;
   useEffect(() => {
-    if (scrollRef.current) {
+    if (messageCount > 0 && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messageCount]);
 
   const handleSend = useCallback(
     (text: string, files?: Array<{ type: 'file'; mediaType: string; url: string }>) => {
@@ -191,6 +190,7 @@ function ChatBody({ agentId, onClear }: { agentId: string; onClear: () => void }
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-900">
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="text-slate-400 hover:text-white transition-colors"
               title="Toggle conversations"
@@ -215,6 +215,7 @@ function ChatBody({ agentId, onClear }: { agentId: string; onClear: () => void }
           <div className="flex items-center gap-2">
             {messages.length > 0 && (
               <button
+                type="button"
                 onClick={handleExport}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-md transition-colors"
                 title="Export conversation"
@@ -224,6 +225,7 @@ function ChatBody({ agentId, onClear }: { agentId: string; onClear: () => void }
               </button>
             )}
             <button
+              type="button"
               onClick={onClear}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-md transition-colors"
               title="Clear conversation"
@@ -245,6 +247,7 @@ function ChatBody({ agentId, onClear }: { agentId: string; onClear: () => void }
                 <div className="grid grid-cols-2 gap-2">
                   {suggestedPrompts.map((prompt) => (
                     <button
+                      type="button"
                       key={prompt}
                       onClick={() => handleSend(prompt)}
                       className="bg-slate-800/50 border border-slate-700 hover:border-sky-500 rounded-lg p-3 text-left text-sm text-slate-300 hover:text-white transition-colors"
@@ -269,6 +272,7 @@ function ChatBody({ agentId, onClear }: { agentId: string; onClear: () => void }
           {showRegenerate && (
             <div className="flex justify-start pl-4">
               <button
+                type="button"
                 onClick={handleRegenerate}
                 className="flex items-center gap-1 text-slate-500 hover:text-slate-300 text-xs transition-colors"
               >

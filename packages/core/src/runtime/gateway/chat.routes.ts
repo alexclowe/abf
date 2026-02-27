@@ -119,7 +119,7 @@ function upsertConversationMeta(convId: string, agentId: string, userText: strin
 		// Evict oldest if at capacity
 		if (conversationMeta.size >= MAX_CONVERSATION_META) {
 			let oldestKey: string | undefined;
-			let oldestTime = Infinity;
+			let oldestTime = Number.POSITIVE_INFINITY;
 			for (const [key, val] of conversationMeta) {
 				if (val.lastAccessed < oldestTime) {
 					oldestTime = val.lastAccessed;
@@ -370,7 +370,7 @@ export function registerChatRoutes(app: Hono, deps: ChatRoutesDeps): void {
 		// Evict oldest if at capacity
 		if (feedbackStore.size >= MAX_FEEDBACK) {
 			let oldestKey: string | undefined;
-			let oldestTime = Infinity;
+			let oldestTime = Number.POSITIVE_INFINITY;
 			for (const [key, val] of feedbackStore) {
 				if (val.timestamp < oldestTime) {
 					oldestTime = val.timestamp;

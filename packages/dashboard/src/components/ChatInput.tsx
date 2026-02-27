@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Send, Square, Paperclip, Mic, MicOff } from 'lucide-react';
 import { FilePreview } from './FilePreview';
 import { SLASH_COMMANDS, type SlashCommand } from '@/lib/slash-commands';
@@ -46,14 +46,14 @@ export function ChatInput({ onSend, isLoading, onStop, agentId }: ChatInputProps
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<ReturnType<typeof createRecognition> | null>(null);
 
-  // Auto-resize textarea
-  useEffect(() => {
+  // Auto-resize textarea on content change
+  function resizeTextarea() {
     const el = textareaRef.current;
     if (el) {
       el.style.height = 'auto';
       el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
     }
-  }, [input]);
+  }
 
   // Fetch agents for @mentions (cached)
   useEffect(() => {
@@ -115,6 +115,7 @@ export function ChatInput({ onSend, isLoading, onStop, agentId }: ChatInputProps
   function handleInputChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const val = e.target.value;
     setInput(val);
+    resizeTextarea();
 
     // Slash command detection
     if (val.startsWith('/')) {
@@ -247,6 +248,7 @@ export function ChatInput({ onSend, isLoading, onStop, agentId }: ChatInputProps
         <div className="absolute bottom-full left-4 mb-2 bg-slate-800 border border-slate-700 rounded-lg shadow-lg py-1 w-64 z-20">
           {filteredSlashCommands.map((cmd) => (
             <button
+              type="button"
               key={cmd.name}
               onClick={() => selectSlashCommand(cmd)}
               className="w-full px-3 py-2 text-left text-sm hover:bg-slate-700 transition-colors"
@@ -263,6 +265,7 @@ export function ChatInput({ onSend, isLoading, onStop, agentId }: ChatInputProps
         <div className="absolute bottom-full left-4 mb-2 bg-slate-800 border border-slate-700 rounded-lg shadow-lg py-1 w-64 z-20">
           {filteredAgents.slice(0, 6).map((agent) => (
             <button
+              type="button"
               key={agent.id}
               onClick={() => insertMention(agent)}
               className="w-full px-3 py-2 text-left text-sm hover:bg-slate-700 transition-colors"
@@ -281,6 +284,7 @@ export function ChatInput({ onSend, isLoading, onStop, agentId }: ChatInputProps
       <div className="flex items-end gap-2 p-4">
         {/* File upload button */}
         <button
+          type="button"
           onClick={() => fileInputRef.current?.click()}
           className="flex-shrink-0 p-2 text-slate-400 hover:text-white transition-colors"
           title="Attach files"
@@ -317,6 +321,7 @@ export function ChatInput({ onSend, isLoading, onStop, agentId }: ChatInputProps
         {/* Voice input */}
         {hasSpeech && (
           <button
+            type="button"
             onClick={toggleVoice}
             className={`flex-shrink-0 p-2 transition-colors ${
               isRecording
@@ -341,6 +346,7 @@ export function ChatInput({ onSend, isLoading, onStop, agentId }: ChatInputProps
           </button>
         ) : (
           <button
+            type="button"
             onClick={handleSubmit}
             disabled={!input.trim() && files.length === 0}
             className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors"

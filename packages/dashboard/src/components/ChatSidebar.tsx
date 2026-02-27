@@ -46,10 +46,6 @@ export function ChatSidebar({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchConversations();
-  }, [agentId]);
-
-  function fetchConversations() {
     setLoading(true);
     fetch(`${BASE}/api/agents/${agentId}/conversations`, { headers: apiHeaders() })
       .then((r) => r.json())
@@ -58,7 +54,7 @@ export function ChatSidebar({
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }
+  }, [agentId]);
 
   function deleteConversation(convId: string) {
     fetch(`${BASE}/api/agents/${agentId}/conversations/${convId}`, {
@@ -80,6 +76,7 @@ export function ChatSidebar({
         </span>
         <div className="flex items-center gap-1">
           <button
+            type="button"
             onClick={onNewConversation}
             className="p-1 text-slate-400 hover:text-white transition-colors"
             title="New conversation"
@@ -87,6 +84,7 @@ export function ChatSidebar({
             <Plus size={16} />
           </button>
           <button
+            type="button"
             onClick={onClose}
             className="p-1 text-slate-400 hover:text-white transition-colors"
             title="Close sidebar"
@@ -121,6 +119,7 @@ export function ChatSidebar({
               </p>
             </div>
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 deleteConversation(conv.id);

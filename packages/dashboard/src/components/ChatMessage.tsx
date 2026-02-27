@@ -42,6 +42,7 @@ function CopyButton({ text }: { text: string }) {
 
   return (
     <button
+      type="button"
       onClick={handleCopy}
       className="absolute top-2 right-2 p-1 rounded bg-slate-700/80 text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
       title="Copy message"
@@ -74,6 +75,7 @@ function FeedbackButtons({ messageId, agentId }: { messageId: string; agentId?: 
   return (
     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
       <button
+        type="button"
         onClick={() => handleFeedback('up')}
         className={`p-0.5 rounded ${feedback === 'up' ? 'text-green-400' : 'text-slate-500 hover:text-slate-300'}`}
         title="Good response"
@@ -81,6 +83,7 @@ function FeedbackButtons({ messageId, agentId }: { messageId: string; agentId?: 
         <ThumbsUp size={12} />
       </button>
       <button
+        type="button"
         onClick={() => handleFeedback('down')}
         className={`p-0.5 rounded ${feedback === 'down' ? 'text-red-400' : 'text-slate-500 hover:text-slate-300'}`}
         title="Bad response"
@@ -104,6 +107,7 @@ function ToolCallBadge({ part }: { part: Record<string, unknown> }) {
   return (
     <div className="my-2 bg-slate-800/50 border border-slate-700 rounded-md text-xs">
       <button
+        type="button"
         onClick={() => hasOutput && setExpanded(!expanded)}
         className={`flex items-center gap-2 w-full px-3 py-2 text-left ${hasOutput ? 'cursor-pointer hover:bg-slate-800/80' : 'cursor-default'}`}
       >
@@ -149,7 +153,7 @@ function FileParts({ part }: { part: Record<string, unknown> }) {
     return (
       <img
         src={url}
-        alt="Uploaded image"
+        alt="Upload"
         className="max-w-[200px] max-h-[200px] rounded-md object-cover my-1"
       />
     );

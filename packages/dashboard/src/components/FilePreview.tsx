@@ -30,6 +30,7 @@ export function FilePreview({ files, onRemove }: FilePreviewProps) {
             </div>
           )}
           <button
+            type="button"
             onClick={() => onRemove(i)}
             className="absolute -top-1.5 -right-1.5 w-4 h-4 flex items-center justify-center bg-slate-600 hover:bg-red-500 rounded-full text-white transition-colors"
           >
