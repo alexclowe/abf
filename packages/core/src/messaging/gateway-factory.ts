@@ -18,34 +18,48 @@ export interface ChannelGatewayConfig {
 }
 
 /**
+ * Module paths for each channel type.
+ * Kept as a map so TypeScript doesn't statically analyze the import paths
+ * (the gateway modules are optional and may not be installed).
+ */
+const GATEWAY_MODULES: Record<ChannelType, string> = {
+	telegram: './telegram.js',
+	slack: './slack-gateway.js',
+	discord: './discord-gateway.js',
+	email: './email-gateway.js',
+};
+
+/** Export class names expected from each gateway module. */
+const GATEWAY_CLASSES: Record<ChannelType, string> = {
+	telegram: 'TelegramGateway',
+	slack: 'SlackChannelGateway',
+	discord: 'DiscordChannelGateway',
+	email: 'EmailChannelGateway',
+};
+
+/**
  * Create a channel gateway instance from config.
  * Dynamically imports the appropriate gateway class.
+ * Returns null if the module is not available.
  */
 export async function createChannelGateway(
 	config: ChannelGatewayConfig,
 	_vault: ICredentialVault,
 ): Promise<IChannelGateway | null> {
+	const modulePath = GATEWAY_MODULES[config.type];
+	const className = GATEWAY_CLASSES[config.type];
+	if (!modulePath || !className) return null;
+
 	try {
-		switch (config.type) {
-			case 'telegram': {
-				const { TelegramGateway } = await import('./telegram.js');
-				return new TelegramGateway(config.token ?? '');
-			}
-			case 'slack': {
-				const { SlackChannelGateway } = await import('./slack-gateway.js');
-				return new SlackChannelGateway(config.token ?? '');
-			}
-			case 'discord': {
-				const { DiscordChannelGateway } = await import('./discord-gateway.js');
-				return new DiscordChannelGateway(config.token ?? '');
-			}
-			case 'email': {
-				const { EmailChannelGateway } = await import('./email-gateway.js');
-				return new EmailChannelGateway(config.smtp ?? { host: '', port: 587, user: '', pass: '' });
-			}
-			default:
-				return null;
+		// Dynamic import via variable path — TS won't resolve these at type-check time
+		const mod = (await import(modulePath)) as Record<string, new (...args: unknown[]) => IChannelGateway>;
+		const GatewayClass = mod[className];
+		if (!GatewayClass) return null;
+
+		if (config.type === 'email') {
+			return new GatewayClass(config.smtp ?? { host: '', port: 587, user: '', pass: '' });
 		}
+		return new GatewayClass(config.token ?? '');
 	} catch {
 		// Gateway module not available — skip silently
 		return null;

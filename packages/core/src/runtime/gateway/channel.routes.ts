@@ -42,7 +42,7 @@ export function registerChannelRoutes(app: Hono, deps: ChannelRoutesDeps): void 
 			return c.json({ error: `Invalid channel type: ${type}` }, 400);
 		}
 
-		const body = await c.req.json<{ token?: string; webhookUrl?: string; config?: Record<string, unknown> }>().catch(() => ({}));
+		const body = await c.req.json<{ token?: string; webhookUrl?: string; config?: Record<string, unknown> }>().catch((): { token?: string; webhookUrl?: string } => ({}));
 		if (!body.token && !body.webhookUrl) {
 			return c.json({ error: 'Either token or webhookUrl is required' }, 400);
 		}

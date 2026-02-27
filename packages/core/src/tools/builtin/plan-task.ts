@@ -121,11 +121,12 @@ export function createPlanTaskTool(
 						return Err(new ToolError('TOOL_EXECUTION_FAILED', 'plan-task: step_id is required', {}));
 					}
 
-					const updated = taskPlanStore.updateStep(plan.id, stepId, {
-						status: stepStatus,
-						output: stepOutput,
-						completedAt: stepStatus === 'completed' ? toISOTimestamp() : undefined,
-					});
+					const stepUpdates: Partial<Pick<import('../../types/task-plan.js').TaskPlanStep, 'status' | 'output' | 'completedAt'>> = {};
+					if (stepStatus) stepUpdates.status = stepStatus;
+					if (stepOutput) stepUpdates.output = stepOutput;
+					if (stepStatus === 'completed') stepUpdates.completedAt = toISOTimestamp();
+
+					const updated = taskPlanStore.updateStep(plan.id, stepId, stepUpdates);
 
 					if (!updated) {
 						return Err(new ToolError('TOOL_EXECUTION_FAILED', `plan-task: step ${stepId} not found`, {}));
