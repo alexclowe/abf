@@ -24,6 +24,8 @@ import { createSendMessageTool } from './builtin/send-message.js';
 import { createBrowseTool } from './builtin/browse.js';
 import { createDatabaseQueryTool } from './builtin/database-query.js';
 import { createDatabaseWriteTool } from './builtin/database-write.js';
+import { createPlanTaskTool } from './builtin/plan-task.js';
+import { createAskHumanTool } from './builtin/ask-human.js';
 import { CustomTool, isCustomToolModule } from './custom-tool.js';
 import type { CustomToolContext } from './custom-tool.js';
 
@@ -94,6 +96,16 @@ export function createBuiltinTools(ctx: BuiltinToolContext): readonly ITool[] {
 	if (dbQuery) tools.push(dbQuery);
 	const dbWrite = createDatabaseWriteTool(ctx);
 	if (dbWrite) tools.push(dbWrite);
+
+	// Task planning tool
+	if (ctx.taskPlanStore) {
+		tools.push(createPlanTaskTool(ctx.taskPlanStore));
+	}
+
+	// Human inquiry tool
+	if (ctx.approvalStore) {
+		tools.push(createAskHumanTool(ctx.approvalStore));
+	}
 
 	return tools;
 }

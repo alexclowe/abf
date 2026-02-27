@@ -33,6 +33,11 @@ export class Runtime implements IRuntime {
 
 		this.components.scheduler.start();
 
+		// Start channel router (R10) — listens for inbound messages from external channels
+		if (this.components.channelRouter) {
+			await this.components.channelRouter.start();
+		}
+
 		// Start monitor polling AFTER agents are loaded to avoid dispatching
 		// activations for agents that don't exist yet (race condition M5).
 		if (this.components.monitorRunner) {
@@ -48,6 +53,10 @@ export class Runtime implements IRuntime {
 		this.components.dispatcher.clearHeartbeats();
 		// Stop monitor polling to clean up interval timers
 		this.components.monitorRunner?.stop();
+		// Stop channel router (R10)
+		if (this.components.channelRouter) {
+			await this.components.channelRouter.stop();
+		}
 
 		if (this.config.gateway.enabled) {
 			await this.components.gateway.stop();

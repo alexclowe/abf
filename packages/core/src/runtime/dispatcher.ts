@@ -108,6 +108,31 @@ export class Dispatcher implements IDispatcher {
 		return Ok(sessionId);
 	}
 
+	async dispatchAndWait(
+		activation: Activation,
+		timeoutMs = 300_000,
+	): Promise<Result<SessionResult, ABFError>> {
+		const dispatchResult = await this.dispatch(activation);
+		if (!dispatchResult.ok) return dispatchResult as unknown as Result<SessionResult, ABFError>;
+
+		const sessionId = dispatchResult.value;
+		const deadline = Date.now() + timeoutMs;
+
+		while (Date.now() < deadline) {
+			const result = this.completedSessions.get(sessionId);
+			if (result) return Ok(result);
+			await new Promise<void>((resolve) => setTimeout(resolve, 250));
+		}
+
+		return Err(
+			new ABFErrorClass(
+				'SESSION_TIMEOUT',
+				`Workflow step timed out after ${timeoutMs}ms waiting for session ${sessionId}`,
+				{ sessionId },
+			),
+		);
+	}
+
 	getActiveSessions(): readonly WorkSession[] {
 		return [...this.activeSessions.values()];
 	}

@@ -73,4 +73,14 @@ export class InMemoryApprovalStore implements IApprovalStore {
 		entry.resolvedBy = resolvedBy ?? 'operator';
 		return true;
 	}
+
+	answer(id: string, answerText: string, resolvedBy?: string): boolean {
+		const entry = this.store.get(id);
+		if (!entry || entry.status !== 'pending') return false;
+		entry.status = 'answered';
+		entry.answer = answerText;
+		entry.resolvedAt = toISOTimestamp();
+		entry.resolvedBy = resolvedBy ?? 'operator';
+		return true;
+	}
 }

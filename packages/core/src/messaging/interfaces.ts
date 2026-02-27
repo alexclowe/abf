@@ -55,3 +55,33 @@ export interface DiscordPluginConfig extends BasePluginConfig {
 }
 
 export type PluginConfig = SlackPluginConfig | EmailPluginConfig | DiscordPluginConfig;
+
+// ─── Channel Gateway Types (R10) ──────────────────────────────────────
+
+export type ChannelType = 'telegram' | 'slack' | 'discord' | 'email';
+
+export interface InboundMessage {
+	readonly channel: ChannelType;
+	readonly senderId: string;
+	readonly senderName?: string | undefined;
+	readonly conversationId?: string | undefined;
+	readonly text: string;
+	readonly timestamp: ISOTimestamp;
+	readonly metadata?: Readonly<Record<string, unknown>> | undefined;
+}
+
+export interface ChannelRoute {
+	readonly channel: ChannelType;
+	readonly agent: string;
+	readonly pattern?: string | undefined;
+	readonly respondInChannel?: boolean | undefined;
+}
+
+export interface IChannelGateway {
+	readonly type: ChannelType;
+	start(): Promise<void>;
+	stop(): Promise<void>;
+	isConnected(): boolean;
+	send(target: string, message: string): Promise<void>;
+	onMessage(handler: (msg: InboundMessage) => void): void;
+}

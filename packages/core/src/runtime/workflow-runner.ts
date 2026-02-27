@@ -1,6 +1,7 @@
 /**
  * WorkflowRunner — executes multi-agent workflow definitions.
  * Handles sequential and parallel steps with dependency ordering.
+ * Supports data flow between steps via {{steps.<stepId>.output}} interpolation.
  */
 
 import { nanoid } from 'nanoid';
@@ -31,6 +32,9 @@ export class WorkflowRunner {
 		const stepResults: WorkflowStepResult[] = [];
 		let runStatus: WorkflowRunStatus = 'running';
 
+		// Context accumulates step outputs for interpolation into subsequent tasks
+		const context: Record<string, unknown> = { ...input };
+
 		try {
 			const waves = this.buildWaves(workflow.steps);
 
@@ -38,11 +42,15 @@ export class WorkflowRunner {
 				if (runStatus === 'failed' && workflow.onFailure === 'stop') break;
 
 				const waveResults = await Promise.all(
-					wave.map((step) => this.executeStep(step, input)),
+					wave.map((step) => this.executeStep(step, context)),
 				);
 
 				for (const result of waveResults) {
 					stepResults.push(result);
+					// Accumulate step outputs for downstream interpolation
+					if (result.output) {
+						context[`steps.${result.stepId}.output`] = result.output;
+					}
 					if (result.status === 'failed' || result.status === 'timeout') {
 						runStatus = result.status;
 					}
@@ -67,10 +75,10 @@ export class WorkflowRunner {
 
 	private async executeStep(
 		step: WorkflowStep,
-		input: Record<string, unknown>,
+		context: Record<string, unknown>,
 	): Promise<WorkflowStepResult> {
 		const startedAt = toISOTimestamp();
-		const task = this.interpolate(step.task, input);
+		const task = this.interpolate(step.task, context);
 
 		// Find agent by name
 		const agent = [...this.agentsMap.values()].find((a) => a.name === step.agent);
@@ -91,10 +99,12 @@ export class WorkflowRunner {
 			agentId: agent.id as AgentId,
 			trigger: { type: 'manual' as const, task },
 			timestamp: startedAt,
-			payload: { workflowInput: input },
+			payload: { workflowInput: context },
 		};
 
-		const result = await this.dispatcher.dispatch(activation);
+		// Use dispatchAndWait to get the session result (R2)
+		const timeoutMs = step.timeout ? step.timeout * 1000 : 300_000;
+		const result = await this.dispatcher.dispatchAndWait(activation, timeoutMs);
 		const completedAt = toISOTimestamp();
 
 		if (!result.ok) {
@@ -102,7 +112,7 @@ export class WorkflowRunner {
 				stepId: step.id,
 				agentName: step.agent,
 				sessionId: '',
-				status: 'failed',
+				status: result.error.code === 'SESSION_TIMEOUT' ? 'timeout' : 'failed',
 				startedAt,
 				completedAt,
 				error: result.error.message,
@@ -112,10 +122,12 @@ export class WorkflowRunner {
 		return {
 			stepId: step.id,
 			agentName: step.agent,
-			sessionId: result.value,
-			status: 'completed',
+			sessionId: result.value.sessionId,
+			status: result.value.status === 'completed' ? 'completed' : 'failed',
 			startedAt,
 			completedAt,
+			output: result.value.outputText,
+			error: result.value.status !== 'completed' ? result.value.error : undefined,
 		};
 	}
 
@@ -147,11 +159,24 @@ export class WorkflowRunner {
 		return waves;
 	}
 
-	/** Replace {{input.key}} with value from input object. */
-	private interpolate(template: string, input: Record<string, unknown>): string {
-		return template.replace(/\{\{input\.([^}]+)\}\}/g, (match, key: string) => {
-			const val = input[key];
-			return val !== undefined ? String(val) : match;
+	/**
+	 * Replace {{input.key}} and {{steps.<stepId>.output}} with values from context.
+	 * Supports dot-path access for nested step outputs.
+	 */
+	private interpolate(template: string, context: Record<string, unknown>): string {
+		return template.replace(/\{\{([^}]+)\}\}/g, (match, path: string) => {
+			// Try direct key first (handles both "input.key" and "steps.step1.output" flat keys)
+			const directVal = context[path];
+			if (directVal !== undefined) return String(directVal);
+
+			// Try nested dot-path traversal (for "input.nested.key" patterns)
+			const parts = path.split('.');
+			let current: unknown = context;
+			for (const part of parts) {
+				if (current == null || typeof current !== 'object') return match;
+				current = (current as Record<string, unknown>)[part];
+			}
+			return current !== undefined ? String(current) : match;
 		});
 	}
 }

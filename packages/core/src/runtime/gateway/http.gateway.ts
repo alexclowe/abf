@@ -25,7 +25,10 @@ import { registerAuthRoutes } from './auth.routes.js';
 import { registerCrudRoutes } from './crud.routes.js';
 import { registerSeedRoutes } from './seed.routes.js';
 import { registerEventRoutes } from './events.routes.js';
+import { registerPlanRoutes } from './plans.routes.js';
 import { registerSetupRoutes } from './setup.routes.js';
+import { registerChannelRoutes } from './channel.routes.js';
+import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 
 /** Timing-safe API key comparison to prevent timing attacks. */
 const ABF_VERSION = '1.0.0';
@@ -55,6 +58,9 @@ export interface GatewayDeps {
 	readonly vault?: ICredentialVault | undefined;
 	readonly scheduler?: IScheduler | undefined;
 	readonly dashboardPort?: number | undefined;
+	readonly taskPlanStore?: import('../../types/task-plan.js').ITaskPlanStore | undefined;
+	readonly channelRouter?: import('../../messaging/channel-router.js').ChannelRouter | undefined;
+	readonly sessionEventBus?: import('../session-events.js').SessionEventBus | undefined;
 }
 
 /** @deprecated Use GatewayDeps instead. Kept for backwards compatibility. */
@@ -146,8 +152,69 @@ export class HttpGateway implements IGateway {
 			registerCrudRoutes(app, { ...deps, scheduler: deps.scheduler });
 		}
 
+		// -- Task Plans (R6) -------------------------------------------------------
+		if (deps.taskPlanStore) {
+			registerPlanRoutes(app, { taskPlanStore: deps.taskPlanStore, agentsMap: deps.agentsMap });
+		}
+
+		// -- Channel Routes (R10) -------------------------------------------------
+		if (deps.channelRouter && deps.vault) {
+			registerChannelRoutes(app, { vault: deps.vault, channelRouter: deps.channelRouter });
+		}
+
 		// -- SSE Events -----------------------------------------------------------
 		registerEventRoutes(app, deps);
+
+		// -- Session Observation SSE (R12) ----------------------------------------
+		if (deps.sessionEventBus) {
+			const eventBus = deps.sessionEventBus;
+
+			// Stream all sessions for a specific agent
+			app.get('/api/agents/:id/stream', (c) => {
+				const agentId = c.req.param('id') as import('../../types/common.js').AgentId;
+				if (!deps.agentsMap.has(agentId)) {
+					return c.json({ error: 'Agent not found' }, 404);
+				}
+
+				return streamSSE(c, async (stream: SSEStreamingApi) => {
+					let id = 0;
+					const handler = (event: import('../session-events.js').SessionLifecycleEvent) => {
+						void stream.writeSSE({
+							event: event.type,
+							data: JSON.stringify(event),
+							id: String(id++),
+						});
+					};
+					eventBus.on(`agent:${agentId}`, handler);
+					stream.onAbort(() => { eventBus.off(`agent:${agentId}`, handler); });
+					// Keep connection alive until aborted
+					while (!stream.aborted) {
+						await stream.sleep(30000);
+					}
+				});
+			});
+
+			// Stream a specific session
+			app.get('/api/sessions/:id/stream', (c) => {
+				const sessionId = c.req.param('id') as import('../../types/common.js').SessionId;
+
+				return streamSSE(c, async (stream: SSEStreamingApi) => {
+					let id = 0;
+					const handler = (event: import('../session-events.js').SessionLifecycleEvent) => {
+						void stream.writeSSE({
+							event: event.type,
+							data: JSON.stringify(event),
+							id: String(id++),
+						});
+					};
+					eventBus.on(`session:${sessionId}`, handler);
+					stream.onAbort(() => { eventBus.off(`session:${sessionId}`, handler); });
+					while (!stream.aborted) {
+						await stream.sleep(30000);
+					}
+				});
+			});
+		}
 
 		// -- Health ---------------------------------------------------------------
 		app.get('/health', (c) => {
@@ -320,6 +387,17 @@ export class HttpGateway implements IGateway {
 				if (!found) return c.json({ error: 'Approval not found or already resolved' }, 404);
 				return c.json({ rejected: true });
 			});
+
+			// Answer an inquiry (R7)
+			app.post('/api/approvals/:id/answer', async (c) => {
+				const body = await c.req.json<{ answer: string }>();
+				if (!body.answer?.trim()) {
+					return c.json({ error: 'answer is required' }, 400);
+				}
+				const found = store.answer(c.req.param('id'), body.answer, 'operator');
+				if (!found) return c.json({ error: 'Inquiry not found or already resolved' }, 404);
+				return c.json({ answered: true });
+			});
 		}
 
 		// -- Providers ------------------------------------------------------------
@@ -358,6 +436,26 @@ export class HttpGateway implements IGateway {
 					forbiddenActions: defaults.forbiddenActions,
 				})),
 			);
+		});
+
+		// -- MCP Library (R11) ----------------------------------------------------
+		app.get('/api/tools/mcp-library', async (c) => {
+			const { listMCPConfigs } = await import('../../tools/mcp/config-registry.js');
+			const category = c.req.query('category');
+			const entries = listMCPConfigs(category || undefined);
+			return c.json(
+				entries.map((e) => ({
+					id: e.id,
+					...e.metadata,
+				})),
+			);
+		});
+
+		app.get('/api/tools/mcp-library/:id', async (c) => {
+			const { getMCPConfig } = await import('../../tools/mcp/config-registry.js');
+			const entry = getMCPConfig(c.req.param('id'));
+			if (!entry) return c.json({ error: 'MCP config not found' }, 404);
+			return c.json(entry);
 		});
 
 		// -- Workflow Templates ----------------------------------------------------

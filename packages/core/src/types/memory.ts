@@ -29,6 +29,7 @@ export interface AgentMemoryContext {
 	readonly decisions: readonly MemoryEntry[];
 	readonly knowledge: Readonly<Record<string, string>>;
 	readonly pendingMessages: number;
+	readonly summary?: string | undefined;
 }
 
 // ─── Memory Store Interface ───────────────────────────────────────────

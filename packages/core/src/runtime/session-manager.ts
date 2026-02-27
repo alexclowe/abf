@@ -24,10 +24,27 @@ import type { IAuditStore } from '../types/security.js';
 import type { Escalation, KPIReport, SessionResult, SessionStatus } from '../types/session.js';
 import type { IToolRegistry, IToolSandbox, ToolCall, ToolResult } from '../types/tool.js';
 import type { Activation } from '../types/trigger.js';
+import type { IApprovalStore } from '../types/approval.js';
+import type { InputSource } from '../types/common.js';
 import { createSessionId, toISOTimestamp } from '../util/id.js';
 import { loadKnowledgeFiles } from '../knowledge/loader.js';
+import { checkBounds } from '../security/bounds-enforcer.js';
+import { processInput } from '../security/input-pipeline.js';
 import type { ISessionManager, StreamEvent } from './interfaces.js';
 import type { ContentPart } from '../types/provider.js';
+
+/** Tools whose output comes from external/untrusted sources. */
+const EXTERNAL_TOOLS = new Set(['web-search', 'web-fetch', 'browse']);
+
+/** Map trigger types to InputSource for the security pipeline. */
+function triggerToInputSource(trigger: import('../types/trigger.js').TriggerConfig): InputSource {
+	switch (trigger.type) {
+		case 'webhook': return 'webhook';
+		case 'event': return trigger.event.startsWith('monitor:') ? 'web' : 'system';
+		case 'message': return 'agent';
+		default: return 'system';
+	}
+}
 
 function evaluateKPI(
 	kpi: KPIDefinition,
@@ -85,6 +102,10 @@ export interface SessionManagerDeps {
 	readonly knowledgeDir?: string | undefined;
 	readonly outputsManager?: import('../memory/outputs.js').OutputsManager | undefined;
 	readonly inbox?: import('../types/inbox.js').IInbox | undefined;
+	readonly approvalStore?: IApprovalStore | undefined;
+	readonly compactor?: import('../memory/compactor.js').MemoryCompactor | undefined;
+	readonly taskPlanStore?: import('../types/task-plan.js').ITaskPlanStore | undefined;
+	readonly sessionEventBus?: import('./session-events.js').SessionEventBus | undefined;
 }
 
 export class SessionManager implements ISessionManager {
@@ -165,6 +186,19 @@ export class SessionManager implements ISessionManager {
 		const sessionId = createSessionId();
 		const startedAt = toISOTimestamp();
 
+		// Emit session start for streaming sessions (R12)
+		this.deps.sessionEventBus?.emitSessionStart(activation.agentId, sessionId);
+
+		// Tee onChunk events into the session event bus (R12)
+		const eventBus = this.deps.sessionEventBus;
+		const agentIdForEvents = activation.agentId;
+		const emitChunk: (event: StreamEvent) => void = eventBus
+			? (event: StreamEvent) => {
+					onChunk(event);
+					eventBus.emitStreamEvent(agentIdForEvents, sessionId, event);
+				}
+			: onChunk;
+
 		try {
 			// Step 1: Load context (lightweight for chat — skip heavy memory loads)
 			const [memoryResult, knowledgeFiles] = await Promise.all([
@@ -231,7 +265,7 @@ export class SessionManager implements ISessionManager {
 
 			// Step 4: Streaming tool loop
 			let loopCount = 0;
-			const maxLoops = 10;
+			const maxLoops = agent.maxToolLoops ?? 10;
 			let totalUsage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
 			let totalCost: USDCents = 0 as USDCents;
 			const toolCalls: ToolCall[] = [];
@@ -252,12 +286,12 @@ export class SessionManager implements ISessionManager {
 
 				for await (const chunk of chunks) {
 					if (chunk.type === 'error') {
-						onChunk({ type: 'error', error: chunk.error ?? 'Provider error' });
+						emitChunk({ type: 'error', error: chunk.error ?? 'Provider error' });
 						throw new ABFErrorClass('PROVIDER_ERROR', chunk.error ?? 'Provider error');
 					}
 					if (chunk.type === 'text' && chunk.text) {
 						responseText += chunk.text;
-						onChunk({ type: 'token', text: chunk.text });
+						emitChunk({ type: 'token', text: chunk.text });
 					}
 					if (chunk.type === 'tool_call' && chunk.toolCall) {
 						pendingToolCalls.push(chunk.toolCall);
@@ -281,7 +315,15 @@ export class SessionManager implements ISessionManager {
 					const tool = this.deps.toolRegistry.get(tc.name as import('../types/common.js').ToolId);
 					if (!tool) continue;
 
-					onChunk({
+					// Behavioral bounds enforcement (R3)
+					const boundsMsg = await this.checkAndEnforceBounds(tc.name, agent, sessionId, totalCost);
+					if (boundsMsg) {
+						emitChunk({ type: 'tool_result', toolName: tc.name, toolOutput: boundsMsg });
+						messages.push({ role: 'tool', content: boundsMsg, toolCallId: tc.id });
+						continue;
+					}
+
+					emitChunk({
 						type: 'tool_use',
 						toolName: tc.name,
 						toolArguments: JSON.parse(tc.arguments) as Record<string, unknown>,
@@ -303,7 +345,14 @@ export class SessionManager implements ISessionManager {
 						toolResults.push(result.value);
 						totalCost = ((totalCost as number) + ((result.value.cost ?? 0) as number)) as USDCents;
 
-						onChunk({
+						// Input security pipeline for external tool results (R4)
+						let toolOutput = JSON.stringify(result.value.output);
+						if (EXTERNAL_TOOLS.has(tc.name)) {
+							const analysis = processInput(toolOutput, 'web');
+							toolOutput = analysis.sanitizedContent;
+						}
+
+						emitChunk({
 							type: 'tool_result',
 							toolName: tc.name,
 							toolOutput: result.value.output,
@@ -311,7 +360,7 @@ export class SessionManager implements ISessionManager {
 
 						messages.push({
 							role: 'tool',
-							content: JSON.stringify(result.value.output),
+							content: toolOutput,
 							toolCallId: tc.id,
 						});
 					}
@@ -326,6 +375,9 @@ export class SessionManager implements ISessionManager {
 			const outputText = lastMsg && lastMsg.role === 'assistant' && typeof lastMsg.content === 'string'
 				? lastMsg.content
 				: undefined;
+
+			// Emit session end for streaming sessions (R12)
+			this.deps.sessionEventBus?.emitSessionEnd(activation.agentId, sessionId, 'completed', outputText);
 
 			return Ok({
 				sessionId,
@@ -344,6 +396,9 @@ export class SessionManager implements ISessionManager {
 				outputText,
 			});
 		} catch (e) {
+			// Emit session end on error (R12)
+			this.deps.sessionEventBus?.emitSessionEnd(activation.agentId, sessionId, 'failed');
+
 			return Err(new ABFErrorClass(
 				'SESSION_FAILED',
 				e instanceof Error ? e.message : String(e),
@@ -392,6 +447,9 @@ export class SessionManager implements ISessionManager {
 			severity: 'info',
 		});
 
+		// Emit session start event (R12)
+		this.deps.sessionEventBus?.emitSessionStart(activation.agentId, sessionId);
+
 		// Step 2: Build prompt
 		const messages: ChatMessage[] = this.buildPrompt(agent, memory, activation, mergedKnowledge, teammateOutputs, inboxItems);
 
@@ -421,7 +479,7 @@ export class SessionManager implements ISessionManager {
 
 		// Step 4: Tool loop
 		let loopCount = 0;
-		const maxLoops = 10;
+		const maxLoops = agent.maxToolLoops ?? 10;
 
 		while (loopCount < maxLoops) {
 			loopCount++;
@@ -466,6 +524,13 @@ export class SessionManager implements ISessionManager {
 				const tool = this.deps.toolRegistry.get(tc.name as import('../types/common.js').ToolId);
 				if (!tool) continue;
 
+				// Behavioral bounds enforcement (R3)
+				const boundsMsg = await this.checkAndEnforceBounds(tc.name, agent, sessionId, totalCost);
+				if (boundsMsg) {
+					messages.push({ role: 'tool', content: boundsMsg, toolCallId: tc.id });
+					continue;
+				}
+
 				const call: ToolCall = {
 					toolId: tc.name as import('../types/common.js').ToolId,
 					arguments: JSON.parse(tc.arguments) as Record<string, unknown>,
@@ -473,6 +538,13 @@ export class SessionManager implements ISessionManager {
 					timestamp: toISOTimestamp(),
 				};
 				toolCalls.push(call);
+
+				// Emit tool_use event (R12)
+				this.deps.sessionEventBus?.emitStreamEvent(activation.agentId, sessionId, {
+					type: 'tool_use',
+					toolName: tc.name,
+					toolArguments: call.arguments,
+				});
 
 				const budgetRemaining = ((agent.behavioralBounds.maxCostPerSession as number) -
 					(totalCost as number)) as USDCents;
@@ -482,10 +554,34 @@ export class SessionManager implements ISessionManager {
 					toolResults.push(result.value);
 					totalCost = ((totalCost as number) + ((result.value.cost ?? 0) as number)) as USDCents;
 
+					// Input security pipeline for external tool results (R4)
+					let toolOutput = JSON.stringify(result.value.output);
+					if (EXTERNAL_TOOLS.has(tc.name)) {
+						const analysis = processInput(toolOutput, 'web');
+						toolOutput = analysis.sanitizedContent;
+						if (analysis.injectionDetected) {
+							void this.deps.auditStore.log({
+								timestamp: toISOTimestamp(),
+								eventType: 'injection_detected',
+								agentId: agent.id,
+								sessionId,
+								details: { tool: tc.name, patterns: analysis.patterns, threatLevel: analysis.threatLevel },
+								severity: 'warn',
+							});
+						}
+					}
+
 					messages.push({
 						role: 'tool',
-						content: JSON.stringify(result.value.output),
+						content: toolOutput,
 						toolCallId: tc.id,
+					});
+
+					// Emit tool_result event (R12)
+					this.deps.sessionEventBus?.emitStreamEvent(activation.agentId, sessionId, {
+						type: 'tool_result',
+						toolName: tc.name,
+						toolOutput: result.value.output,
 					});
 				}
 			}
@@ -496,6 +592,14 @@ export class SessionManager implements ISessionManager {
 		const outputText = lastMsg && lastMsg.role === 'assistant' && typeof lastMsg.content === 'string'
 			? lastMsg.content
 			: undefined;
+
+		// Emit text output event (R12)
+		if (outputText) {
+			this.deps.sessionEventBus?.emitStreamEvent(activation.agentId, sessionId, {
+				type: 'token',
+				text: outputText,
+			});
+		}
 
 		// Step 5: Process outputs — notify on session completion
 		if (this.deps.messagingRouter) {
@@ -525,6 +629,13 @@ export class SessionManager implements ISessionManager {
 					agent.name,
 					`# ${activation.trigger.task}\n\n${lastMessage.content}`,
 				);
+			}
+
+			// Fire-and-forget compaction check (R8)
+			if (this.deps.compactor) {
+				void this.deps.compactor.shouldCompact(activation.agentId).then((needed) => {
+					if (needed) void this.deps.compactor!.compact(activation.agentId);
+				});
 			}
 		}
 
@@ -593,10 +704,14 @@ export class SessionManager implements ISessionManager {
 				? ((rescheduleResult.output as Record<string, unknown>)['delay_seconds'] as number)
 				: undefined;
 
+		// Emit session end event (R12)
+		const finalStatus = escalations.length > 0 ? 'escalated' as SessionStatus : status;
+		this.deps.sessionEventBus?.emitSessionEnd(activation.agentId, sessionId, finalStatus, outputText);
+
 		return Ok({
 			sessionId,
 			agentId: activation.agentId,
-			status: escalations.length > 0 ? 'escalated' as SessionStatus : status,
+			status: finalStatus,
 			startedAt,
 			completedAt,
 			toolCalls,
@@ -614,6 +729,110 @@ export class SessionManager implements ISessionManager {
 
 	async abort(_sessionId: SessionId): Promise<void> {
 		// In v0.1, abort is a no-op — sessions run to completion or timeout
+	}
+
+	/**
+	 * Check behavioral bounds before tool execution.
+	 * Returns a message to push to the LLM if blocked, or null to proceed.
+	 */
+	private async checkAndEnforceBounds(
+		toolName: string,
+		agent: AgentConfig,
+		sessionId: SessionId,
+		totalCost: USDCents,
+	): Promise<string | null> {
+		const result = checkBounds({
+			action: toolName,
+			bounds: agent.behavioralBounds,
+			currentSessionCost: totalCost,
+		});
+
+		if (!result.ok) {
+			// Cost limit exceeded
+			await this.deps.auditStore.log({
+				timestamp: toISOTimestamp(),
+				eventType: 'bounds_check',
+				agentId: agent.id,
+				sessionId,
+				details: { tool: toolName, reason: 'cost_limit_exceeded', error: result.error.message },
+				severity: 'warn',
+			});
+			return `[BLOCKED] Cost limit exceeded: ${result.error.message}`;
+		}
+
+		const check = result.value;
+
+		if (check.allowed === false) {
+			await this.deps.auditStore.log({
+				timestamp: toISOTimestamp(),
+				eventType: 'bounds_check',
+				agentId: agent.id,
+				sessionId,
+				details: { tool: toolName, reason: check.reason, blocked: true },
+				severity: 'warn',
+			});
+			return `[BLOCKED] Behavioral bounds: ${check.reason}`;
+		}
+
+		if (check.allowed === 'requires_approval') {
+			if (this.deps.approvalStore) {
+				this.deps.approvalStore.create({
+					agentId: agent.id,
+					sessionId,
+					toolId: toolName as import('../types/common.js').ToolId,
+					toolName,
+					arguments: {},
+					createdAt: toISOTimestamp(),
+				});
+			}
+			await this.deps.auditStore.log({
+				timestamp: toISOTimestamp(),
+				eventType: 'bounds_check',
+				agentId: agent.id,
+				sessionId,
+				details: { tool: toolName, reason: 'requires_approval', queued: true },
+				severity: 'info',
+			});
+			return `[QUEUED] Tool "${toolName}" requires approval. It has been queued for human review.`;
+		}
+
+		return null; // Proceed
+	}
+
+	/** Build "Human Responses" section for answered inquiries (R7). */
+	private buildHumanResponsesSection(agentId: import('../types/common.js').AgentId): string {
+		if (!this.deps.approvalStore) return '';
+		const answered = this.deps.approvalStore.list({ agentId }).filter(
+			(r) => r.type === 'inquiry' && r.status === 'answered' && r.answer,
+		);
+		if (answered.length === 0) return '';
+
+		return [
+			'Human Responses:',
+			...answered.map(
+				(r) => `- Q: ${r.question ?? '(unknown)'}\n  A: ${r.answer}`,
+			),
+		].join('\n');
+	}
+
+	/** Build the "Current Task Plan" section for the system prompt (R6). */
+	private buildPlanSection(agentId: import('../types/common.js').AgentId): string {
+		if (!this.deps.taskPlanStore) return '';
+		const plan = this.deps.taskPlanStore.getActive(agentId);
+		if (!plan) return '';
+
+		const stepLines = plan.steps.map((s) => {
+			const marker = s.id === plan.currentStepId ? '→' : ' ';
+			const statusIcon = s.status === 'completed' ? '✓' : s.status === 'in_progress' ? '…' : s.status === 'skipped' ? '–' : '○';
+			return `  ${marker} [${statusIcon}] ${s.id}: ${s.description}${s.output ? ` (output: ${s.output.slice(0, 200)})` : ''}`;
+		});
+
+		return [
+			'Current Task Plan:',
+			`Goal: ${plan.goal}`,
+			`Status: ${plan.status} | Current step: ${plan.currentStepId ?? 'none'}`,
+			...stepLines,
+		].join('\n');
 	}
 
 	private evaluateEscalationCondition(
@@ -671,6 +890,9 @@ export class SessionManager implements ISessionManager {
 			`Role: ${agent.role}`,
 			`Task: ${activation.trigger.task}`,
 			'',
+			memory.summary
+				? `Historical Summary:\n${memory.summary}`
+				: '',
 			memory.history.length > 0
 				? `Recent History:\n${memory.history.map((h) => h.content).join('\n---\n')}`
 				: '',
@@ -689,6 +911,10 @@ export class SessionManager implements ISessionManager {
 					].join('\n')
 				: '',
 			memory.pendingMessages > 0 ? `You have ${memory.pendingMessages} pending messages.` : '',
+			// Human responses to inquiries (R7)
+			this.buildHumanResponsesSection(activation.agentId),
+			// Active task plan (R6)
+			this.buildPlanSection(activation.agentId),
 			'',
 			'KPIs:',
 			...agent.kpis.map((k) => `- ${k.metric}: target ${k.target} (review ${k.review})`),
@@ -699,9 +925,25 @@ export class SessionManager implements ISessionManager {
 		const messages: ChatMessage[] = [{ role: 'system', content: systemContent }];
 
 		if (activation.payload) {
+			// Input security pipeline: process external payloads (R4)
+			const source = triggerToInputSource(activation.trigger);
+			let payloadContent = JSON.stringify(activation.payload);
+			if (source !== 'system' && source !== 'agent') {
+				const analysis = processInput(payloadContent, source);
+				payloadContent = analysis.sanitizedContent;
+				if (analysis.injectionDetected) {
+					void this.deps.auditStore.log({
+						timestamp: toISOTimestamp(),
+						eventType: 'injection_detected',
+						agentId: activation.agentId,
+						details: { source, patterns: analysis.patterns, threatLevel: analysis.threatLevel, trigger: activation.trigger.type },
+						severity: 'warn',
+					});
+				}
+			}
 			messages.push({
 				role: 'user',
-				content: JSON.stringify(activation.payload),
+				content: payloadContent,
 			});
 		} else {
 			messages.push({

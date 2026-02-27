@@ -128,6 +128,10 @@ export async function createRuntime(
 	const messageTemplates = new MessageTemplateRegistry();
 	messageTemplates.load(join(projectRoot, 'templates', 'messages'));
 
+	// Task plan store (R6)
+	const { InMemoryTaskPlanStore } = await import('../planning/store.js');
+	const taskPlanStore = new InMemoryTaskPlanStore();
+
 	// Build tool context with all dependencies
 	const toolContext: import('../tools/builtin/context.js').BuiltinToolContext = {
 		vault,
@@ -136,6 +140,7 @@ export async function createRuntime(
 		approvalStore,
 		datastore,
 		messageTemplates,
+		taskPlanStore,
 	};
 
 	// Register built-in tools
@@ -177,6 +182,18 @@ export async function createRuntime(
 	const { InMemoryInbox } = await import('../inbox/store.js');
 	const inbox = new InMemoryInbox();
 
+	// Memory compactor (R8)
+	const { MemoryCompactor } = await import('../memory/compactor.js');
+	const compactor = new MemoryCompactor(memoryStore, providerRegistry, {
+		windowSize: config.memoryWindowSize ?? 20,
+		threshold: config.memorySummarizationThreshold ?? 50,
+		enabled: config.memorySummarizationEnabled ?? true,
+	});
+
+	// Session event bus (R12) — real-time observation of automated sessions
+	const { SessionEventBus } = await import('./session-events.js');
+	const sessionEventBus = new SessionEventBus();
+
 	// 9. Session manager — receives shared agentsMap
 	const sessionManager = new SessionManager({
 		agents: agentsMap,
@@ -191,6 +208,10 @@ export async function createRuntime(
 		knowledgeDir: join(projectRoot, config.knowledgeDir),
 		outputsManager,
 		inbox,
+		approvalStore,
+		compactor,
+		taskPlanStore,
+		sessionEventBus,
 	});
 
 	// 10. Dispatcher — receives shared agentsMap
@@ -200,10 +221,24 @@ export async function createRuntime(
 		agentsMap,
 	);
 
-	// 11. Scheduler — wired directly to dispatcher
-	const scheduler = new Scheduler((activation) => {
-		void dispatcher.dispatch(activation);
-	});
+	// Register sessions-spawn tool (needs dispatcher + agentsMap, deferred until now — R1)
+	const { createSessionsSpawnTool } = await import('../tools/builtin/sessions-spawn.js');
+	toolRegistry.register(createSessionsSpawnTool(toolContext, { dispatcher, agentsMap }));
+
+	// Proactive evaluator (R9)
+	const { ProactiveEvaluator } = await import('./proactive-evaluator.js');
+	const proactiveEvaluator = new ProactiveEvaluator(providerRegistry);
+
+	// 11. Scheduler — wired directly to dispatcher, with proactive evaluation
+	const scheduler = new Scheduler(
+		(activation) => {
+			void dispatcher.dispatch(activation);
+		},
+		async (agent, trigger) => {
+			const result = await proactiveEvaluator.evaluate(agent, trigger);
+			return result.shouldAct;
+		},
+	);
 
 	// 12. Workflow runner
 	const workflowRunner = new WorkflowRunner(dispatcher, agentsMap);
@@ -217,6 +252,24 @@ export async function createRuntime(
 	// Metrics collector
 	const { MetricsCollector } = await import('../metrics/collector.js');
 	const metricsCollector = new MetricsCollector(dispatcher, agentsMap);
+
+	// Channel router (R10) — routes inbound messages from external channels to agents
+	const { ChannelRouter } = await import('../messaging/channel-router.js');
+	const channelRouter = new ChannelRouter();
+	channelRouter.setDispatcher(dispatcher);
+
+	// Wire channel gateways from config
+	if (config.channels && config.channels.length > 0) {
+		const { createChannelGateway } = await import('../messaging/gateway-factory.js');
+		const configuredTypes = new Set(config.channels.map((r) => r.channel));
+		for (const channelType of configuredTypes) {
+			const gw = await createChannelGateway({ type: channelType }, vault);
+			if (gw) {
+				channelRouter.addGateway(gw);
+			}
+		}
+		channelRouter.setRoutes([...config.channels]);
+	}
 
 	// 13. Gateway
 	const gateway = new HttpGateway(config.gateway, {
@@ -236,6 +289,9 @@ export async function createRuntime(
 		vault,
 		scheduler,
 		dashboardPort: options?.dashboardPort,
+		taskPlanStore,
+		channelRouter,
+		sessionEventBus,
 	});
 
 	const components: RuntimeComponents = {
@@ -252,6 +308,7 @@ export async function createRuntime(
 		sessionManager,
 		gateway,
 		monitorRunner,
+		channelRouter,
 	};
 
 	return new Runtime(config, projectRoot, components, vault);

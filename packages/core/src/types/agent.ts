@@ -57,6 +57,7 @@ export interface AgentConfig {
 	readonly behavioralBounds: BehavioralBounds;
 	readonly kpis: readonly KPIDefinition[];
 	readonly charter: string;
+	readonly maxToolLoops?: number | undefined;
 }
 
 // ─── Agent Runtime State ──────────────────────────────────────────────

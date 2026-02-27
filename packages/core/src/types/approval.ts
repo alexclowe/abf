@@ -4,7 +4,7 @@
 
 import type { AgentId, ISOTimestamp, SessionId, ToolId } from './common.js';
 
-export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'answered';
 
 export interface ApprovalRequest {
 	readonly id: string;
@@ -17,6 +17,12 @@ export interface ApprovalRequest {
 	status: ApprovalStatus;
 	resolvedAt?: ISOTimestamp;
 	resolvedBy?: string;
+	/** Distinguishes approval requests from human inquiries. Default: 'approval'. */
+	readonly type?: 'approval' | 'inquiry' | undefined;
+	/** The question asked (for inquiry type). */
+	readonly question?: string | undefined;
+	/** The human's answer (for inquiry type, set when answered). */
+	answer?: string | undefined;
 }
 
 export interface IApprovalStore {
@@ -37,4 +43,7 @@ export interface IApprovalStore {
 
 	/** Reject a pending request. */
 	reject(id: string, resolvedBy?: string): boolean;
+
+	/** Answer an inquiry with a free-form response. */
+	answer(id: string, answerText: string, resolvedBy?: string): boolean;
 }

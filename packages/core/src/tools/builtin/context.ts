@@ -21,4 +21,6 @@ export interface BuiltinToolContext {
 	readonly datastore?: IDatastore | undefined;
 	/** Message templates for send-message tool. */
 	readonly messageTemplates?: import('../../messaging/templates.js').MessageTemplateRegistry | undefined;
+	/** Task plan store for plan-task tool. */
+	readonly taskPlanStore?: import('../../types/task-plan.js').ITaskPlanStore | undefined;
 }
