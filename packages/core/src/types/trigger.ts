@@ -44,13 +44,23 @@ export interface HeartbeatTrigger {
 	readonly task: string;
 }
 
+export interface ProactiveTrigger {
+	readonly type: 'proactive';
+	readonly schedule: string; // cron expression
+	readonly task: string;
+	readonly evaluationPrompt: string;
+	readonly evaluationTools?: readonly string[] | undefined;
+	readonly threshold?: number | undefined;
+}
+
 export type TriggerConfig =
 	| CronTrigger
 	| EventTrigger
 	| MessageTrigger
 	| WebhookTrigger
 	| ManualTrigger
-	| HeartbeatTrigger;
+	| HeartbeatTrigger
+	| ProactiveTrigger;
 
 // ─── Activation ───────────────────────────────────────────────────────
 // An activation is the runtime event that fires when a trigger condition is met.

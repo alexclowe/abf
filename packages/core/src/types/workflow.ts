@@ -35,6 +35,7 @@ export interface WorkflowStepResult {
 	readonly startedAt: string;
 	readonly completedAt?: string | undefined;
 	readonly error?: string | undefined;
+	readonly output?: string | undefined;
 }
 
 export interface WorkflowRun {

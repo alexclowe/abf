@@ -46,6 +46,8 @@ export interface IScheduler {
 
 export interface IDispatcher {
 	dispatch(activation: Activation): Promise<Result<SessionId, ABFError>>;
+	/** Dispatch and wait for the session to complete, returning the result. */
+	dispatchAndWait(activation: Activation, timeoutMs?: number): Promise<Result<SessionResult, ABFError>>;
 	registerAgent(agent: AgentConfig): void;
 	getActiveSessions(): readonly WorkSession[];
 	getAgentState(agentId: AgentId): AgentState | undefined;
@@ -107,6 +109,7 @@ export interface RuntimeComponents {
 	readonly datastore?: IDatastore | undefined;
 	readonly inbox?: import('../types/inbox.js').IInbox | undefined;
 	readonly monitorRunner?: import('../monitor/runner.js').MonitorRunner | undefined;
+	readonly channelRouter?: import('../messaging/channel-router.js').ChannelRouter | undefined;
 }
 
 export interface IRuntime {

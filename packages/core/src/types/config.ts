@@ -95,4 +95,8 @@ export interface AbfConfig {
 	readonly knowledgeDir: string;
 	readonly outputsDir: string;
 	readonly cloud?: CloudConfig | undefined;
+	readonly memoryWindowSize?: number | undefined;
+	readonly memorySummarizationThreshold?: number | undefined;
+	readonly memorySummarizationEnabled?: boolean | undefined;
+	readonly channels?: readonly import('../messaging/interfaces.js').ChannelRoute[] | undefined;
 }

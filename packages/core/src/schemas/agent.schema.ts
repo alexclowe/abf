@@ -55,6 +55,15 @@ const heartbeatTriggerSchema = z.object({
 	task: z.string(),
 });
 
+const proactiveTriggerSchema = z.object({
+	type: z.literal('proactive'),
+	schedule: z.string(),
+	task: z.string(),
+	evaluation_prompt: z.string(),
+	evaluation_tools: z.array(z.string()).optional(),
+	threshold: z.number().min(0).max(1).optional(),
+});
+
 const triggerSchema = z.discriminatedUnion('type', [
 	cronTriggerSchema,
 	eventTriggerSchema,
@@ -62,6 +71,7 @@ const triggerSchema = z.discriminatedUnion('type', [
 	webhookTriggerSchema,
 	manualTriggerSchema,
 	heartbeatTriggerSchema,
+	proactiveTriggerSchema,
 ]);
 
 // ─── Behavioral Bounds Schema ─────────────────────────────────────────
@@ -109,6 +119,7 @@ export const agentYamlSchema = z.object({
 	behavioral_bounds: behavioralBoundsSchema.default({}),
 	kpis: z.array(kpiSchema).default([]),
 	charter: z.string().default(''),
+	max_tool_loops: z.number().int().min(1).max(100).optional(),
 });
 
 export type AgentYamlInput = z.input<typeof agentYamlSchema>;
@@ -171,5 +182,6 @@ export function transformAgentYaml(parsed: z.output<typeof agentYamlSchema>): Ag
 		},
 		kpis: parsed.kpis,
 		charter,
+		maxToolLoops: parsed.max_tool_loops,
 	};
 }
