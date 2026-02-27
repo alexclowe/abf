@@ -102,7 +102,7 @@ export const agentYamlSchema = z.object({
 	model: z.string().default('claude-sonnet-4-5'),
 	temperature: z.number().min(0).max(2).optional(),
 	team: z.string().optional(),
-	reports_to: z.string().optional(),
+	reports_to: z.string().nullable().optional(),
 	tools: z.array(z.string()).default([]),
 	triggers: z.array(triggerSchema).default([]),
 	escalation_rules: z.array(escalationRuleSchema).default([]),
