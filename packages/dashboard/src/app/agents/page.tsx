@@ -3,10 +3,14 @@
 import useSWR from 'swr';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { useEventStream } from '@/lib/use-event-stream';
 import { AgentStatusBadge } from '@/components/AgentStatusBadge';
 
 export default function AgentsPage() {
-  const { data: agents, error } = useSWR('agents', () => api.agents.list(), { refreshInterval: 3000 });
+  const { data: stream } = useEventStream();
+  const sseHasAgents = !!stream?.agents?.[0]?.config;
+  const { data: swrAgents, error } = useSWR(!sseHasAgents ? 'agents' : null, () => api.agents.list(), { refreshInterval: 3000 });
+  const agents = (sseHasAgents ? stream!.agents : swrAgents) as { config: Record<string, any>; state?: Record<string, any> | null }[] | undefined;
 
   return (
     <div className="p-6 space-y-4">

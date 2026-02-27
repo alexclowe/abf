@@ -3,13 +3,26 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
+import { useEventStream } from '@/lib/use-event-stream';
 import { AgentStatusBadge } from '@/components/AgentStatusBadge';
 import { Bot, Play, DollarSign } from 'lucide-react';
 
 export default function OverviewPage() {
-  const { data: status } = useSWR('status', () => api.status(), { refreshInterval: 3000 });
-  const { data: agents } = useSWR('agents', () => api.agents.list(), { refreshInterval: 3000 });
-  const { data: sessions } = useSWR('sessions', () => api.sessions.active(), { refreshInterval: 3000 });
+  const { data: stream } = useEventStream();
+
+  // Check if SSE snapshot has the data shapes this page needs
+  const sseHasAgents = !!stream?.agents?.[0]?.config;
+  const sseHasStatus = stream?.status?.activeSessions !== undefined;
+  const sseHasSessions = !!stream?.sessions;
+
+  // SWR polls only when SSE doesn't provide usable data for that field
+  const { data: swrStatus } = useSWR(!sseHasStatus ? 'status' : null, () => api.status(), { refreshInterval: 3000 });
+  const { data: swrAgents } = useSWR(!sseHasAgents ? 'agents' : null, () => api.agents.list(), { refreshInterval: 3000 });
+  const { data: swrSessions } = useSWR(!sseHasSessions ? 'sessions' : null, () => api.sessions.active(), { refreshInterval: 3000 });
+
+  const status = sseHasStatus ? stream!.status : swrStatus;
+  const agents = (sseHasAgents ? stream!.agents : swrAgents) as { config: Record<string, any>; state?: Record<string, any> | null }[] | undefined;
+  const sessions = sseHasSessions ? stream!.sessions : swrSessions;
 
   const [taskInputs, setTaskInputs] = useState<Record<string, string>>({});
   const [activeInput, setActiveInput] = useState<string | null>(null);

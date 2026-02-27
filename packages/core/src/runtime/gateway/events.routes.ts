@@ -46,6 +46,8 @@ function buildSnapshot(deps: GatewayDeps): Record<string, unknown> {
 			version: ABF_VERSION,
 			uptime: process.uptime(),
 			agents: deps.agentsMap.size,
+			activeSessions: dispatcher.getActiveSessions().length,
+			configured: deps.agentsMap.size > 0,
 		},
 		runtime: mc?.collect() ?? {
 			activeSessions: dispatcher.getActiveSessions().length,
@@ -53,7 +55,14 @@ function buildSnapshot(deps: GatewayDeps): Record<string, unknown> {
 			totalEscalations: dispatcher.getEscalations().length,
 			resolvedEscalations: dispatcher.getEscalations().filter((e) => e.resolved).length,
 		},
-		agents: mc?.collectAgentStates() ?? [],
+		// Full agent list (config + state) for overview and agents pages
+		agents: [...deps.agentsMap.values()].map((cfg) => ({
+			config: cfg,
+			state: dispatcher.getAgentState(cfg.id),
+		})),
+		// Flat agent states for the metrics page
+		agentStates: mc?.collectAgentStates() ?? [],
+		sessions: dispatcher.getActiveSessions(),
 		escalations: dispatcher.getEscalations(),
 	};
 }
