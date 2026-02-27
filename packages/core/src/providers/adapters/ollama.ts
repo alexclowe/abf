@@ -5,7 +5,7 @@
 
 import type { ICredentialVault } from '../../credentials/vault.js';
 import type { ProviderId, USDCents } from '../../types/common.js';
-import type { ChatChunk, ChatRequest, IProvider, ModelInfo } from '../../types/provider.js';
+import type { ChatChunk, ChatRequest, ContentPart, IProvider, ModelInfo } from '../../types/provider.js';
 
 interface OllamaChatChunk {
 	model: string;
@@ -43,12 +43,30 @@ export class OllamaProvider implements IProvider {
 
 	async *chat(request: ChatRequest): AsyncIterable<ChatChunk> {
 		// Map our ChatMessage format to Ollama format
-		const messages = request.messages.map((m) => ({
-			role: m.role === 'tool' ? 'user' : m.role,
-			content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
-		}));
+		const messages = request.messages.map((m) => {
+			let content: string;
+			let images: string[] | undefined;
 
-		// Build tools in OpenAI-compatible format
+			// Handle multimodal ContentPart[] content (images + text)
+			if (Array.isArray(m.content) && m.content.length > 0 && typeof m.content[0] === 'object' && 'type' in m.content[0]) {
+				const parts = m.content as readonly ContentPart[];
+				content = parts.filter((p) => p.type === 'text').map((p) => (p as { type: 'text'; text: string }).text).join('');
+				const imageParts = parts.filter((p) => p.type === 'image');
+				if (imageParts.length > 0) {
+					images = imageParts.map((p) => (p as { type: 'image'; data: string }).data);
+				}
+			} else {
+				content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+			}
+
+			return {
+				role: m.role === 'tool' ? 'user' : m.role,
+				content,
+				...(images ? { images } : {}),
+			};
+		});
+
+		// Build tools in OpenAI-compatible format — parameters is already a valid JSON Schema
 		const tools =
 			request.tools && request.tools.length > 0
 				? request.tools.map((t) => ({
@@ -56,14 +74,7 @@ export class OllamaProvider implements IProvider {
 						function: {
 							name: t.name,
 							description: t.description,
-							parameters: {
-								type: 'object',
-								properties: t.parameters,
-								required: Object.keys(t.parameters).filter(
-									(k) =>
-										(t.parameters as Record<string, { required?: boolean }>)[k]?.required !== false,
-								),
-							},
+							parameters: t.parameters,
 						},
 					}))
 				: undefined;

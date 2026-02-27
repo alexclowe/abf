@@ -1,8 +1,42 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+@import 'streamdown/styles.css';
 
 :root {
   --background: #0f172a;
   --foreground: #f8fafc;
+}
+
+/* Streamdown dark theme overrides */
+.streamdown pre {
+  background-color: #1e293b !important;
+  border: 1px solid #334155;
+  border-radius: 0.5rem;
+}
+
+.streamdown table {
+  border-color: #334155;
+}
+
+.streamdown th,
+.streamdown td {
+  border-color: #334155;
+}
+
+.streamdown a {
+  color: #38bdf8;
+}
+
+.streamdown a:hover {
+  color: #7dd3fc;
+}
+
+.streamdown blockquote {
+  border-left-color: #0ea5e9;
+  background-color: rgba(14, 165, 233, 0.05);
+}
+
+.streamdown hr {
+  border-color: #334155;
 }

@@ -9,20 +9,25 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/react": "^3.0.105",
+    "@streamdown/code": "^1.0.3",
+    "@tailwindcss/typography": "^0.5.19",
+    "ai": "^6.0.103",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.525.0",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "swr": "^2.3.3",
-    "lucide-react": "^0.525.0",
-    "clsx": "^2.1.1"
+    "streamdown": "^2.3.0",
+    "swr": "^2.3.3"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "typescript": "^5.8.0",
-    "tailwindcss": "^3.4.0",
     "autoprefixer": "^10.4.0",
-    "postcss": "^8.4.0"
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.8.0"
   }
 }
