@@ -16,7 +16,7 @@ export default function MetricsPage() {
   });
 
   const runtime = stream?.runtime ?? swrRuntime;
-  const agents = stream?.agents ?? swrAgents;
+  const agents = stream?.agentStates ?? swrAgents;
 
   const activeSessions = Number(runtime?.activeSessions ?? 0);
   const agentCount = Number(runtime?.agentCount ?? 0);
