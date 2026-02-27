@@ -15,7 +15,8 @@
     "lint": "biome lint .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
-    "clean": "turbo clean"
+    "clean": "turbo clean",
+    "abf": "node packages/cli/dist/index.js"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
