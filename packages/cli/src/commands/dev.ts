@@ -1,7 +1,14 @@
 /**
  * abf dev — start ABF in development mode with real runtime.
+ *
+ * Spawns the Next.js dashboard as a child process on port 3001 and proxies
+ * non-API traffic through the Hono gateway on port 3000, giving operators
+ * a single URL to access everything.
  */
 
+import { existsSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { spawn, type ChildProcess } from 'node:child_process';
 import chalk from 'chalk';
 import ora from 'ora';
 
@@ -9,29 +16,134 @@ interface DevOptions {
 	port: string;
 }
 
+const DASHBOARD_PORT = 3001;
+
+/** Default config used when no abf.config.yaml exists (bootstrap / setup mode). */
+function getDefaultConfig(): import('@abf/core').AbfConfig {
+	return {
+		name: 'abf',
+		version: '0.1.0',
+		storage: { backend: 'filesystem', basePath: '.' },
+		bus: { backend: 'in-process' },
+		security: {
+			injectionDetection: true,
+			boundsEnforcement: true,
+			auditLogging: true,
+			credentialRotationHours: 24,
+			maxSessionCostDefault: 2.0,
+		},
+		gateway: { enabled: true, host: '0.0.0.0', port: 3000 },
+		runtime: { maxConcurrentSessions: 10, sessionTimeoutMs: 300_000, healthCheckIntervalMs: 30_000 },
+		logging: { level: 'info', format: 'pretty' },
+		agentsDir: 'agents',
+		teamsDir: 'teams',
+		toolsDir: 'tools',
+		memoryDir: 'memory',
+		logsDir: 'logs',
+		knowledgeDir: 'knowledge',
+		outputsDir: 'outputs',
+	};
+}
+
+/**
+ * Find the dashboard package directory.
+ * Tries monorepo layout first (../../dashboard relative to CLI dist), then npm resolution.
+ */
+function findDashboardDir(): string | null {
+	// Monorepo: packages/cli/dist/ → packages/dashboard
+	const monorepoPath = join(dirname(new URL(import.meta.url).pathname), '..', '..', '..', 'dashboard');
+	if (existsSync(join(monorepoPath, 'package.json'))) {
+		return monorepoPath;
+	}
+
+	// npm install: try require.resolve
+	try {
+		const resolved = require.resolve('@abf/dashboard/package.json', { paths: [process.cwd()] });
+		return dirname(resolved);
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Spawn the Next.js dashboard as a child process.
+ * Returns the child process, or null if dashboard is not available.
+ */
+function spawnDashboard(dashboardDir: string): ChildProcess {
+	const standalonePath = join(dashboardDir, '.next', 'standalone', 'server.js');
+	const isStandalone = existsSync(standalonePath);
+
+	const env = {
+		...process.env,
+		PORT: String(DASHBOARD_PORT),
+		NEXT_PUBLIC_ABF_API_URL: '',
+	};
+
+	if (isStandalone) {
+		// Production mode: standalone server built by `next build` with output: 'standalone'
+		return spawn('node', [standalonePath], {
+			stdio: 'pipe',
+			env,
+			cwd: dashboardDir,
+		});
+	}
+
+	// Dev mode: use npx next dev
+	return spawn('npx', ['next', 'dev', '-p', String(DASHBOARD_PORT)], {
+		stdio: 'pipe',
+		env,
+		cwd: dashboardDir,
+		shell: true,
+	});
+}
+
 export async function devCommand(options: DevOptions): Promise<void> {
 	const spinner = ora('Starting ABF development server...').start();
+
+	let dashboardProcess: ChildProcess | null = null;
 
 	try {
 		const { loadConfig, createRuntime } = await import('@abf/core');
 
+		let bootstrapMode = false;
 		const configResult = await loadConfig(process.cwd());
+		let config: import('@abf/core').AbfConfig;
+
 		if (!configResult.ok) {
-			spinner.fail(chalk.red(configResult.error.message));
-			process.exit(1);
+			if (configResult.error.code === 'CONFIG_NOT_FOUND') {
+				bootstrapMode = true;
+				config = getDefaultConfig();
+				spinner.text = 'No config found — running in setup mode...';
+			} else {
+				spinner.fail(chalk.red(configResult.error.message));
+				process.exit(1);
+			}
+		} else {
+			config = configResult.value;
 		}
 
-		const config = configResult.value;
-
-		// Port override from CLI flag
-		const port = Number.parseInt(options.port, 10) || config.gateway.port;
+		// Port override: CLI flag > PORT env var > config
+		const port = Number.parseInt(options.port, 10) || Number.parseInt(process.env['PORT'] ?? '', 10) || config.gateway.port;
 		const patchedConfig = {
 			...config,
 			gateway: { ...config.gateway, port, enabled: true },
 		};
 
+		// Spawn dashboard if available
+		let dashboardPort: number | undefined;
+		const dashboardDir = findDashboardDir();
+		if (dashboardDir) {
+			spinner.text = 'Starting dashboard...';
+			dashboardProcess = spawnDashboard(dashboardDir);
+			dashboardPort = DASHBOARD_PORT;
+
+			// Silently log dashboard errors for debugging
+			dashboardProcess.stderr?.on('data', () => {});
+			dashboardProcess.on('error', () => {});
+		}
+
 		spinner.text = 'Assembling runtime...';
-		const runtime = await createRuntime(patchedConfig, process.cwd());
+		const runtime = await createRuntime(patchedConfig, process.cwd(), { dashboardPort });
 
 		spinner.text = 'Loading agents...';
 		const agentsResult = await runtime.loadAgents();
@@ -44,10 +156,14 @@ export async function devCommand(options: DevOptions): Promise<void> {
 		spinner.text = 'Starting runtime...';
 		await runtime.start();
 
-		spinner.succeed(chalk.green(`ABF running — ${agentCount} agent(s) loaded`));
+		if (bootstrapMode) {
+			spinner.succeed(chalk.green('ABF running in setup mode'));
+		} else {
+			spinner.succeed(chalk.green(`ABF running — ${agentCount} agent(s) loaded`));
+		}
 
 		console.log();
-		if (agentsResult.ok) {
+		if (!bootstrapMode && agentsResult.ok) {
 			for (const agent of agentsResult.value) {
 				const triggerSummary = agent.triggers.map((t) => t.type).join(', ') || 'none';
 				console.log(
@@ -57,7 +173,13 @@ export async function devCommand(options: DevOptions): Promise<void> {
 		}
 
 		console.log();
-		console.log(`  Gateway: ${chalk.cyan(`http://localhost:${port}`)}`);
+		console.log(`  ${chalk.cyan(`http://localhost:${port}`)}`);
+		if (bootstrapMode) {
+			console.log(`  Setup:   ${chalk.cyan(`http://localhost:${port}/setup`)}`);
+		}
+		if (!dashboardDir) {
+			console.log(chalk.dim('  (Dashboard not found — API-only mode)'));
+		}
 		console.log(`  Health:  ${chalk.cyan(`http://localhost:${port}/health`)}`);
 		console.log();
 		console.log(chalk.dim('  Press Ctrl+C to stop'));
@@ -66,6 +188,9 @@ export async function devCommand(options: DevOptions): Promise<void> {
 		const shutdown = async (signal: string) => {
 			console.log();
 			console.log(chalk.dim(`  Received ${signal}, shutting down...`));
+			if (dashboardProcess && !dashboardProcess.killed) {
+				dashboardProcess.kill('SIGTERM');
+			}
 			await runtime.stop();
 			process.exit(0);
 		};
@@ -76,6 +201,9 @@ export async function devCommand(options: DevOptions): Promise<void> {
 		// Keep process alive
 		await new Promise(() => {});
 	} catch (error) {
+		if (dashboardProcess && !dashboardProcess.killed) {
+			dashboardProcess.kill('SIGTERM');
+		}
 		spinner.fail(chalk.red('Failed to start development server'));
 		console.error(error);
 		process.exit(1);

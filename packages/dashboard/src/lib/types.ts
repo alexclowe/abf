@@ -422,3 +422,44 @@ export interface SeedInterviewStartResponse {
   sessionId: string;
   step: InterviewStep;
 }
+
+// ── Knowledge Files ─────────────────────────────────────────────────
+
+export interface KnowledgeFile {
+  filename: string;
+  content: string;
+  size: number;
+}
+
+// ── Monitor Config ──────────────────────────────────────────────────
+
+export interface MonitorConfig {
+  name: string;
+  description?: string;
+  url: string;
+  interval: string;
+  agent: string;
+  task: string;
+  method?: string;
+}
+
+// ── Message Template Config ─────────────────────────────────────────
+
+export interface MessageTemplateConfig {
+  name: string;
+  description?: string;
+  channel: string;
+  subject?: string;
+  body: string;
+  variables: string[];
+}
+
+// ── Archetype ───────────────────────────────────────────────────────
+
+export interface ArchetypeInfo {
+  name: string;
+  temperature: number;
+  tools: string[];
+  allowedActions: string[];
+  forbiddenActions: string[];
+}

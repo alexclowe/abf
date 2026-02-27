@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
 import type { EventSnapshot } from './use-event-stream';
 
-const BASE = process.env.NEXT_PUBLIC_ABF_API_URL ?? 'http://localhost:3000';
+const BASE = process.env.NEXT_PUBLIC_ABF_API_URL ?? '';
 
 interface EventStreamContextValue {
 	data: EventSnapshot | null;

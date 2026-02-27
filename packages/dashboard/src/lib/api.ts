@@ -23,7 +23,7 @@ import type {
   SeedInterviewStartResponse,
 } from './types';
 
-const BASE = process.env.NEXT_PUBLIC_ABF_API_URL ?? 'http://localhost:3000';
+const BASE = process.env.NEXT_PUBLIC_ABF_API_URL ?? '';
 
 function headers(extra?: Record<string, string>): Record<string, string> {
   const h: Record<string, string> = { ...extra };
@@ -50,6 +50,16 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function put<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'PUT',
+    headers: headers({ 'Content-Type': 'application/json' }),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json() as Promise<T>;
+}
+
 async function del<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { method: 'DELETE', headers: headers() });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -66,6 +76,11 @@ export const api = {
     memory: (id: string) => get<AgentMemoryContext>(`/api/agents/${id}/memory`),
     run: (id: string, task: string, payload?: Record<string, unknown>) =>
       post<{ sessionId: string }>(`/api/agents/${id}/run`, { task, payload }),
+    create: (body: Record<string, unknown>) =>
+      post<{ success: boolean; agent: { id: string; name: string; displayName: string } }>('/api/agents', body),
+    update: (id: string, body: Record<string, unknown>) =>
+      put<{ success: boolean }>(`/api/agents/${id}`, body),
+    delete: (id: string) => del<{ success: boolean }>(`/api/agents/${id}`),
   },
 
   sessions: {
@@ -75,6 +90,11 @@ export const api = {
 
   teams: {
     list: () => get<TeamConfig[]>('/api/teams'),
+    create: (body: Record<string, unknown>) =>
+      post<{ success: boolean; team: TeamConfig }>('/api/teams', body),
+    update: (id: string, body: Record<string, unknown>) =>
+      put<{ success: boolean }>(`/api/teams/${id}`, body),
+    delete: (id: string) => del<{ success: boolean }>(`/api/teams/${id}`),
   },
 
   messages: {
@@ -186,11 +206,50 @@ export const api = {
     },
   },
 
+  knowledge: {
+    list: () => get<import('./types').KnowledgeFile[]>('/api/knowledge'),
+    get: (filename: string) => get<{ filename: string; content: string }>(`/api/knowledge/${filename}`),
+    create: (body: { filename: string; content: string }) =>
+      post<{ success: boolean; filename: string }>('/api/knowledge', body),
+    update: (filename: string, content: string) =>
+      put<{ success: boolean }>(`/api/knowledge/${filename}`, { content }),
+    delete: (filename: string) => del<{ success: boolean }>(`/api/knowledge/${filename}`),
+  },
+
+  monitors: {
+    list: () => get<import('./types').MonitorConfig[]>('/api/monitors'),
+    create: (body: Record<string, unknown>) =>
+      post<{ success: boolean; name: string }>('/api/monitors', body),
+    update: (name: string, body: Record<string, unknown>) =>
+      put<{ success: boolean }>(`/api/monitors/${name}`, body),
+    delete: (name: string) => del<{ success: boolean }>(`/api/monitors/${name}`),
+  },
+
+  messageTemplates: {
+    list: () => get<import('./types').MessageTemplateConfig[]>('/api/message-templates'),
+    create: (body: Record<string, unknown>) =>
+      post<{ success: boolean; name: string }>('/api/message-templates', body),
+    update: (name: string, body: Record<string, unknown>) =>
+      put<{ success: boolean }>(`/api/message-templates/${name}`, body),
+    delete: (name: string) => del<{ success: boolean }>(`/api/message-templates/${name}`),
+  },
+
+  config: {
+    get: () => get<Record<string, unknown>>('/api/config'),
+    update: (body: Record<string, unknown>) =>
+      put<{ success: boolean }>('/api/config', body),
+  },
+
   workflows: {
     list: () => get<import('./types').WorkflowDefinition[]>('/api/workflows'),
     get: (name: string) => get<import('./types').WorkflowDefinition>(`/api/workflows/${name}`),
     run: (name: string, input?: Record<string, unknown>) =>
       post<{ runId: string }>(`/api/workflows/${name}/run`, { input }),
     getRun: (runId: string) => get<import('./types').WorkflowRun>(`/api/workflows/runs/${runId}`),
+    create: (body: Record<string, unknown>) =>
+      post<{ success: boolean; name: string }>('/api/workflows', body),
+    update: (name: string, body: Record<string, unknown>) =>
+      put<{ success: boolean }>(`/api/workflows/${name}`, body),
+    delete: (name: string) => del<{ success: boolean }>(`/api/workflows/${name}`),
   },
 };

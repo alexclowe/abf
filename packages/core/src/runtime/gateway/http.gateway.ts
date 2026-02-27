@@ -22,6 +22,7 @@ import type { IApprovalStore } from '../../types/approval.js';
 import type { ICredentialVault } from '../../credentials/vault.js';
 import type { IGateway, IDispatcher, IScheduler } from '../interfaces.js';
 import { registerAuthRoutes } from './auth.routes.js';
+import { registerCrudRoutes } from './crud.routes.js';
 import { registerSeedRoutes } from './seed.routes.js';
 import { registerEventRoutes } from './events.routes.js';
 import { registerSetupRoutes } from './setup.routes.js';
@@ -53,6 +54,7 @@ export interface GatewayDeps {
 	readonly metricsCollector?: import('../../metrics/collector.js').MetricsCollector | undefined;
 	readonly vault?: ICredentialVault | undefined;
 	readonly scheduler?: IScheduler | undefined;
+	readonly dashboardPort?: number | undefined;
 }
 
 /** @deprecated Use GatewayDeps instead. Kept for backwards compatibility. */
@@ -89,7 +91,7 @@ export class HttpGateway implements IGateway {
 			cors({
 				origin: (origin) =>
 					allowedOrigins.includes(origin) ? origin : (allowedOrigins[0] ?? ''),
-				allowMethods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+				allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 				allowHeaders: ['Content-Type', 'Authorization'],
 			}),
 		);
@@ -137,6 +139,11 @@ export class HttpGateway implements IGateway {
 		// -- Seed routes (seed-to-company pipeline) --------------------------------
 		if (deps.scheduler) {
 			registerSeedRoutes(app, { ...deps, scheduler: deps.scheduler });
+		}
+
+		// -- CRUD routes (agents, teams, knowledge, workflows, monitors, etc.) ----
+		if (deps.scheduler) {
+			registerCrudRoutes(app, { ...deps, scheduler: deps.scheduler });
 		}
 
 		// -- SSE Events -----------------------------------------------------------
@@ -468,8 +475,39 @@ export class HttpGateway implements IGateway {
 			return c.json({ runId }, 202);
 		});
 
-		// 404 fallback
-		app.notFound((c) => c.json({ error: 'Not found' }, 404));
+		// Dashboard proxy or 404 fallback
+		if (deps.dashboardPort) {
+			const dashboardOrigin = `http://127.0.0.1:${deps.dashboardPort}`;
+			app.all('*', async (c) => {
+				try {
+					const url = new URL(c.req.url);
+					const target = `${dashboardOrigin}${url.pathname}${url.search}`;
+					const proxyHeaders = new Headers(c.req.raw.headers);
+					proxyHeaders.delete('host');
+					const hasBody = c.req.method !== 'GET' && c.req.method !== 'HEAD';
+					const init: RequestInit = {
+						method: c.req.method,
+						headers: proxyHeaders,
+					};
+					if (hasBody) {
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+						init.body = c.req.raw.body as any;
+						// Node fetch requires duplex for streaming request bodies
+						(init as Record<string, unknown>)['duplex'] = 'half';
+					}
+					const resp = await fetch(target, init);
+					return new Response(resp.body, {
+						status: resp.status,
+						statusText: resp.statusText,
+						headers: resp.headers,
+					});
+				} catch {
+					return c.text('Dashboard unavailable', 502);
+				}
+			});
+		} else {
+			app.notFound((c) => c.json({ error: 'Not found' }, 404));
+		}
 	}
 
 	async start(): Promise<void> {

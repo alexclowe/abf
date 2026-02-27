@@ -9,7 +9,9 @@
  * - Re-analyzing updated seed docs against an existing plan
  */
 
+import { access, writeFile as writeFileFs } from 'node:fs/promises';
 import { join } from 'node:path';
+import { stringify as yamlStringify } from 'yaml';
 import type { Hono } from 'hono';
 import type { AgentConfig } from '../../types/agent.js';
 import type { IScheduler } from '../interfaces.js';
@@ -117,6 +119,23 @@ export function registerSeedRoutes(app: Hono, deps: SeedRouteDeps): void {
 				provider,
 				model,
 			);
+
+			// Generate abf.config.yaml if it doesn't exist
+			const configPath = join(deps.projectRoot, 'abf.config.yaml');
+			try {
+				await access(configPath);
+			} catch {
+				const companyName = body.plan.company?.name ?? 'abf';
+				const safeName = companyName.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-');
+				const configContent = yamlStringify({
+					name: safeName,
+					version: '0.1.0',
+					storage: { backend: 'filesystem' },
+					bus: { backend: 'in-process' },
+					gateway: { enabled: true, host: '0.0.0.0', port: 3000 },
+				});
+				await writeFileFs(configPath, configContent, 'utf-8');
+			}
 
 			// Reload agents from disk (same pattern as setup.routes.ts)
 			const { loadAgentConfigs } = await import('../../config/loader.js');

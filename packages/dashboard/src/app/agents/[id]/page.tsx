@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
 import { AgentStatusBadge } from '@/components/AgentStatusBadge';
@@ -36,7 +37,7 @@ export default function AgentDetailPage() {
   if (error) {
     return (
       <div className="p-6">
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
+        <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
           Failed to load agent: {error.message}
         </div>
       </div>
@@ -60,12 +61,20 @@ export default function AgentDetailPage() {
           </div>
           <p className="text-slate-400 mt-1">{config.role} — {config.description}</p>
         </div>
-        <button
-          onClick={() => setShowRun(!showRun)}
-          className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors"
-        >
-          Run Agent
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/agents/${id}/edit`}
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md text-sm font-medium transition-colors border border-slate-700"
+          >
+            Edit
+          </Link>
+          <button
+            onClick={() => setShowRun(!showRun)}
+            className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors"
+          >
+            Run Agent
+          </button>
+        </div>
       </div>
 
       {/* Run form */}
@@ -94,10 +103,13 @@ export default function AgentDetailPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-slate-800">
+      <div className="flex gap-1 border-b border-slate-800" role="tablist" aria-label="Agent details">
         {(['overview', 'memory', 'sessions'] as Tab[]).map((t) => (
           <button
             key={t}
+            role="tab"
+            aria-selected={tab === t}
+            aria-controls={`panel-${t}`}
             onClick={() => setTab(t)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               tab === t
@@ -112,8 +124,8 @@ export default function AgentDetailPage() {
 
       {/* Tab content */}
       {tab === 'overview' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <div role="tabpanel" id="panel-overview" className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
               <h3 className="text-sm font-medium text-slate-400 mb-2">Configuration</h3>
               <dl className="space-y-1 text-sm">
@@ -236,7 +248,7 @@ export default function AgentDetailPage() {
       )}
 
       {tab === 'memory' && (
-        <div className="space-y-4">
+        <div role="tabpanel" id="panel-memory" className="space-y-4">
           {memory?.charter && (
             <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
               <h3 className="text-sm font-medium text-slate-400 mb-2">Charter</h3>
@@ -263,7 +275,7 @@ export default function AgentDetailPage() {
       )}
 
       {tab === 'sessions' && (
-        <div className="text-sm text-slate-500">
+        <div role="tabpanel" id="panel-sessions" className="text-sm text-slate-500">
           Session history is available when the agent has completed sessions.
           {state && (
             <div className="mt-2">

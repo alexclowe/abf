@@ -42,9 +42,14 @@ import { Runtime } from './runtime.js';
 import { Scheduler } from './scheduler.js';
 import { SessionManager } from './session-manager.js';
 
+export interface CreateRuntimeOptions {
+	dashboardPort?: number | undefined;
+}
+
 export async function createRuntime(
 	config: AbfConfig,
 	projectRoot: string,
+	options?: CreateRuntimeOptions,
 ): Promise<Runtime> {
 	// 1. Credential vault (v2 — OS Keychain or scrypt)
 	const vault = await createVault();
@@ -230,6 +235,7 @@ export async function createRuntime(
 		metricsCollector,
 		vault,
 		scheduler,
+		dashboardPort: options?.dashboardPort,
 	});
 
 	const components: RuntimeComponents = {

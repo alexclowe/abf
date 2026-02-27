@@ -14,17 +14,31 @@ export default function AgentsPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold">Agents</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Agents</h1>
+        <Link
+          href="/agents/new"
+          className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors"
+        >
+          + New Agent
+        </Link>
+      </div>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
+        <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
           Failed to load agents: {error.message}
         </div>
       )}
 
       {agents && agents.length === 0 && (
         <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center">
-          <p className="text-slate-400">No agents configured.</p>
+          <p className="text-slate-400 mb-3">No agents configured yet.</p>
+          <Link
+            href="/agents/new"
+            className="inline-block px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors"
+          >
+            Create your first agent
+          </Link>
         </div>
       )}
 

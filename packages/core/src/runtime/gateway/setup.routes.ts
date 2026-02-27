@@ -6,7 +6,7 @@
  * agents into the live runtime.
  */
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { access, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { stringify } from 'yaml';
 import type { Hono } from 'hono';
@@ -712,9 +712,24 @@ export function registerSetupRoutes(app: Hono, deps: SetupDeps): void {
 				await mkdir(dir, { recursive: true });
 			}
 
-			// Write files (skip if already exists to avoid overwriting user edits)
+			// Write files
 			for (const f of files) {
 				await writeFile(join(root, f.path), f.content, 'utf-8');
+			}
+
+			// Generate abf.config.yaml if it doesn't exist
+			const configPath = join(root, 'abf.config.yaml');
+			try {
+				await access(configPath);
+			} catch {
+				const configContent = stringify({
+					name: projectName,
+					version: '0.1.0',
+					storage: { backend: 'filesystem' },
+					bus: { backend: 'in-process' },
+					gateway: { enabled: true, host: '0.0.0.0', port: 3000 },
+				});
+				await writeFile(configPath, configContent, 'utf-8');
 			}
 
 			// Reload agents from disk
