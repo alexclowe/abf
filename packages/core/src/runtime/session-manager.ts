@@ -26,7 +26,8 @@ import type { IToolRegistry, IToolSandbox, ToolCall, ToolResult } from '../types
 import type { Activation } from '../types/trigger.js';
 import { createSessionId, toISOTimestamp } from '../util/id.js';
 import { loadKnowledgeFiles } from '../knowledge/loader.js';
-import type { ISessionManager } from './interfaces.js';
+import type { ISessionManager, StreamEvent } from './interfaces.js';
+import type { ContentPart } from '../types/provider.js';
 
 function evaluateKPI(
 	kpi: KPIDefinition,
@@ -148,6 +149,205 @@ export class SessionManager implements ISessionManager {
 				memoryUpdates: [],
 				error: e instanceof Error ? e.message : String(e),
 			});
+		}
+	}
+
+	async executeStreaming(
+		activation: Activation,
+		onChunk: (event: StreamEvent) => void,
+		conversationHistory?: { role: string; content: ChatMessage['content'] }[],
+	): Promise<Result<SessionResult, ABFError>> {
+		const agent = this.deps.agents.get(activation.agentId);
+		if (!agent) {
+			return Err(new ABFErrorClass('AGENT_NOT_FOUND', `Agent ${activation.agentId} not found`));
+		}
+
+		const sessionId = createSessionId();
+		const startedAt = toISOTimestamp();
+
+		try {
+			// Step 1: Load context (lightweight for chat — skip heavy memory loads)
+			const [memoryResult, knowledgeFiles] = await Promise.all([
+				this.deps.memoryStore.loadContext(activation.agentId),
+				this.deps.knowledgeDir
+					? loadKnowledgeFiles(this.deps.knowledgeDir)
+					: Promise.resolve({} as Record<string, string>),
+			]);
+			if (!memoryResult.ok) return memoryResult;
+			const memory = memoryResult.value;
+			const mergedKnowledge = { ...memory.knowledge, ...knowledgeFiles };
+
+			// Step 2: Build prompt — system message with charter + context
+			const messages: ChatMessage[] = this.buildPrompt(agent, memory, activation, mergedKnowledge);
+
+			// Inject conversation history before the final user message
+			if (conversationHistory && conversationHistory.length > 0) {
+				// Remove the default user message added by buildPrompt (last element)
+				const userMsg = messages.pop();
+				// Add conversation history
+				for (const h of conversationHistory) {
+					messages.push({
+						role: h.role as ChatMessage['role'],
+						content: h.content as string,
+					});
+				}
+				// Re-add the user message
+				if (userMsg) messages.push(userMsg);
+			}
+
+			// Handle multimodal content in user message
+			const payload = activation.payload as Record<string, unknown> | undefined;
+			if (payload?.['contentParts']) {
+				// Replace the last user message with multimodal content
+				const lastIdx = messages.length - 1;
+				if (messages[lastIdx]?.role === 'user') {
+					messages[lastIdx] = {
+						role: 'user',
+						content: payload['contentParts'] as ContentPart[],
+					};
+				}
+			}
+
+			// Step 3: Get provider + tools
+			const provider = this.deps.providerRegistry.getBySlug(agent.provider);
+			if (!provider) {
+				return Err(new ABFErrorClass('PROVIDER_NOT_FOUND', `Provider ${agent.provider} not registered`));
+			}
+
+			const agentTools = this.deps.toolRegistry.getForAgent(agent.id, agent.tools);
+			const chatTools = agentTools.map((t) => {
+				const properties: Record<string, { type: string; description: string }> = {};
+				const required: string[] = [];
+				for (const p of t.definition.parameters) {
+					properties[p.name] = { type: p.type, description: p.description };
+					if (p.required) required.push(p.name);
+				}
+				return {
+					name: t.definition.name,
+					description: t.definition.description,
+					parameters: { type: 'object', properties, required },
+				};
+			});
+
+			// Step 4: Streaming tool loop
+			let loopCount = 0;
+			const maxLoops = 10;
+			let totalUsage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+			let totalCost: USDCents = 0 as USDCents;
+			const toolCalls: ToolCall[] = [];
+			const toolResults: ToolResult[] = [];
+
+			while (loopCount < maxLoops) {
+				loopCount++;
+
+				const chunks = provider.chat({
+					model: agent.model,
+					messages,
+					temperature: agent.temperature,
+					tools: chatTools.length > 0 ? chatTools : undefined,
+				});
+
+				let responseText = '';
+				const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
+
+				for await (const chunk of chunks) {
+					if (chunk.type === 'error') {
+						onChunk({ type: 'error', error: chunk.error ?? 'Provider error' });
+						throw new ABFErrorClass('PROVIDER_ERROR', chunk.error ?? 'Provider error');
+					}
+					if (chunk.type === 'text' && chunk.text) {
+						responseText += chunk.text;
+						onChunk({ type: 'token', text: chunk.text });
+					}
+					if (chunk.type === 'tool_call' && chunk.toolCall) {
+						pendingToolCalls.push(chunk.toolCall);
+					}
+					if (chunk.type === 'usage' && chunk.usage) {
+						totalUsage = {
+							inputTokens: totalUsage.inputTokens + chunk.usage.inputTokens,
+							outputTokens: totalUsage.outputTokens + chunk.usage.outputTokens,
+							totalTokens: totalUsage.totalTokens + chunk.usage.totalTokens,
+						};
+					}
+				}
+
+				if (pendingToolCalls.length === 0) {
+					messages.push({ role: 'assistant', content: responseText });
+					break;
+				}
+
+				// Execute tool calls with streaming events
+				for (const tc of pendingToolCalls) {
+					const tool = this.deps.toolRegistry.get(tc.name as import('../types/common.js').ToolId);
+					if (!tool) continue;
+
+					onChunk({
+						type: 'tool_use',
+						toolName: tc.name,
+						toolArguments: JSON.parse(tc.arguments) as Record<string, unknown>,
+					});
+
+					const call: ToolCall = {
+						toolId: tc.name as import('../types/common.js').ToolId,
+						arguments: JSON.parse(tc.arguments) as Record<string, unknown>,
+						agentId: agent.id,
+						timestamp: toISOTimestamp(),
+					};
+					toolCalls.push(call);
+
+					const budgetRemaining = ((agent.behavioralBounds.maxCostPerSession as number) -
+						(totalCost as number)) as USDCents;
+
+					const result = await this.deps.toolSandbox.execute(call, tool, budgetRemaining);
+					if (result.ok) {
+						toolResults.push(result.value);
+						totalCost = ((totalCost as number) + ((result.value.cost ?? 0) as number)) as USDCents;
+
+						onChunk({
+							type: 'tool_result',
+							toolName: tc.name,
+							toolOutput: result.value.output,
+						});
+
+						messages.push({
+							role: 'tool',
+							content: JSON.stringify(result.value.output),
+							toolCallId: tc.id,
+						});
+					}
+				}
+			}
+
+			// Step 8: Report
+			totalCost = ((totalCost as number) +
+				provider.estimateCost(agent.model, totalUsage.totalTokens)) as USDCents;
+
+			const lastMsg = messages[messages.length - 1];
+			const outputText = lastMsg && lastMsg.role === 'assistant' && typeof lastMsg.content === 'string'
+				? lastMsg.content
+				: undefined;
+
+			return Ok({
+				sessionId,
+				agentId: activation.agentId,
+				status: 'completed' as import('../types/session.js').SessionStatus,
+				startedAt,
+				completedAt: toISOTimestamp(),
+				toolCalls,
+				toolResults,
+				messagesEmitted: [],
+				escalations: [],
+				kpiReports: [],
+				tokenUsage: totalUsage,
+				cost: totalCost,
+				memoryUpdates: [],
+				outputText,
+			});
+		} catch (e) {
+			return Err(new ABFErrorClass(
+				'SESSION_FAILED',
+				e instanceof Error ? e.message : String(e),
+			));
 		}
 	}
 

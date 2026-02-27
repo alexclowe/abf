@@ -59,8 +59,23 @@ export interface IDispatcher {
 // ─── Session Manager ──────────────────────────────────────────────────
 // Executes the 8-step work session lifecycle.
 
+/** Events emitted during streaming chat sessions. */
+export interface StreamEvent {
+	readonly type: 'token' | 'tool_use' | 'tool_result' | 'error';
+	readonly text?: string;
+	readonly toolName?: string;
+	readonly toolArguments?: Record<string, unknown>;
+	readonly toolOutput?: unknown;
+	readonly error?: string;
+}
+
 export interface ISessionManager {
 	execute(activation: Activation): Promise<Result<SessionResult, ABFError>>;
+	executeStreaming(
+		activation: Activation,
+		onChunk: (event: StreamEvent) => void,
+		conversationHistory?: { role: string; content: import('../types/provider.js').ChatMessage['content'] }[],
+	): Promise<Result<SessionResult, ABFError>>;
 	abort(sessionId: SessionId): Promise<void>;
 }
 

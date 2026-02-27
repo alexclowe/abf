@@ -10,7 +10,7 @@
 import type { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import type { AgentId } from '../../types/common.js';
-import type { ContentPart } from '../../types/provider.js';
+import type { ChatMessage, ContentPart } from '../../types/provider.js';
 import { createActivationId, toISOTimestamp } from '../../util/id.js';
 import type { GatewayDeps } from './http.gateway.js';
 import type { InMemoryConversationStore } from '../conversation-store.js';
@@ -148,11 +148,11 @@ export function registerChatRoutes(app: Hono, deps: ChatRoutesDeps): void {
 			return c.json({ error: 'Agent not found' }, 404);
 		}
 
-		const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+		const body: Record<string, unknown> = await c.req.json<Record<string, unknown>>().catch(() => ({}));
 
 		// Support both AI SDK format { id, messages[] } and legacy { message, conversationId }
 		let userText: string;
-		let conversationHistory: { role: string; content: string | ContentPart[] }[];
+		let conversationHistory: { role: string; content: ChatMessage['content'] }[];
 
 		if (Array.isArray(body['messages'])) {
 			// AI SDK DefaultChatTransport format
@@ -198,7 +198,7 @@ export function registerChatRoutes(app: Hono, deps: ChatRoutesDeps): void {
 			agentId,
 			trigger: { type: 'manual' as const, task: userText.trim() },
 			timestamp: toISOTimestamp(),
-			payload: { message: userText.trim() },
+			payload: { message: userText.trim() } as Record<string, unknown>,
 		};
 
 		// Create SSE stream with UI Message Stream v1 protocol
@@ -362,7 +362,7 @@ export function registerChatRoutes(app: Hono, deps: ChatRoutesDeps): void {
 
 	// POST /api/agents/:id/chat/feedback — store feedback on a message
 	app.post('/api/agents/:id/chat/feedback', async (c) => {
-		const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+		const body: Record<string, unknown> = await c.req.json<Record<string, unknown>>().catch(() => ({}));
 		const messageId = typeof body['messageId'] === 'string' ? body['messageId'] : '';
 		const feedback = typeof body['feedback'] === 'string' ? body['feedback'] : '';
 		if (!messageId) return c.json({ error: 'messageId required' }, 400);
@@ -406,7 +406,7 @@ export function registerChatRoutes(app: Hono, deps: ChatRoutesDeps): void {
 	// PUT /api/agents/:id/conversations/:cid — rename conversation
 	app.put('/api/agents/:id/conversations/:cid', async (c) => {
 		const cid = c.req.param('cid');
-		const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+		const body: Record<string, unknown> = await c.req.json<Record<string, unknown>>().catch(() => ({}));
 		const title = typeof body['title'] === 'string' ? body['title'] : '';
 		const meta = conversationMeta.get(cid);
 		if (!meta) return c.json({ error: 'Conversation not found' }, 404);
