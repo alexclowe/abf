@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: abf
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: ABF_VAULT_PASSWORD
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false

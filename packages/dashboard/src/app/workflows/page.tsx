@@ -4,7 +4,8 @@ import useSWR from 'swr';
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import type { WorkflowDefinition } from '@/lib/types';
-import { GitBranch, Play } from 'lucide-react';
+import { GitBranch, Play, Plus } from 'lucide-react';
+import Link from 'next/link';
 
 function WorkflowGraph({ workflow }: { workflow: WorkflowDefinition }) {
   const completed = new Set<string>();
@@ -52,24 +53,39 @@ export default function WorkflowsPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold">Workflows</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Workflows</h1>
+        <Link
+          href="/workflows/new"
+          className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+        >
+          <Plus size={14} />
+          New Workflow
+        </Link>
+      </div>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
+        <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
           Failed to load workflows: {error.message}
         </div>
       )}
 
       {runError && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm flex items-center justify-between">
+        <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm flex items-center justify-between">
           <span>{runError}</span>
           <button onClick={() => setRunError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
         </div>
       )}
 
       {workflows && workflows.length === 0 && (
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center text-slate-400">
-          No workflows found. Create a <code className="bg-slate-800 px-1 rounded text-sky-400">workflows/*.workflow.yaml</code> file.
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center">
+          <p className="text-slate-400 mb-3">No workflows configured yet.</p>
+          <Link
+            href="/workflows/new"
+            className="inline-block px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors"
+          >
+            Create your first workflow
+          </Link>
         </div>
       )}
 

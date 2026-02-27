@@ -19,3 +19,4 @@ export type { GatewayDeps, GatewayHandlers } from './gateway/index.js';
 export { WorkflowRunner } from './workflow-runner.js';
 export { Runtime } from './runtime.js';
 export { createRuntime } from './factory.js';
+export type { CreateRuntimeOptions } from './factory.js';

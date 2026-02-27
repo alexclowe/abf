@@ -6,7 +6,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 
 export async function setupCommand(): Promise<void> {
-	const setupUrl = 'http://localhost:3001/setup';
+	const setupUrl = 'http://localhost:3000/setup';
 	const spinner = ora('Checking if ABF Dashboard is running\u2026').start();
 
 	// Check if dashboard is reachable

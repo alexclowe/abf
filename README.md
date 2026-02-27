@@ -53,11 +53,10 @@ cd my-business
 # Configure your LLM provider
 abf auth anthropic   # or: openai, ollama
 
-# Start the runtime
+# Start the runtime (dashboard + API on one port)
 abf dev
 
-# Dashboard opens at http://localhost:3001
-# API available at http://localhost:3000
+# Open http://localhost:3000 — dashboard and API on the same port
 ```
 
 See the full [Quickstart Guide](docs/quickstart.md) for a detailed walkthrough.
@@ -229,7 +228,7 @@ The ABF Dashboard is a Next.js application that provides a visual interface for 
 - **Logs** -- Session and audit logs
 - **Setup** -- 6-step setup wizard: choose provider, configure API key, select company type (new idea, existing document, existing company, or template), interview or upload, review generated plan, and create project
 
-The Dashboard connects to the Gateway API (default port 3000) and runs on port 3001 in development.
+The Dashboard is served through the Gateway on port 3000 — a single URL for everything.
 
 ---
 
@@ -291,7 +290,9 @@ ABF supports multiple deployment targets:
 - **Render**: `abf deploy --target render`
 - **Fly.io**: `abf deploy --target fly`
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy?repo=https://github.com/alexclowe/abf&branch=main)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy?repo=https://github.com/alexclowe/abf&branch=main&envs=ABF_VAULT_PASSWORD,ANTHROPIC_API_KEY&optionalEnvs=ANTHROPIC_API_KEY&ABF_VAULT_PASSWORDDesc=Encryption+password+for+credential+vault&ANTHROPIC_API_KEYDesc=Optional+Anthropic+API+key+(can+configure+later+via+dashboard))
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/alexclowe/abf)
 
 See the [deployment guide](docs/deployment.md) for detailed instructions.
 

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bot, LayoutDashboard, Users, AlertTriangle, ScrollText, Layers, GitBranch, TrendingUp, ShieldCheck, BarChart3, KeyRound } from 'lucide-react';
+import { Bot, LayoutDashboard, Users, AlertTriangle, ScrollText, Layers, GitBranch, TrendingUp, ShieldCheck, BarChart3, BookOpen, Eye, Mail, Settings } from 'lucide-react';
 import clsx from 'clsx';
 
 const nav = [
@@ -10,18 +10,21 @@ const nav = [
   { href: '/agents', label: 'Agents', icon: Bot },
   { href: '/teams', label: 'Teams', icon: Users },
   { href: '/workflows', label: 'Workflows', icon: GitBranch },
+  { href: '/knowledge', label: 'Knowledge', icon: BookOpen },
+  { href: '/monitors', label: 'Monitors', icon: Eye },
+  { href: '/message-templates', label: 'Templates', icon: Mail },
   { href: '/approvals', label: 'Approvals', icon: ShieldCheck },
   { href: '/escalations', label: 'Escalations', icon: AlertTriangle },
   { href: '/metrics', label: 'Metrics', icon: BarChart3 },
   { href: '/kpis', label: 'KPIs', icon: TrendingUp },
-  { href: '/settings/providers', label: 'Providers', icon: KeyRound },
+  { href: '/settings', label: 'Settings', icon: Settings },
   { href: '/logs', label: 'Logs', icon: ScrollText },
 ];
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   return (
-    <aside className="w-56 min-h-screen bg-slate-900 border-r border-slate-800 flex flex-col">
+    <aside className="w-56 min-h-screen bg-slate-900 border-r border-slate-800 flex flex-col" aria-label="Main navigation">
       <div className="p-4 border-b border-slate-800">
         <div className="flex items-center gap-2">
           <Layers className="text-sky-400" size={20} />
@@ -33,9 +36,10 @@ export function Sidebar() {
           <Link
             key={href}
             href={href}
+            onClick={onNavigate}
             className={clsx(
               'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
-              pathname === href
+              (href === '/' ? pathname === '/' : pathname.startsWith(href))
                 ? 'bg-sky-500/10 text-sky-400 font-medium'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800',
             )}
@@ -48,6 +52,7 @@ export function Sidebar() {
       <div className="p-3 border-t border-slate-800">
         <Link
           href="/setup"
+          onClick={onNavigate}
           className="flex items-center gap-2 px-3 py-2 text-xs text-slate-500 hover:text-slate-300 rounded-md hover:bg-slate-800 transition-colors"
         >
           Setup
