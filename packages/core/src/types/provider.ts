@@ -6,13 +6,28 @@
 import type { ProviderId, USDCents } from './common.js';
 import type { TaggedContent } from './common.js';
 
+// ─── Content Part Types (Multimodal) ──────────────────────────────────
+
+export interface TextContent {
+	readonly type: 'text';
+	readonly text: string;
+}
+
+export interface ImageContent {
+	readonly type: 'image';
+	readonly mediaType: string;
+	readonly data: string; // base64
+}
+
+export type ContentPart = TextContent | ImageContent;
+
 // ─── Chat Types ───────────────────────────────────────────────────────
 
 export type ChatRole = 'system' | 'user' | 'assistant' | 'tool';
 
 export interface ChatMessage {
 	readonly role: ChatRole;
-	readonly content: string | readonly TaggedContent[];
+	readonly content: string | readonly ContentPart[] | readonly TaggedContent[];
 	readonly name?: string | undefined;
 	readonly toolCallId?: string | undefined;
 }

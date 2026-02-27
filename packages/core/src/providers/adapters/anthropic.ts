@@ -6,7 +6,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { ICredentialVault } from '../../credentials/vault.js';
 import type { ProviderId, USDCents } from '../../types/common.js';
 import { ProviderError } from '../../types/errors.js';
-import type { ChatChunk, ChatRequest, IProvider, ModelInfo } from '../../types/provider.js';
+import type { ChatChunk, ChatRequest, ContentPart, IProvider, ModelInfo } from '../../types/provider.js';
 
 export class AnthropicProvider implements IProvider {
 	readonly id = 'anthropic' as ProviderId;
@@ -54,20 +54,14 @@ export class AnthropicProvider implements IProvider {
 		const systemMessage = request.messages.find((m) => m.role === 'system');
 		const userMessages = request.messages.filter((m) => m.role !== 'system');
 
-		// Build tool definitions
+		// Build tool definitions — parameters is already a valid JSON Schema object
 		const tools: Anthropic.Tool[] | undefined =
 			request.tools && request.tools.length > 0
 				? request.tools.map((t) => ({
+						type: 'custom' as const,
 						name: t.name,
 						description: t.description,
-						input_schema: {
-							type: 'object' as const,
-							properties: t.parameters as Record<string, unknown>,
-							required: Object.keys(t.parameters).filter(
-								(k) =>
-									(t.parameters as Record<string, { required?: boolean }>)[k]?.required !== false,
-							),
-						},
+						input_schema: t.parameters as Anthropic.Tool.InputSchema,
 					}))
 				: undefined;
 
@@ -87,6 +81,32 @@ export class AnthropicProvider implements IProvider {
 						],
 					};
 				}
+
+				// Handle multimodal ContentPart[] content (images + text)
+				if (Array.isArray(m.content) && m.content.length > 0 && typeof m.content[0] === 'object' && 'type' in m.content[0]) {
+					const parts = m.content as readonly ContentPart[];
+					const hasImages = parts.some((p) => p.type === 'image');
+					if (hasImages) {
+						const blocks: Anthropic.ContentBlockParam[] = parts.map((p) => {
+							if (p.type === 'image') {
+								return {
+									type: 'image' as const,
+									source: {
+										type: 'base64' as const,
+										media_type: p.mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+										data: p.data,
+									},
+								};
+							}
+							return { type: 'text' as const, text: p.text };
+						});
+						return {
+							role: m.role as 'user' | 'assistant',
+							content: blocks,
+						};
+					}
+				}
+
 				return {
 					role: m.role as 'user' | 'assistant',
 					content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),

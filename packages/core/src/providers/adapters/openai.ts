@@ -6,7 +6,7 @@ import OpenAI from 'openai';
 import type { ICredentialVault } from '../../credentials/vault.js';
 import type { ProviderId, USDCents } from '../../types/common.js';
 import { ProviderError } from '../../types/errors.js';
-import type { ChatChunk, ChatRequest, IProvider, ModelInfo } from '../../types/provider.js';
+import type { ChatChunk, ChatRequest, ContentPart, IProvider, ModelInfo } from '../../types/provider.js';
 
 export class OpenAIProvider implements IProvider {
 	readonly id = 'openai' as ProviderId;
@@ -50,7 +50,7 @@ export class OpenAIProvider implements IProvider {
 
 		const client = this.getClient(apiKey);
 
-		// Build tool definitions
+		// Build tool definitions — parameters is already a valid JSON Schema object
 		const tools: OpenAI.Chat.ChatCompletionTool[] | undefined =
 			request.tools && request.tools.length > 0
 				? request.tools.map((t) => ({
@@ -58,14 +58,7 @@ export class OpenAIProvider implements IProvider {
 						function: {
 							name: t.name,
 							description: t.description,
-							parameters: {
-								type: 'object' as const,
-								properties: t.parameters as Record<string, unknown>,
-								required: Object.keys(t.parameters).filter(
-									(k) =>
-										(t.parameters as Record<string, { required?: boolean }>)[k]?.required !== false,
-								),
-							},
+							parameters: t.parameters as OpenAI.FunctionParameters,
 						},
 					}))
 				: undefined;
@@ -79,6 +72,28 @@ export class OpenAIProvider implements IProvider {
 					content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
 				};
 			}
+
+			// Handle multimodal ContentPart[] content (images + text)
+			if (Array.isArray(m.content) && m.content.length > 0 && typeof m.content[0] === 'object' && 'type' in m.content[0]) {
+				const parts = m.content as readonly ContentPart[];
+				const hasImages = parts.some((p) => p.type === 'image');
+				if (hasImages) {
+					const openAiParts: OpenAI.Chat.ChatCompletionContentPart[] = parts.map((p) => {
+						if (p.type === 'image') {
+							return {
+								type: 'image_url' as const,
+								image_url: { url: `data:${p.mediaType};base64,${p.data}` },
+							};
+						}
+						return { type: 'text' as const, text: p.text };
+					});
+					return {
+						role: m.role as 'user',
+						content: openAiParts,
+					};
+				}
+			}
+
 			return {
 				role: m.role as 'system' | 'user' | 'assistant',
 				content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
