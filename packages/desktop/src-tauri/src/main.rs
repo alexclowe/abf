@@ -7,7 +7,8 @@
 // - One-click Ollama installation for local LLM
 // - Health polling → auto-load dashboard when ready
 
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// Temporarily disabled for debugging — enables console output on Windows
+// #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::io::Write;
 use std::sync::{Arc, Mutex};
@@ -22,8 +23,10 @@ use tauri_plugin_shell::ShellExt;
 /// Write a line to a debug log file on the user's desktop
 fn debug_log(msg: &str) {
     let path = if cfg!(target_os = "windows") {
-        let home = std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\Public".to_string());
-        format!("{}\\Desktop\\abf-desktop-debug.log", home)
+        let tmp = std::env::var("TEMP")
+            .or_else(|_| std::env::var("USERPROFILE").map(|h| format!("{}\\Desktop", h)))
+            .unwrap_or_else(|_| "C:\\".to_string());
+        format!("{}\\abf-desktop-debug.log", tmp)
     } else {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
         format!("{}/abf-desktop-debug.log", home)
