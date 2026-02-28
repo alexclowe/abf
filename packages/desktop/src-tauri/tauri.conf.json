@@ -9,7 +9,6 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "title": "ABF — Agentic Business Framework",
     "windows": [
       {
         "title": "ABF Dashboard",
