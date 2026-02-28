@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bot, LayoutDashboard, Users, AlertTriangle, ScrollText, Layers, GitBranch, TrendingUp, ShieldCheck, BarChart3, BookOpen, Eye, Mail, Settings } from 'lucide-react';
+import { Bot, LayoutDashboard, Users, AlertTriangle, ScrollText, Layers, GitBranch, TrendingUp, ShieldCheck, BarChart3, BookOpen, Eye, Mail, Settings, MessageSquare, CreditCard } from 'lucide-react';
 import clsx from 'clsx';
 
 const nav = [
@@ -15,8 +15,10 @@ const nav = [
   { href: '/message-templates', label: 'Templates', icon: Mail },
   { href: '/approvals', label: 'Approvals', icon: ShieldCheck },
   { href: '/escalations', label: 'Escalations', icon: AlertTriangle },
+  { href: '/channels', label: 'Channels', icon: MessageSquare },
   { href: '/metrics', label: 'Metrics', icon: BarChart3 },
   { href: '/kpis', label: 'KPIs', icon: TrendingUp },
+  { href: '/billing', label: 'Billing', icon: CreditCard },
   { href: '/settings', label: 'Settings', icon: Settings },
   { href: '/logs', label: 'Logs', icon: ScrollText },
 ];

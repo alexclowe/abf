@@ -120,6 +120,14 @@ export type { IKeychain } from './credentials/index.js';
 export { CloudProxyProvider } from './providers/adapters/cloud-proxy.js';
 export type { CloudConfig } from './types/config.js';
 
+// ─── Cloud Gateway ───────────────────────────────────────────────────
+export { createCloudGateway } from './cloud/gateway.js';
+export type { CloudGatewayDeps } from './cloud/gateway.js';
+export { generateToken, validateToken, hashToken, InMemoryTokenStore } from './cloud/token.js';
+export type { CloudToken, TokenValidationResult, ITokenStore } from './cloud/token.js';
+export { createStripeIntegration, CREDIT_TIERS } from './cloud/stripe.js';
+export type { StripeConfig, StripeIntegration } from './cloud/stripe.js';
+
 // ─── Tools ────────────────────────────────────────────────────────────
 export { ToolRegistry, BasicToolSandbox, loadToolConfigs, createBuiltinTools, MCPClient, MCPToolAdapter, loadMCPTools } from './tools/index.js';
 export type { BuiltinToolContext } from './tools/index.js';

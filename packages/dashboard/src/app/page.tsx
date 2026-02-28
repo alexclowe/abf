@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
 import { useEventStream } from '@/lib/use-event-stream';
 import { AgentStatusBadge } from '@/components/AgentStatusBadge';
+import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { Bot, Play, DollarSign } from 'lucide-react';
 
 export default function OverviewPage() {
@@ -23,6 +24,20 @@ export default function OverviewPage() {
   const status = sseHasStatus ? stream!.status : swrStatus;
   const agents = (sseHasAgents ? stream!.agents : swrAgents) as { config: Record<string, any>; state?: Record<string, any> | null }[] | undefined;
   const sessions = sseHasSessions ? stream!.sessions : swrSessions;
+
+  // Data for onboarding checklist
+  const { data: authStatus } = useSWR('auth-status', () => api.auth.status(), { revalidateOnFocus: false });
+  const { data: knowledgeFiles } = useSWR('knowledge', () => api.knowledge.list(), { revalidateOnFocus: false });
+
+  const onboardingData = useMemo(() => {
+    const hasProvider = authStatus
+      ? Object.values(authStatus).some((s) => s.connected)
+      : false;
+    const agentCount = agents?.length ?? 0;
+    const hasRun = agents?.some((a) => (a.state?.sessionsCompleted ?? 0) > 0) ?? false;
+    const knowledgeCount = knowledgeFiles?.length ?? 0;
+    return { hasProvider, agentCount, hasRun, hasChannel: false, knowledgeCount };
+  }, [authStatus, agents, knowledgeFiles]);
 
   const [taskInputs, setTaskInputs] = useState<Record<string, string>>({});
   const [activeInput, setActiveInput] = useState<string | null>(null);
@@ -46,6 +61,9 @@ export default function OverviewPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Your Team</h1>
       </div>
+
+      {/* Onboarding Checklist */}
+      <OnboardingChecklist data={onboardingData} />
 
       {/* Agent cards */}
       {agents && agents.length > 0 ? (

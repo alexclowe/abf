@@ -28,6 +28,8 @@ import { registerEventRoutes } from './events.routes.js';
 import { registerPlanRoutes } from './plans.routes.js';
 import { registerSetupRoutes } from './setup.routes.js';
 import { registerChannelRoutes } from './channel.routes.js';
+import { registerBillingRoutes } from './billing.routes.js';
+import { registerOAuthRoutes } from './oauth.routes.js';
 import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 
 /** Timing-safe API key comparison to prevent timing attacks. */
@@ -61,6 +63,7 @@ export interface GatewayDeps {
 	readonly taskPlanStore?: import('../../types/task-plan.js').ITaskPlanStore | undefined;
 	readonly channelRouter?: import('../../messaging/channel-router.js').ChannelRouter | undefined;
 	readonly sessionEventBus?: import('../session-events.js').SessionEventBus | undefined;
+	readonly billingLedger?: import('../../billing/types.js').IBillingLedger | undefined;
 }
 
 /** @deprecated Use GatewayDeps instead. Kept for backwards compatibility. */
@@ -160,6 +163,16 @@ export class HttpGateway implements IGateway {
 		// -- Channel Routes (R10) -------------------------------------------------
 		if (deps.channelRouter && deps.vault) {
 			registerChannelRoutes(app, { vault: deps.vault, channelRouter: deps.channelRouter });
+		}
+
+		// -- Billing Routes -------------------------------------------------------
+		if (deps.billingLedger) {
+			registerBillingRoutes(app, { ledger: deps.billingLedger, providerRegistry: deps.providerRegistry });
+		}
+
+		// -- OAuth Routes ---------------------------------------------------------
+		if (deps.vault) {
+			registerOAuthRoutes(app, { vault: deps.vault, dashboardPort: deps.dashboardPort });
 		}
 
 		// -- SSE Events -----------------------------------------------------------
@@ -285,6 +298,55 @@ export class HttpGateway implements IGateway {
 			const result = await deps.dispatcher.dispatch(activation);
 			if (!result.ok) return c.json({ error: result.error.message }, 400);
 			return c.json({ sessionId: result.value }, 202);
+		});
+
+		// -- Generate Charter (AI) ------------------------------------------------
+		app.post('/api/agents/generate-charter', async (c) => {
+			const body = await c.req.json<{
+				name?: string;
+				role?: string;
+				description?: string;
+				tools?: string;
+			}>().catch((): { name?: string; role?: string; description?: string; tools?: string } => ({}));
+
+			if (!body.name || !body.role) {
+				return c.json({ error: 'name and role are required' }, 400);
+			}
+
+			// Find a provider to generate the charter
+			const slugs = ['anthropic', 'openai', 'ollama'];
+			for (const slug of slugs) {
+				const provider = deps.providerRegistry.getBySlug(slug);
+				if (!provider) continue;
+				try {
+					const models = await provider.models();
+					if (models.length === 0) continue;
+					const model = models[0]!.id;
+					let charter = '';
+					const toolList = body.tools || 'web-search';
+					const chunks = provider.chat({
+						model,
+						messages: [
+							{
+								role: 'system',
+								content: 'You generate agent charters for an AI agent framework. Write a concise, professional charter in Markdown. Include: identity statement, goals (3-5 bullet points), guidelines (3-5 bullet points), and boundaries. Keep it under 500 words.',
+							},
+							{
+								role: 'user',
+								content: `Generate a charter for an AI agent named "${body.name}" with role "${body.role}". Description: ${body.description || 'Not specified'}. Available tools: ${toolList}.`,
+							},
+						],
+						temperature: 0.4,
+					});
+					for await (const chunk of chunks) {
+						if (chunk.type === 'text' && chunk.text) charter += chunk.text;
+					}
+					return c.json({ charter });
+				} catch {
+					// Try next provider
+				}
+			}
+			return c.json({ error: 'No LLM provider available to generate charter' }, 503);
 		});
 
 		// -- Sessions -------------------------------------------------------------

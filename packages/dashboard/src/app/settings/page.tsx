@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
-import { Save } from 'lucide-react';
+import { Save, ChevronDown, ChevronRight } from 'lucide-react';
 
 interface ConfigState {
   name: string;
@@ -47,6 +47,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     if (rawConfig && !config) {
@@ -158,7 +159,19 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* Advanced Toggle */}
+      <button
+        type="button"
+        onClick={() => setShowAdvanced(!showAdvanced)}
+        className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+      >
+        {showAdvanced ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        <span className="font-medium">Infrastructure Settings</span>
+        {!showAdvanced && <span className="text-xs text-slate-500">(Storage, Bus, Gateway, Runtime)</span>}
+      </button>
+
       {/* Storage */}
+      {showAdvanced && (
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-3">
         <h2 className="text-sm font-medium text-slate-400 mb-2">Storage</h2>
         <div>
@@ -184,8 +197,10 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* Message Bus */}
+      {showAdvanced && (
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-3">
         <h2 className="text-sm font-medium text-slate-400 mb-2">Message Bus</h2>
         <div>
@@ -211,8 +226,10 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* Gateway */}
+      {showAdvanced && (
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-3">
         <h2 className="text-sm font-medium text-slate-400 mb-2">Gateway</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -235,8 +252,10 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Runtime */}
+      {showAdvanced && (
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-3">
         <h2 className="text-sm font-medium text-slate-400 mb-2">Runtime</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -269,6 +288,7 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

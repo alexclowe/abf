@@ -1,0 +1,17 @@
+{
+  "name": "@abf/desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ABF Desktop App — native wrapper for the ABF dashboard and runtime",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "echo 'Tauri desktop app - run: cargo tauri build'",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@abf/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

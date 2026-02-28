@@ -81,6 +81,8 @@ export const api = {
     update: (id: string, body: Record<string, unknown>) =>
       put<{ success: boolean }>(`/api/agents/${id}`, body),
     delete: (id: string) => del<{ success: boolean }>(`/api/agents/${id}`),
+    generateCharter: (body: { name: string; role: string; description?: string; tools?: string }) =>
+      post<{ charter: string }>('/api/agents/generate-charter', body),
   },
 
   sessions: {
