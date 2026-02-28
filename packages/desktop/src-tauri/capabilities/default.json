@@ -5,13 +5,6 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "event:default",
-    "window:default",
-    "app:default",
-    "image:default",
-    "resources:default",
-    "menu:default",
-    "tray:default",
     "shell:allow-spawn",
     "shell:allow-execute",
     "shell:allow-kill",
