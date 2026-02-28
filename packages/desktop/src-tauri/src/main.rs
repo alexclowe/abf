@@ -113,7 +113,7 @@ async fn check_ollama() -> serde_json::Value {
         .send()
         .await
     {
-        Ok(resp) if resp.ok() => {
+        Ok(resp) if resp.status().is_success() => {
             if let Ok(body) = resp.json::<serde_json::Value>().await {
                 let models = body
                     .get("models")
