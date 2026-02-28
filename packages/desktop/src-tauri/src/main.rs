@@ -271,6 +271,61 @@ fn resolve_cli_path(app: &tauri::AppHandle) -> std::path::PathBuf {
         .unwrap_or_else(|_| std::path::PathBuf::from("packages/cli/dist/index.js"))
 }
 
+// ─── Tray Setup ─────────────────────────────────────────────────────────────
+
+fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let open_item =
+        MenuItem::with_id(app, "open", "Open Dashboard", true, None::<&str>)?;
+    let status_item =
+        MenuItem::with_id(app, "status", "Agents: starting...", false, None::<&str>)?;
+    let separator =
+        MenuItem::with_id(app, "sep", "─────────", false, None::<&str>)?;
+    let quit_item =
+        MenuItem::with_id(app, "quit", "Quit ABF", true, None::<&str>)?;
+
+    let menu =
+        Menu::with_items(app, &[&open_item, &status_item, &separator, &quit_item])?;
+
+    let icon = app
+        .default_window_icon()
+        .cloned()
+        .ok_or("no default window icon")?;
+
+    let _tray = TrayIconBuilder::new()
+        .icon(icon)
+        .menu(&menu)
+        .tooltip("ABF — AI Agent Team")
+        .on_menu_event(move |app, event| match event.id.as_ref() {
+            "open" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+            "quit" => {
+                app.exit(0);
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                let app = tray.app_handle();
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+        })
+        .build(app)?;
+
+    Ok(())
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 fn main() {
@@ -293,50 +348,10 @@ fn main() {
             pull_ollama_model
         ])
         .setup(move |app| {
-            // Build tray menu
-            let open_item =
-                MenuItem::with_id(app, "open", "Open Dashboard", true, None::<&str>)?;
-            let status_item =
-                MenuItem::with_id(app, "status", "Agents: starting...", false, None::<&str>)?;
-            let separator =
-                MenuItem::with_id(app, "sep", "─────────", false, None::<&str>)?;
-            let quit_item =
-                MenuItem::with_id(app, "quit", "Quit ABF", true, None::<&str>)?;
-
-            let menu =
-                Menu::with_items(app, &[&open_item, &status_item, &separator, &quit_item])?;
-
-            // Create tray icon
-            let _tray = TrayIconBuilder::new()
-                .menu(&menu)
-                .tooltip("ABF — AI Agent Team")
-                .on_menu_event(move |app, event| match event.id.as_ref() {
-                    "open" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                    }
-                    "quit" => {
-                        app.exit(0);
-                    }
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        let app = tray.app_handle();
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                    }
-                })
-                .build(app)?;
+            // Build tray icon — wrapped so failures don't crash the app
+            if let Err(e) = setup_tray(app) {
+                eprintln!("Tray icon setup failed (non-fatal): {}", e);
+            }
 
             // Emit "app-ready" so the splash page can start its setup flow
             let app_handle = app.handle().clone();

@@ -22,12 +22,6 @@
         "url": "splash.html"
       }
     ],
-    "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true,
-      "menuOnLeftClick": false,
-      "tooltip": "ABF — AI Agent Team"
-    },
     "security": {
       "csp": null
     }
