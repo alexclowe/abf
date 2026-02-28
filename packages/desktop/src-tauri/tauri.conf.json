@@ -28,33 +28,7 @@
   },
   "plugins": {
     "shell": {
-      "scope": [
-        {
-          "name": "node",
-          "cmd": "node",
-          "args": true
-        },
-        {
-          "name": "ollama",
-          "cmd": "ollama",
-          "args": true
-        },
-        {
-          "name": "sh",
-          "cmd": "sh",
-          "args": true
-        },
-        {
-          "name": "curl",
-          "cmd": "curl",
-          "args": true
-        },
-        {
-          "name": "powershell",
-          "cmd": "powershell",
-          "args": true
-        }
-      ]
+      "open": true
     }
   },
   "bundle": {
