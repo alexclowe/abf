@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ABF — Getting Started</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e5e5e5;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .logo {
+      font-size: 48px;
+      font-weight: 700;
+      letter-spacing: -1px;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .tagline {
+      font-size: 14px;
+      color: #737373;
+      margin-bottom: 48px;
+    }
+
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid #262626;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 24px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .status {
+      font-size: 14px;
+      color: #a3a3a3;
+      text-align: center;
+      max-width: 400px;
+      line-height: 1.6;
+    }
+
+    .status.error { color: #ef4444; }
+    .status.success { color: #22c55e; }
+
+    .dots::after {
+      content: '';
+      animation: dots 1.5s steps(4, end) infinite;
+    }
+
+    @keyframes dots {
+      0%  { content: ''; }
+      25% { content: '.'; }
+      50% { content: '..'; }
+      75% { content: '...'; }
+    }
+
+    /* ── Setup screen ── */
+    .setup-screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      max-width: 480px;
+    }
+
+    .setup-screen.active { display: flex; }
+
+    .setup-title {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .setup-desc {
+      font-size: 14px;
+      color: #a3a3a3;
+      margin-bottom: 32px;
+      line-height: 1.5;
+    }
+
+    .setup-options {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .setup-btn {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 20px;
+      background: #171717;
+      border: 1px solid #262626;
+      border-radius: 12px;
+      color: #e5e5e5;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: left;
+    }
+
+    .setup-btn:hover {
+      background: #1f1f1f;
+      border-color: #3b82f6;
+    }
+
+    .setup-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .setup-btn:disabled:hover {
+      border-color: #262626;
+      background: #171717;
+    }
+
+    .btn-icon {
+      font-size: 28px;
+      flex-shrink: 0;
+      width: 40px;
+      text-align: center;
+    }
+
+    .btn-content { flex: 1; }
+
+    .btn-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .btn-desc {
+      font-size: 12px;
+      color: #737373;
+    }
+
+    .btn-badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #22c55e20;
+      color: #22c55e;
+      flex-shrink: 0;
+    }
+
+    /* ── Progress screen ── */
+    .progress-screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      max-width: 480px;
+    }
+
+    .progress-screen.active { display: flex; }
+
+    .progress-log {
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: #111;
+      border: 1px solid #262626;
+      border-radius: 8px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      color: #737373;
+      width: 100%;
+      min-width: 360px;
+      max-height: 120px;
+      overflow-y: auto;
+      text-align: left;
+      line-height: 1.8;
+    }
+
+    /* ── Loading screen ── */
+    .loading-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .loading-screen.hidden { display: none; }
+  </style>
+</head>
+<body>
+
+  <!-- Loading screen (shown first) -->
+  <div class="loading-screen" id="loading-screen">
+    <div class="logo">ABF</div>
+    <div class="tagline">Agentic Business Framework</div>
+    <div class="spinner" id="spinner"></div>
+    <div class="status" id="status">Checking setup<span class="dots"></span></div>
+  </div>
+
+  <!-- Setup screen (shown when no LLM provider is configured) -->
+  <div class="setup-screen" id="setup-screen">
+    <div class="logo" style="font-size:36px; margin-bottom:4px;">ABF</div>
+    <div class="tagline" style="margin-bottom:32px;">Agentic Business Framework</div>
+
+    <div class="setup-title">Welcome to ABF</div>
+    <div class="setup-desc">
+      ABF needs an AI model to power your agents.
+      Choose how you'd like to get started:
+    </div>
+
+    <div class="setup-options">
+      <button class="setup-btn" id="btn-ollama" onclick="setupOllama()">
+        <div class="btn-icon">&#x1F4BB;</div>
+        <div class="btn-content">
+          <div class="btn-title" id="ollama-btn-title">Install Local AI (Ollama)</div>
+          <div class="btn-desc" id="ollama-btn-desc">Free, private, runs on your machine. No account needed.</div>
+        </div>
+        <div class="btn-badge">Recommended</div>
+      </button>
+
+      <button class="setup-btn" id="btn-api" onclick="setupApiKey()">
+        <div class="btn-icon">&#x2601;</div>
+        <div class="btn-content">
+          <div class="btn-title">I have an API key</div>
+          <div class="btn-desc">Use Anthropic, OpenAI, or another cloud provider.</div>
+        </div>
+      </button>
+    </div>
+  </div>
+
+  <!-- Progress screen (shown during Ollama install) -->
+  <div class="progress-screen" id="progress-screen">
+    <div class="logo" style="font-size:36px; margin-bottom:4px;">ABF</div>
+    <div class="tagline" style="margin-bottom:32px;">Agentic Business Framework</div>
+    <div class="spinner"></div>
+    <div class="status" id="progress-status">Setting up local AI<span class="dots"></span></div>
+    <div class="progress-log" id="progress-log"></div>
+  </div>
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    const { listen } = window.__TAURI__.event;
+
+    let ollamaStatus = null;
+
+    /** Set status text with animated dots */
+    function setStatusWithDots(el, text) {
+      el.textContent = '';
+      el.appendChild(document.createTextNode(text));
+      const dots = document.createElement('span');
+      dots.className = 'dots';
+      el.appendChild(dots);
+    }
+
+    // ── Startup check ──────────────────────────────────────────────────────
+    async function checkSetup() {
+      try {
+        // Check if Ollama is available
+        ollamaStatus = await invoke('check_ollama');
+
+        if (ollamaStatus.running && ollamaStatus.models.length > 0) {
+          // Ollama is ready — start the runtime with Ollama provider
+          document.getElementById('status').textContent = 'Starting runtime...';
+          await invoke('start_runtime');
+          return;
+        }
+
+        // Check if runtime is already running (maybe started externally)
+        const runtime = await invoke('get_runtime_status');
+        if (runtime.status === 'running') {
+          document.getElementById('status').textContent = 'Loading dashboard...';
+          return;
+        }
+
+        // Nothing configured — show setup screen
+        showSetup();
+      } catch (err) {
+        // On any error, show setup screen
+        showSetup();
+      }
+    }
+
+    function showSetup() {
+      document.getElementById('loading-screen').classList.add('hidden');
+      document.getElementById('setup-screen').classList.add('active');
+
+      // If Ollama is installed but needs models, update the button
+      if (ollamaStatus && ollamaStatus.installed && ollamaStatus.models.length === 0) {
+        document.getElementById('ollama-btn-title').textContent = 'Set Up Local AI (Ollama)';
+        document.getElementById('ollama-btn-desc').textContent =
+          'Ollama is installed. We just need to download a model.';
+      }
+    }
+
+    // ── Ollama setup flow ──────────────────────────────────────────────────
+    async function setupOllama() {
+      // Switch to progress screen
+      document.getElementById('setup-screen').classList.remove('active');
+      document.getElementById('progress-screen').classList.add('active');
+
+      const logEl = document.getElementById('progress-log');
+      const statusEl = document.getElementById('progress-status');
+
+      function log(msg) {
+        logEl.textContent += msg + '\n';
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      // Listen for progress events
+      listen('ollama-progress', (event) => {
+        log(event.payload);
+      });
+
+      try {
+        // Step 1: Install if needed
+        if (!ollamaStatus || !ollamaStatus.installed) {
+          setStatusWithDots(statusEl, 'Installing Ollama');
+          log('Installing Ollama...');
+
+          const installed = await invoke('install_ollama');
+          if (!installed) {
+            statusEl.textContent = 'Installation failed';
+            statusEl.classList.add('error');
+            log('ERROR: Failed to install Ollama.');
+            log('Try installing manually: https://ollama.com/download');
+            return;
+          }
+          log('Ollama installed.');
+        } else {
+          log('Ollama already installed.');
+        }
+
+        // Step 2: Start server if needed
+        const recheck = await invoke('check_ollama');
+        if (!recheck.running) {
+          setStatusWithDots(statusEl, 'Starting Ollama');
+          const started = await invoke('start_ollama');
+          if (!started) {
+            statusEl.textContent = 'Failed to start Ollama';
+            statusEl.classList.add('error');
+            log('ERROR: Could not start Ollama server.');
+            return;
+          }
+        } else {
+          log('Ollama server running.');
+        }
+
+        // Step 3: Pull a model if none installed
+        const afterStart = await invoke('check_ollama');
+        if (afterStart.models.length === 0) {
+          setStatusWithDots(statusEl, 'Downloading AI model');
+          log('Downloading llama3.2 (~2 GB)...');
+
+          const pulled = await invoke('pull_ollama_model', { model: 'llama3.2' });
+          if (!pulled) {
+            statusEl.textContent = 'Failed to download model';
+            statusEl.classList.add('error');
+            log('ERROR: Could not download llama3.2.');
+            return;
+          }
+        } else {
+          log('Model available: ' + afterStart.models[0]);
+        }
+
+        // Step 4: Start the ABF runtime
+        setStatusWithDots(statusEl, 'Starting ABF');
+        log('Starting ABF runtime...');
+        await invoke('start_runtime');
+
+        statusEl.textContent = 'Loading dashboard...';
+        statusEl.classList.add('success');
+        log('Setup complete! Loading dashboard...');
+
+        // The Rust health-poll loop will navigate to the dashboard
+
+      } catch (err) {
+        statusEl.textContent = 'Setup failed';
+        statusEl.classList.add('error');
+        log('ERROR: ' + (err.message || err));
+      }
+    }
+
+    // ── API key setup (start runtime, let setup wizard handle it) ────────
+    async function setupApiKey() {
+      document.getElementById('setup-screen').classList.remove('active');
+      document.getElementById('loading-screen').classList.remove('hidden');
+      document.getElementById('status').textContent = 'Starting runtime...';
+
+      try {
+        await invoke('start_runtime');
+        // The health-poll loop will navigate to the dashboard's /setup wizard
+      } catch (err) {
+        const statusEl = document.getElementById('status');
+        statusEl.textContent = 'Failed to start: ' + (err.message || err);
+        statusEl.classList.add('error');
+      }
+    }
+
+    // ── Event listeners ────────────────────────────────────────────────────
+    listen('runtime-ready', () => {
+      const statusEl = document.getElementById('status');
+      if (statusEl) statusEl.textContent = 'Loading dashboard...';
+      const progressEl = document.getElementById('progress-status');
+      if (progressEl) {
+        progressEl.textContent = 'Loading dashboard...';
+        progressEl.classList.add('success');
+      }
+    });
+
+    listen('runtime-error', (event) => {
+      const el = document.getElementById('status');
+      if (el) {
+        el.textContent = event.payload || 'Failed to start runtime';
+        el.classList.add('error');
+      }
+    });
+
+    // Start the check
+    checkSetup();
+  </script>
+</body>
+</html>
