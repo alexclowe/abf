@@ -323,8 +323,6 @@ describe('E2E Smoke Test — Full Runtime Lifecycle', () => {
 
 	// ── 5. Run Agent Session ──────────────────────────────────────────
 
-	let capturedSessionId: string;
-
 	it('POST /api/agents/test-agent/run dispatches session and returns 202', async () => {
 		const res = await fetch(`${baseUrl}/api/agents/test-agent/run`, {
 			method: 'POST',
@@ -337,7 +335,6 @@ describe('E2E Smoke Test — Full Runtime Lifecycle', () => {
 		const body = await res.json();
 		expect(body.sessionId).toBeDefined();
 		expect(typeof body.sessionId).toBe('string');
-		capturedSessionId = body.sessionId;
 	});
 
 	// ── 6. Session Completes ──────────────────────────────────────────

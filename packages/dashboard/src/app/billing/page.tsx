@@ -105,6 +105,7 @@ export default function BillingPage() {
             className="w-32 bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
           />
           <button
+            type="button"
             onClick={handleTopUp}
             className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors"
           >

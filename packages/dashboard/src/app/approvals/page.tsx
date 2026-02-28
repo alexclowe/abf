@@ -41,6 +41,7 @@ export default function ApprovalsPage() {
         <div className="flex gap-1">
           {(['pending', 'approved', 'rejected', ''] as const).map((s) => (
             <button
+              type="button"
               key={s}
               onClick={() => setFilter(s)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
@@ -64,7 +65,7 @@ export default function ApprovalsPage() {
       {actionError && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm flex items-center justify-between">
           <span>{actionError}</span>
-          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
+          <button type="button" onClick={() => setActionError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
         </div>
       )}
 
@@ -112,12 +113,14 @@ export default function ApprovalsPage() {
             {item.status === 'pending' && (
               <div className="flex gap-2">
                 <button
+                  type="button"
                   onClick={() => handleApprove(item.id)}
                   className="px-4 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-md text-xs font-medium transition-colors"
                 >
                   Approve
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleReject(item.id)}
                   className="px-4 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-md text-xs font-medium transition-colors"
                 >

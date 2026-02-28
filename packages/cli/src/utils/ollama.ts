@@ -96,7 +96,7 @@ export function pickBestModel(installed: string[]): string | null {
 	}
 
 	// No preferred model found — use whatever is available
-	return installed[0];
+	return installed[0] ?? null;
 }
 
 /** Strip the ":latest" or ":tag" suffix for display and YAML config. */

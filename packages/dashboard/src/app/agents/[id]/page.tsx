@@ -69,6 +69,7 @@ export default function AgentDetailPage() {
             Edit
           </Link>
           <button
+            type="button"
             onClick={() => setShowRun(!showRun)}
             className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors"
           >
@@ -88,6 +89,7 @@ export default function AgentDetailPage() {
             onKeyDown={(e) => e.key === 'Enter' && handleRun()}
           />
           <button
+            type="button"
             onClick={handleRun}
             className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-md text-sm font-medium transition-colors"
           >
@@ -106,6 +108,7 @@ export default function AgentDetailPage() {
       <div className="flex gap-1 border-b border-slate-800" role="tablist" aria-label="Agent details">
         {(['overview', 'memory', 'sessions'] as Tab[]).map((t) => (
           <button
+            type="button"
             key={t}
             role="tab"
             aria-selected={tab === t}
@@ -225,6 +228,7 @@ export default function AgentDetailPage() {
                   <span className="text-xs text-sky-400">{inboxStatus}</span>
                 )}
                 <button
+                  type="button"
                   onClick={async () => {
                     if (!inboxSubject.trim() || !inboxBody.trim()) return;
                     try {

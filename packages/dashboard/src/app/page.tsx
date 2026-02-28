@@ -84,6 +84,7 @@ export default function OverviewPage() {
                   <p className="text-sm text-slate-500">{a.config.description}</p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => handleRunClick(a.config.id)}
                   className="ml-4 flex-shrink-0 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-1.5"
                 >
@@ -108,6 +109,7 @@ export default function OverviewPage() {
                     className="flex-1 bg-slate-800 border border-slate-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-sky-500"
                   />
                   <button
+                    type="button"
                     onClick={() => setActiveInput(null)}
                     className="px-2 py-1.5 text-slate-400 hover:text-white text-sm transition-colors"
                   >

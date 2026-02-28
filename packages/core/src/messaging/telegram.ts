@@ -93,7 +93,7 @@ export class TelegramGateway implements IChannelGateway {
 						}
 					}
 				}
-			} catch (err) {
+			} catch {
 				if (this.polling) {
 					// Wait before retrying on error
 					await new Promise((r) => setTimeout(r, 5000));
