@@ -9,6 +9,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{
@@ -17,6 +18,29 @@ use tauri::{
     Emitter, Manager, Url,
 };
 use tauri_plugin_shell::ShellExt;
+
+/// Write a line to a debug log file on the user's desktop
+fn debug_log(msg: &str) {
+    let path = if cfg!(target_os = "windows") {
+        let home = std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\Public".to_string());
+        format!("{}\\Desktop\\abf-desktop-debug.log", home)
+    } else {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+        format!("{}/abf-desktop-debug.log", home)
+    };
+
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let _ = writeln!(f, "[{}] {}", timestamp, msg);
+    }
+}
 
 /// Shared state for the sidecar child process
 struct RuntimeState {
@@ -329,8 +353,11 @@ fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 fn main() {
+    debug_log("=== ABF Desktop starting ===");
+
     let runtime_state = Arc::new(Mutex::new(RuntimeState { child: None }));
 
+    debug_log("Building tauri app...");
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_autostart::init(
@@ -348,15 +375,21 @@ fn main() {
             pull_ollama_model
         ])
         .setup(move |app| {
+            debug_log("setup() called");
+
             // Build tray icon — wrapped so failures don't crash the app
             if let Err(e) = setup_tray(app) {
-                eprintln!("Tray icon setup failed (non-fatal): {}", e);
+                debug_log(&format!("Tray icon setup failed (non-fatal): {}", e));
+            } else {
+                debug_log("Tray icon created OK");
             }
 
             // Emit "app-ready" so the splash page can start its setup flow
             let app_handle = app.handle().clone();
             let state = runtime_state.clone();
+            debug_log("Spawning async health-poll task");
             tauri::async_runtime::spawn(async move {
+                debug_log("Async task started, emitting app-ready");
                 let _ = app_handle.emit("app-ready", true);
 
                 // Wait briefly then check if runtime comes up on its own
@@ -404,5 +437,10 @@ fn main() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("error while running ABF Desktop");
+        .unwrap_or_else(|e| {
+            debug_log(&format!("FATAL: tauri run failed: {}", e));
+            panic!("error while running ABF Desktop: {}", e);
+        });
+
+    debug_log("App exited normally");
 }
