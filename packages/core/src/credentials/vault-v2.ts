@@ -117,7 +117,8 @@ async function deriveScryptKey(
 	r = SCRYPT_R,
 	p = SCRYPT_P,
 ): Promise<Buffer> {
-	return (await scryptAsync(password, salt, KEY_LEN, { N, r, p })) as Buffer;
+	const maxmem = 128 * N * r * p + 128 * 1024; // scrypt memory + overhead
+	return (await scryptAsync(password, salt, KEY_LEN, { N, r, p, maxmem })) as Buffer;
 }
 
 // ─── Header validation ─────────────────────────────────────────────
