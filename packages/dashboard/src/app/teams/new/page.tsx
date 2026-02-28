@@ -73,7 +73,7 @@ export default function NewTeamPage() {
       {error && (
         <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm flex items-center justify-between">
           <span>{error}</span>
-          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
+          <button type="button" onClick={() => setError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
         </div>
       )}
 
@@ -156,6 +156,7 @@ export default function NewTeamPage() {
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-sm font-medium text-slate-400">Goals</h2>
           <button
+            type="button"
             onClick={addGoal}
             className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-md text-sm transition-colors flex items-center gap-1"
           >
@@ -174,6 +175,7 @@ export default function NewTeamPage() {
             />
             {goals.length > 1 && (
               <button
+                type="button"
                 onClick={() => removeGoal(index)}
                 className="p-2 text-slate-500 hover:text-red-400 transition-colors"
                 aria-label={`Remove goal ${index + 1}`}
@@ -188,12 +190,14 @@ export default function NewTeamPage() {
       {/* Submit */}
       <div className="flex justify-end gap-3">
         <button
+          type="button"
           onClick={() => router.push('/teams')}
           className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md text-sm transition-colors"
         >
           Cancel
         </button>
         <button
+          type="button"
           onClick={handleSubmit}
           disabled={saving}
           className="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white rounded-md text-sm font-medium transition-colors"

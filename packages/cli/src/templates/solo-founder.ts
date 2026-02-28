@@ -21,7 +21,7 @@ export interface SoloFounderFiles {
 	dockerCompose: string; // docker-compose.yml
 }
 
-export function soloFounderTemplate(projectName: string): SoloFounderFiles {
+export function soloFounderTemplate(projectName: string, provider = 'anthropic', model = 'claude-sonnet-4-5'): SoloFounderFiles {
 	// ── abf.config.yaml ────────────────────────────────────────────────────────
 	const config = stringify({
 		name: projectName,
@@ -51,8 +51,8 @@ export function soloFounderTemplate(projectName: string): SoloFounderFiles {
 		role: 'Orchestrator',
 		description:
 			'Organizes the founder\'s day, routes research tasks to Scout and writing tasks to Scribe.',
-		provider: 'anthropic',
-		model: 'claude-sonnet-4-5',
+		provider,
+		model,
 		temperature: 0.4,
 		team: 'founders',
 		reports_to: null,
@@ -120,8 +120,8 @@ Professional but warm. Like a trusted chief of staff, not a robot.`,
 		role: 'Researcher',
 		description:
 			'Deep research on competitors, markets, people, and technologies. Produces structured, sourced reports.',
-		provider: 'anthropic',
-		model: 'claude-sonnet-4-5',
+		provider,
+		model,
 		temperature: 0.2,
 		team: 'founders',
 		reports_to: 'compass',
@@ -187,8 +187,8 @@ Precise, direct, analytical. Like a top-tier research associate, not a journalis
 		role: 'Writer',
 		description:
 			'Writes blog posts, emails, LinkedIn updates, proposals, and investor communications in the founder\'s voice.',
-		provider: 'anthropic',
-		model: 'claude-sonnet-4-5',
+		provider,
+		model,
 		temperature: 0.7,
 		team: 'founders',
 		reports_to: 'compass',

@@ -5,7 +5,8 @@
   "description": "ABF Desktop App — native wrapper for the ABF dashboard and runtime",
   "scripts": {
     "dev": "tauri dev",
-    "build": "echo 'Tauri desktop app - run: cargo tauri build'",
+    "build": "echo 'Tauri desktop app - run: pnpm tauri build'",
+    "icons": "node scripts/generate-icons.mjs",
     "tauri": "tauri"
   },
   "dependencies": {

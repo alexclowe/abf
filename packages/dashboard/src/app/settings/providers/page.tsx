@@ -164,6 +164,7 @@ function ProviderCard({
                 <Check size={12} /> Connected
               </span>
               <button
+                type="button"
                 onClick={handleDisconnect}
                 disabled={disconnecting}
                 className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
@@ -174,6 +175,7 @@ function ProviderCard({
             </>
           ) : (
             <button
+              type="button"
               onClick={onConnect}
               className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-xs font-medium transition-colors"
             >

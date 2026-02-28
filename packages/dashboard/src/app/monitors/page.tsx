@@ -47,7 +47,7 @@ function MonitorFormPanel({
     <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-3">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-medium text-slate-400">{isEdit ? 'Edit Monitor' : 'New Monitor'}</h3>
-        <button onClick={onCancel} className="text-slate-400 hover:text-white transition-colors" aria-label="Close form">
+        <button type="button" onClick={onCancel} className="text-slate-400 hover:text-white transition-colors" aria-label="Close form">
           <X size={16} />
         </button>
       </div>
@@ -131,12 +131,14 @@ function MonitorFormPanel({
 
       <div className="flex justify-end gap-2 pt-2">
         <button
+          type="button"
           onClick={onCancel}
           className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-md text-sm transition-colors"
         >
           Cancel
         </button>
         <button
+          type="button"
           onClick={onSubmit}
           disabled={saving || !form.name || !form.url || !form.agent || !form.task}
           className="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white rounded-md text-sm font-medium transition-colors"
@@ -232,6 +234,7 @@ export default function MonitorsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Monitors</h1>
         <button
+          type="button"
           onClick={startCreate}
           className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-2"
         >
@@ -249,7 +252,7 @@ export default function MonitorsPage() {
       {actionError && (
         <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm flex items-center justify-between">
           <span>{actionError}</span>
-          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
+          <button type="button" onClick={() => setActionError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
         </div>
       )}
 
@@ -301,12 +304,14 @@ export default function MonitorsPage() {
                     {deleting === monitor.name ? (
                       <div className="flex gap-1">
                         <button
+                          type="button"
                           onClick={() => handleDelete(monitor.name)}
                           className="px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded text-xs transition-colors"
                         >
                           Confirm
                         </button>
                         <button
+                          type="button"
                           onClick={() => setDeleting(null)}
                           className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs transition-colors"
                         >
@@ -316,6 +321,7 @@ export default function MonitorsPage() {
                     ) : (
                       <div className="flex gap-1">
                         <button
+                          type="button"
                           onClick={() => startEdit(monitor)}
                           className="p-1.5 text-slate-400 hover:text-sky-400 hover:bg-slate-800 rounded transition-colors"
                           aria-label={`Edit ${monitor.name}`}
@@ -323,6 +329,7 @@ export default function MonitorsPage() {
                           <Pencil size={14} />
                         </button>
                         <button
+                          type="button"
                           onClick={() => setDeleting(monitor.name)}
                           className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
                           aria-label={`Delete ${monitor.name}`}

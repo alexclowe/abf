@@ -42,7 +42,7 @@ export default function EscalationsPage() {
       {actionError && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm flex items-center justify-between">
           <span>{actionError}</span>
-          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
+          <button type="button" onClick={() => setActionError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
         </div>
       )}
 
@@ -73,6 +73,7 @@ export default function EscalationsPage() {
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={() => resolve(esc.id)}
                   className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-md text-xs font-medium transition-colors shrink-0"
                 >

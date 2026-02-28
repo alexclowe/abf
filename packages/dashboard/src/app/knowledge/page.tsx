@@ -95,6 +95,7 @@ export default function KnowledgePage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Knowledge Base</h1>
         <button
+          type="button"
           onClick={() => setShowNewFile(true)}
           className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-2"
         >
@@ -112,7 +113,7 @@ export default function KnowledgePage() {
       {actionError && (
         <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm flex items-center justify-between">
           <span>{actionError}</span>
-          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
+          <button type="button" onClick={() => setActionError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
         </div>
       )}
 
@@ -136,12 +137,14 @@ export default function KnowledgePage() {
               autoFocus
             />
             <button
+              type="button"
               onClick={handleCreate}
               className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors"
             >
               Create
             </button>
             <button
+              type="button"
               onClick={() => { setShowNewFile(false); setNewFileName(''); }}
               className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-md text-sm transition-colors"
             >
@@ -161,6 +164,7 @@ export default function KnowledgePage() {
           {files?.map((file) => (
             <div key={file.filename} className="group relative">
               <button
+                type="button"
                 onClick={() => selectFile(file.filename)}
                 className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors flex items-center gap-2 ${
                   selectedFile === file.filename
@@ -178,12 +182,14 @@ export default function KnowledgePage() {
               {deleting === file.filename ? (
                 <div className="absolute right-0 top-0 bottom-0 flex items-center gap-1 pr-1">
                   <button
+                    type="button"
                     onClick={() => handleDelete(file.filename)}
                     className="px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded text-xs transition-colors"
                   >
                     Confirm
                   </button>
                   <button
+                    type="button"
                     onClick={() => setDeleting(null)}
                     className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs transition-colors"
                   >
@@ -192,6 +198,7 @@ export default function KnowledgePage() {
                 </div>
               ) : (
                 <button
+                  type="button"
                   onClick={() => setDeleting(file.filename)}
                   className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-red-400 transition-all"
                   aria-label={`Delete ${file.filename}`}
@@ -213,6 +220,7 @@ export default function KnowledgePage() {
                   {dirty && <span className="text-amber-400 ml-2">(unsaved)</span>}
                 </h2>
                 <button
+                  type="button"
                   onClick={handleSave}
                   disabled={!dirty || saving}
                   className="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md text-sm font-medium transition-colors flex items-center gap-2"

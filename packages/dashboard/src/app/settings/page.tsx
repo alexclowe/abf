@@ -116,6 +116,7 @@ export default function SettingsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Settings</h1>
         <button
+          type="button"
           onClick={handleSave}
           disabled={saving}
           className="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-2"
@@ -128,7 +129,7 @@ export default function SettingsPage() {
       {actionError && (
         <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm flex items-center justify-between">
           <span>{actionError}</span>
-          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
+          <button type="button" onClick={() => setActionError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
         </div>
       )}
 

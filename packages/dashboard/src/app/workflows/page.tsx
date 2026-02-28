@@ -73,7 +73,7 @@ export default function WorkflowsPage() {
       {runError && (
         <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm flex items-center justify-between">
           <span>{runError}</span>
-          <button onClick={() => setRunError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
+          <button type="button" onClick={() => setRunError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
         </div>
       )}
 
@@ -98,6 +98,7 @@ export default function WorkflowsPage() {
               <span className="text-slate-500 text-sm font-mono">({wf.name})</span>
             </div>
             <button
+              type="button"
               onClick={() => void handleRun(wf.name)}
               disabled={running === wf.name}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 rounded-md text-sm font-medium transition-colors"

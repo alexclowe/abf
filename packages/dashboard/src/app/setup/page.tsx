@@ -38,8 +38,6 @@ type SeedInputTab = 'paste' | 'upload';
 
 const TOTAL_STEPS = 6;
 
-type HostingMode = 'self-hosted' | 'cloud';
-
 const providers = [
   { id: 'abf-cloud', name: 'ABF Cloud', desc: 'We handle everything. No API keys needed.', needsKey: false, keyUrl: null, isCloud: true },
   { id: 'anthropic', name: 'Anthropic (Claude)', desc: 'Best for reasoning and writing. Recommended.', needsKey: true, keyUrl: 'https://console.anthropic.com/keys', isCloud: false },
@@ -92,6 +90,7 @@ function NavButtons({
     <div className="flex justify-between">
       {onBack ? (
         <button
+          type="button"
           onClick={onBack}
           className="px-4 py-2 text-slate-400 hover:text-white text-sm transition-colors"
         >
@@ -102,6 +101,7 @@ function NavButtons({
       )}
       {onNext && (
         <button
+          type="button"
           onClick={onNext}
           disabled={nextDisabled || loading}
           className={clsx('px-4 py-2 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-2', nextCls)}
@@ -157,6 +157,7 @@ function AgentRow({
         <span className="text-xs text-slate-500">{agent.tools.length} tools</span>
         <span className="text-xs text-slate-500">{agent.kpis.length} KPIs</span>
         <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
             onRemove();
@@ -232,7 +233,7 @@ function InterviewChat({
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
-  useEffect(() => { scrollToBottom(); }, [messages, currentQuestion, scrollToBottom]);
+  useEffect(() => { scrollToBottom(); }, [scrollToBottom]);
 
   // Start interview on mount
   useEffect(() => {
@@ -353,6 +354,7 @@ function InterviewChat({
             autoFocus
           />
           <button
+            type="button"
             onClick={handleSubmit}
             disabled={!answer.trim()}
             className="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-md text-sm font-medium transition-colors"
@@ -439,6 +441,7 @@ function SeedDocumentInput({
       {/* Tabs */}
       <div className="flex gap-1 border-b border-slate-800">
         <button
+          type="button"
           onClick={() => setTab('paste')}
           className={clsx(
             'px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2',
@@ -451,6 +454,7 @@ function SeedDocumentInput({
           Paste Text
         </button>
         <button
+          type="button"
           onClick={() => setTab('upload')}
           className={clsx(
             'px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2',
@@ -849,6 +853,7 @@ function CreatingStep({
       </Card>
 
       <button
+        type="button"
         onClick={() => router.push('/')}
         className="w-full px-4 py-3 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors"
       >
@@ -880,7 +885,7 @@ export default function SetupPage() {
   const [creating, setCreating] = useState(false);
 
   // Seed flow (Options A/B/C)
-  const [seedText, setSeedText] = useState('');
+  const [, setSeedText] = useState('');
   const [plan, setPlan] = useState<CompanyPlan | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
 
@@ -963,6 +968,7 @@ export default function SetupPage() {
         <div className="bg-sky-500/10 border border-sky-500/20 rounded-lg p-4 flex items-center justify-between">
           <span className="text-sky-400 text-sm">Already configured.</span>
           <button
+            type="button"
             onClick={() => router.push('/')}
             className="text-sm text-sky-400 hover:text-sky-300 underline"
           >
@@ -995,6 +1001,7 @@ export default function SetupPage() {
             <p className="text-xs text-slate-500 font-medium mb-2 uppercase tracking-wide">Easiest</p>
             {providers.filter((p) => p.isCloud).map((p) => (
               <button
+                type="button"
                 key={p.id}
                 onClick={() => setProvider(p.id)}
                 className={clsx(
@@ -1016,6 +1023,7 @@ export default function SetupPage() {
             <div className="grid grid-cols-3 gap-3">
               {providers.filter((p) => !p.isCloud).map((p) => (
                 <button
+                  type="button"
                   key={p.id}
                   onClick={() => setProvider(p.id)}
                   className={clsx(
@@ -1120,6 +1128,7 @@ export default function SetupPage() {
               const Icon = opt.icon;
               return (
                 <button
+                  type="button"
                   key={opt.id}
                   onClick={() => setCompanyType(opt.id)}
                   className={clsx(
@@ -1215,6 +1224,7 @@ export default function SetupPage() {
           <div className="grid grid-cols-2 gap-3">
             {templates.map((t) => (
               <button
+                type="button"
                 key={t.id}
                 onClick={() => setTemplate(t.id)}
                 className={clsx(

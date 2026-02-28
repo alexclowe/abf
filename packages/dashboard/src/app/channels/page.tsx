@@ -160,6 +160,7 @@ export default function ChannelsPage() {
                   />
                   <div className="flex gap-2">
                     <button
+                      type="button"
                       onClick={() => handleConnect(type)}
                       className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-xs font-medium transition-colors"
                     >
@@ -174,6 +175,7 @@ export default function ChannelsPage() {
                       </a>
                     )}
                     <button
+                      type="button"
                       onClick={() => { setConfiguring(null); setToken(''); }}
                       className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-md text-xs font-medium transition-colors"
                     >
@@ -185,6 +187,7 @@ export default function ChannelsPage() {
                 <div className="flex gap-2">
                   {isConfigured ? (
                     <button
+                      type="button"
                       onClick={() => handleDisconnect(type)}
                       className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/20 rounded-md text-xs font-medium transition-colors"
                     >
@@ -192,6 +195,7 @@ export default function ChannelsPage() {
                     </button>
                   ) : (
                     <button
+                      type="button"
                       onClick={() => setConfiguring(type)}
                       className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-xs font-medium transition-colors"
                     >
@@ -232,6 +236,7 @@ export default function ChannelsPage() {
         </div>
         {channels?.find((c) => c.type === 'google')?.connected ? (
           <button
+            type="button"
             onClick={() => handleDisconnect('google')}
             className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/20 rounded-md text-xs font-medium transition-colors"
           >

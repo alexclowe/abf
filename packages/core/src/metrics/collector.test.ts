@@ -72,7 +72,7 @@ function makeAgentState(id: string): AgentState {
 	};
 }
 
-function makeKPIReport(agentId: string): KPIReport {
+function makeKPIReport(_agentId: string): KPIReport {
 	return {
 		metric: 'coverage',
 		value: '95%',

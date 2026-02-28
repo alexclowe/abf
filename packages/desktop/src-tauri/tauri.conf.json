@@ -5,7 +5,6 @@
   "identifier": "dev.abf.desktop",
   "build": {
     "beforeDevCommand": "",
-    "devUrl": "http://localhost:3001",
     "beforeBuildCommand": "",
     "frontendDist": "../dist"
   },
@@ -19,7 +18,8 @@
         "minWidth": 800,
         "minHeight": 600,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "url": "splash.html"
       }
     ],
     "trayIcon": {
@@ -30,6 +30,37 @@
     },
     "security": {
       "csp": null
+    }
+  },
+  "plugins": {
+    "shell": {
+      "scope": [
+        {
+          "name": "node",
+          "cmd": "node",
+          "args": true
+        },
+        {
+          "name": "ollama",
+          "cmd": "ollama",
+          "args": true
+        },
+        {
+          "name": "sh",
+          "cmd": "sh",
+          "args": true
+        },
+        {
+          "name": "curl",
+          "cmd": "curl",
+          "args": true
+        },
+        {
+          "name": "powershell",
+          "cmd": "powershell",
+          "args": true
+        }
+      ]
     }
   },
   "bundle": {

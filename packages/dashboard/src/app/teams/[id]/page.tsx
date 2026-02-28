@@ -114,6 +114,7 @@ export default function TeamDetailPage() {
         <div className="flex gap-2">
           {!editing && (
             <button
+              type="button"
               onClick={startEditing}
               className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors"
             >
@@ -121,6 +122,7 @@ export default function TeamDetailPage() {
             </button>
           )}
           <button
+            type="button"
             onClick={() => setShowDeleteConfirm(true)}
             className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-2"
           >
@@ -133,7 +135,7 @@ export default function TeamDetailPage() {
       {actionError && (
         <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm flex items-center justify-between">
           <span>{actionError}</span>
-          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
+          <button type="button" onClick={() => setActionError(null)} className="text-red-400 hover:text-red-300 text-xs ml-4">Dismiss</button>
         </div>
       )}
 
@@ -151,12 +153,14 @@ export default function TeamDetailPage() {
           </p>
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={handleDelete}
               className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-md text-sm font-medium transition-colors"
             >
               Yes, Delete
             </button>
             <button
+              type="button"
               onClick={() => setShowDeleteConfirm(false)}
               className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-md text-sm transition-colors"
             >
@@ -228,12 +232,14 @@ export default function TeamDetailPage() {
 
           <div className="flex justify-end gap-2 pt-2">
             <button
+              type="button"
               onClick={() => setEditing(false)}
               className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-md text-sm transition-colors"
             >
               Cancel
             </button>
             <button
+              type="button"
               onClick={handleSave}
               disabled={saving}
               className="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-2"
