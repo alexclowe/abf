@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { CronBuilder } from './CronBuilder';
+import { ActionMultiSelect, COMMON_ACTIONS } from './ActionMultiSelect';
+import { api } from '@/lib/api';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -85,10 +88,14 @@ const EMPTY_FORM: AgentFormData = {
 
 // ── Component ───────────────────────────────────────────────────────
 
+type FormTab = 'basic' | 'advanced';
+
 export function AgentForm({ initialData, archetypes, onSubmit, submitLabel, isEdit }: AgentFormProps) {
   const [form, setForm] = useState<AgentFormData>({ ...EMPTY_FORM, ...initialData });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<FormTab>('basic');
+  const [generatingCharter, setGeneratingCharter] = useState(false);
 
   // Sync initial data when it arrives (for edit page loading)
   useEffect(() => {
@@ -183,6 +190,30 @@ export function AgentForm({ initialData, archetypes, onSubmit, submitLabel, isEd
     }));
   }
 
+  // ── Charter Generation ─────────────────────────────────────────
+
+  async function generateCharter() {
+    if (!form.name.trim() || !form.role.trim()) {
+      setError('Fill in Name and Role before generating a charter.');
+      return;
+    }
+    setGeneratingCharter(true);
+    setError(null);
+    try {
+      const result = await api.agents.generateCharter({
+        name: form.name.trim(),
+        role: form.role.trim(),
+        description: form.description.trim() || undefined,
+        tools: form.tools.trim() || undefined,
+      });
+      set('charter', result.charter);
+    } catch (err) {
+      setError(`Charter generation failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setGeneratingCharter(false);
+    }
+  }
+
   // ── Submit ──────────────────────────────────────────────────────
 
   async function handleSubmit(e: React.FormEvent) {
@@ -242,10 +273,27 @@ export function AgentForm({ initialData, archetypes, onSubmit, submitLabel, isEd
   const sectionHeader = 'text-sm font-medium text-slate-400 mb-2';
   const card = 'bg-slate-900 border border-slate-800 rounded-lg p-4';
 
+  const tabClass = (tab: FormTab) =>
+    `px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
+      activeTab === tab
+        ? 'bg-slate-900 text-white border border-slate-800 border-b-slate-900 -mb-px'
+        : 'text-slate-400 hover:text-white'
+    }`;
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Tab Navigation */}
+      <div className="flex gap-1 border-b border-slate-800">
+        <button type="button" onClick={() => setActiveTab('basic')} className={tabClass('basic')}>
+          Basic
+        </button>
+        <button type="button" onClick={() => setActiveTab('advanced')} className={tabClass('advanced')}>
+          Advanced
+        </button>
+      </div>
+
       {/* Quick Start Archetypes */}
-      {!isEdit && archetypes.length > 0 && (
+      {activeTab === 'basic' && !isEdit && archetypes.length > 0 && (
         <div className={card}>
           <h2 className={sectionHeader}>Quick Start - Pick an Archetype</h2>
           <p className="text-xs text-slate-500 mb-3">
@@ -276,75 +324,80 @@ export function AgentForm({ initialData, archetypes, onSubmit, submitLabel, isEd
         </div>
       )}
 
+      {/* ── Basic Tab ───────────────────────────────────────────────── */}
+
       {/* Basic Info */}
-      <div className={card}>
-        <h2 className={sectionHeader}>Basic Information</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className={labelClass}>Name *</label>
-            <input
-              value={form.name}
-              onChange={(e) => set('name', e.target.value)}
-              placeholder="scout"
-              className={inputClass}
-              required
-              disabled={isEdit}
-            />
-            {isEdit && (
-              <p className="text-xs text-slate-600 mt-1">Name cannot be changed after creation.</p>
-            )}
-          </div>
-          <div>
-            <label className={labelClass}>Display Name *</label>
-            <input
-              value={form.displayName}
-              onChange={(e) => set('displayName', e.target.value)}
-              placeholder="Research & Analytics"
-              className={inputClass}
-              required
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Role *</label>
-            <input
-              value={form.role}
-              onChange={(e) => set('role', e.target.value)}
-              placeholder="Citation Monitor"
-              className={inputClass}
-              required
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Role Archetype</label>
-            <select
-              value={form.roleArchetype || 'custom'}
-              onChange={(e) => handleArchetypeChange(e.target.value)}
-              className={inputClass}
-            >
-              <option value="custom">Custom</option>
-              {archetypes.map((a) => (
-                <option key={a.name} value={a.name}>
-                  {a.name.charAt(0).toUpperCase() + a.name.slice(1)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="sm:col-span-2">
-            <label className={labelClass}>Description</label>
-            <textarea
-              value={form.description}
-              onChange={(e) => set('description', e.target.value)}
-              placeholder="What this agent does..."
-              rows={2}
-              className={`${inputClass} resize-none`}
-            />
+      {activeTab === 'basic' && (
+        <div className={card}>
+          <h2 className={sectionHeader}>Basic Information</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Name *</label>
+              <input
+                value={form.name}
+                onChange={(e) => set('name', e.target.value)}
+                placeholder="scout"
+                className={inputClass}
+                required
+                disabled={isEdit}
+              />
+              {isEdit && (
+                <p className="text-xs text-slate-600 mt-1">Name cannot be changed after creation.</p>
+              )}
+            </div>
+            <div>
+              <label className={labelClass}>Display Name *</label>
+              <input
+                value={form.displayName}
+                onChange={(e) => set('displayName', e.target.value)}
+                placeholder="Research & Analytics"
+                className={inputClass}
+                required
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Role *</label>
+              <input
+                value={form.role}
+                onChange={(e) => set('role', e.target.value)}
+                placeholder="Citation Monitor"
+                className={inputClass}
+                required
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Role Archetype</label>
+              <select
+                value={form.roleArchetype || 'custom'}
+                onChange={(e) => handleArchetypeChange(e.target.value)}
+                className={inputClass}
+              >
+                <option value="custom">Custom</option>
+                {archetypes.map((a) => (
+                  <option key={a.name} value={a.name}>
+                    {a.name.charAt(0).toUpperCase() + a.name.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="sm:col-span-2">
+              <label className={labelClass}>Description</label>
+              <textarea
+                value={form.description}
+                onChange={(e) => set('description', e.target.value)}
+                placeholder="What this agent does..."
+                rows={2}
+                className={`${inputClass} resize-none`}
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Model Configuration */}
-      <div className={card}>
-        <h2 className={sectionHeader}>Model Configuration</h2>
+      {activeTab === 'basic' && (
+        <div className={card}>
+          <h2 className={sectionHeader}>Model Configuration</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className={labelClass}>Provider</label>
@@ -381,8 +434,12 @@ export function AgentForm({ initialData, archetypes, onSubmit, submitLabel, isEd
           </div>
         </div>
       </div>
+      )}
+
+      {/* ── Advanced Tab ────────────────────────────────────────────── */}
 
       {/* Team & Reporting */}
+      {activeTab === 'advanced' && (
       <div className={card}>
         <h2 className={sectionHeader}>Team & Reporting</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -406,8 +463,10 @@ export function AgentForm({ initialData, archetypes, onSubmit, submitLabel, isEd
           </div>
         </div>
       </div>
+      )}
 
       {/* Tools */}
+      {activeTab === 'advanced' && (
       <div className={card}>
         <h2 className={sectionHeader}>Tools</h2>
         <label className={labelClass}>Tool names (comma-separated)</label>
@@ -418,8 +477,10 @@ export function AgentForm({ initialData, archetypes, onSubmit, submitLabel, isEd
           className={inputClass}
         />
       </div>
+      )}
 
       {/* Triggers */}
+      {activeTab === 'advanced' && (
       <div className={card}>
         <div className="flex items-center justify-between mb-2">
           <h2 className={sectionHeader + ' mb-0'}>Triggers</h2>
@@ -472,13 +533,11 @@ export function AgentForm({ initialData, archetypes, onSubmit, submitLabel, isEd
                   />
                 </div>
                 {trigger.type === 'cron' && (
-                  <div>
-                    <label className="text-xs text-slate-500">Schedule (cron)</label>
-                    <input
+                  <div className="sm:col-span-2">
+                    <label className="text-xs text-slate-500">Schedule</label>
+                    <CronBuilder
                       value={trigger.schedule ?? ''}
-                      onChange={(e) => updateTrigger(i, 'schedule', e.target.value)}
-                      placeholder="0 */2 * * *"
-                      className={inputClass}
+                      onChange={(cron) => updateTrigger(i, 'schedule', cron)}
                     />
                   </div>
                 )}
@@ -498,53 +557,60 @@ export function AgentForm({ initialData, archetypes, onSubmit, submitLabel, isEd
           ))}
         </div>
       </div>
+      )}
 
       {/* Behavioral Bounds */}
+      {activeTab === 'advanced' && (
       <div className={card}>
         <h2 className={sectionHeader}>Behavioral Bounds</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className={labelClass}>Allowed Actions (comma-separated)</label>
-            <input
-              value={form.allowedActions}
-              onChange={(e) => set('allowedActions', e.target.value)}
-              placeholder="read_data, write_draft"
-              className={inputClass}
-            />
+        <div className="space-y-4">
+          <ActionMultiSelect
+            label="Allowed Actions"
+            value={form.allowedActions}
+            onChange={(v) => set('allowedActions', v)}
+            actions={COMMON_ACTIONS}
+          />
+          <ActionMultiSelect
+            label="Forbidden Actions"
+            value={form.forbiddenActions}
+            onChange={(v) => set('forbiddenActions', v)}
+            actions={COMMON_ACTIONS}
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Max Cost Per Session</label>
+              <input
+                value={form.maxCostPerSession}
+                onChange={(e) => set('maxCostPerSession', e.target.value)}
+                placeholder="$2.00"
+                className={inputClass}
+              />
+            </div>
           </div>
-          <div>
-            <label className={labelClass}>Forbidden Actions (comma-separated)</label>
-            <input
-              value={form.forbiddenActions}
-              onChange={(e) => set('forbiddenActions', e.target.value)}
-              placeholder="delete_data, modify_billing"
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Max Cost Per Session</label>
-            <input
-              value={form.maxCostPerSession}
-              onChange={(e) => set('maxCostPerSession', e.target.value)}
-              placeholder="$2.00"
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Requires Approval (comma-separated)</label>
-            <input
-              value={form.requiresApproval}
-              onChange={(e) => set('requiresApproval', e.target.value)}
-              placeholder="publish_content, send_client_email"
-              className={inputClass}
-            />
-          </div>
+          <ActionMultiSelect
+            label="Requires Approval"
+            value={form.requiresApproval}
+            onChange={(v) => set('requiresApproval', v)}
+            actions={COMMON_ACTIONS}
+          />
         </div>
       </div>
+      )}
 
       {/* Charter */}
+      {activeTab === 'basic' && (
       <div className={card}>
-        <h2 className={sectionHeader}>Charter</h2>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className={sectionHeader + ' mb-0'}>Charter</h2>
+          <button
+            type="button"
+            onClick={generateCharter}
+            disabled={generatingCharter}
+            className="px-3 py-1 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white rounded-md text-xs font-medium transition-colors"
+          >
+            {generatingCharter ? 'Generating...' : 'Generate with AI'}
+          </button>
+        </div>
         <textarea
           value={form.charter}
           onChange={(e) => set('charter', e.target.value)}
@@ -552,9 +618,14 @@ export function AgentForm({ initialData, archetypes, onSubmit, submitLabel, isEd
           rows={10}
           className={`${inputClass} resize-y font-mono`}
         />
+        <p className="text-xs text-slate-500 mt-1">
+          The charter defines your agent&apos;s identity and behavior. Fill in Name and Role above, then click &quot;Generate with AI&quot; to auto-create one.
+        </p>
       </div>
+      )}
 
       {/* KPIs */}
+      {activeTab === 'advanced' && (
       <div className={card}>
         <div className="flex items-center justify-between mb-2">
           <h2 className={sectionHeader + ' mb-0'}>KPIs</h2>
@@ -618,6 +689,7 @@ export function AgentForm({ initialData, archetypes, onSubmit, submitLabel, isEd
           ))}
         </div>
       </div>
+      )}
 
       {/* Submit */}
       <div className="flex justify-end">

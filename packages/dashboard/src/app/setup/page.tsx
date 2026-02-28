@@ -38,10 +38,13 @@ type SeedInputTab = 'paste' | 'upload';
 
 const TOTAL_STEPS = 6;
 
+type HostingMode = 'self-hosted' | 'cloud';
+
 const providers = [
-  { id: 'anthropic', name: 'Anthropic (Claude)', desc: 'Best for reasoning and writing. Recommended.', needsKey: true, keyUrl: 'https://console.anthropic.com/keys' },
-  { id: 'openai', name: 'OpenAI (GPT)', desc: 'Fast and reliable. Good alternative.', needsKey: true, keyUrl: 'https://platform.openai.com/api-keys' },
-  { id: 'ollama', name: 'Ollama', desc: 'Free, runs on your computer. No internet required.', needsKey: false, keyUrl: null },
+  { id: 'abf-cloud', name: 'ABF Cloud', desc: 'We handle everything. No API keys needed.', needsKey: false, keyUrl: null, isCloud: true },
+  { id: 'anthropic', name: 'Anthropic (Claude)', desc: 'Best for reasoning and writing. Recommended.', needsKey: true, keyUrl: 'https://console.anthropic.com/keys', isCloud: false },
+  { id: 'openai', name: 'OpenAI (GPT)', desc: 'Fast and reliable. Good alternative.', needsKey: true, keyUrl: 'https://platform.openai.com/api-keys', isCloud: false },
+  { id: 'ollama', name: 'Ollama', desc: 'Free, runs on your computer. No internet required.', needsKey: false, keyUrl: null, isCloud: false },
 ];
 
 const templates = [
@@ -865,6 +868,7 @@ export default function SetupPage() {
   const [step, setStep] = useState<Step>(1);
   const [provider, setProvider] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [cloudToken, setCloudToken] = useState('');
   const [error, setError] = useState('');
 
   // Step 3: company type
@@ -984,14 +988,17 @@ export default function SetupPage() {
       {/* ── Step 1: Provider ─────────────────────────────────────────── */}
       {step === 1 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Choose an AI Provider</h2>
-          <div className="grid grid-cols-3 gap-3">
-            {providers.map((p) => (
+          <h2 className="text-lg font-semibold">How would you like to run your AI agents?</h2>
+
+          {/* Cloud option */}
+          <div>
+            <p className="text-xs text-slate-500 font-medium mb-2 uppercase tracking-wide">Easiest</p>
+            {providers.filter((p) => p.isCloud).map((p) => (
               <button
                 key={p.id}
                 onClick={() => setProvider(p.id)}
                 className={clsx(
-                  'border rounded-lg p-4 text-left transition-colors',
+                  'w-full border rounded-lg p-4 text-left transition-colors',
                   provider === p.id
                     ? 'border-sky-500 bg-sky-500/10'
                     : 'border-slate-800 bg-slate-900 hover:border-slate-700',
@@ -1002,6 +1009,29 @@ export default function SetupPage() {
               </button>
             ))}
           </div>
+
+          {/* Self-hosted options */}
+          <div>
+            <p className="text-xs text-slate-500 font-medium mb-2 uppercase tracking-wide">Bring Your Own Key</p>
+            <div className="grid grid-cols-3 gap-3">
+              {providers.filter((p) => !p.isCloud).map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setProvider(p.id)}
+                  className={clsx(
+                    'border rounded-lg p-4 text-left transition-colors',
+                    provider === p.id
+                      ? 'border-sky-500 bg-sky-500/10'
+                      : 'border-slate-800 bg-slate-900 hover:border-slate-700',
+                  )}
+                >
+                  <div className="font-medium text-sm">{p.name}</div>
+                  <div className="text-xs text-slate-400 mt-1">{p.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <NavButtons
             onNext={() => provider && setStep(2)}
             nextDisabled={!provider}
@@ -1009,11 +1039,36 @@ export default function SetupPage() {
         </div>
       )}
 
-      {/* ── Step 2: API Key ──────────────────────────────────────────── */}
+      {/* ── Step 2: API Key / Cloud Token ──────────────────────────── */}
       {step === 2 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold">API Configuration</h2>
-          {selectedProvider?.needsKey ? (
+          <h2 className="text-lg font-semibold">
+            {selectedProvider?.isCloud ? 'ABF Cloud Setup' : 'API Configuration'}
+          </h2>
+          {selectedProvider?.isCloud ? (
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">ABF Cloud Token</label>
+              <input
+                type="password"
+                value={cloudToken}
+                onChange={(e) => setCloudToken(e.target.value)}
+                placeholder="abf_live_..."
+                className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                Get your token at <span className="text-sky-400">cloud.abf.dev</span>. We handle all AI provider access for you.
+              </p>
+              <Card className="mt-3">
+                <p className="text-sm text-slate-300">What you get with ABF Cloud:</p>
+                <ul className="text-xs text-slate-400 mt-2 space-y-1">
+                  <li>Access to Claude, GPT-4, and other top models</li>
+                  <li>No API keys to manage — just one token</li>
+                  <li>Usage-based pricing — pay only for what you use</li>
+                  <li>Automatic model updates and fallback</li>
+                </ul>
+              </Card>
+            </div>
+          ) : selectedProvider?.needsKey ? (
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-sm text-slate-400">{selectedProvider.name} API Key</label>
@@ -1048,7 +1103,10 @@ export default function SetupPage() {
           <NavButtons
             onBack={() => setStep(1)}
             onNext={() => setStep(3)}
-            nextDisabled={!!selectedProvider?.needsKey && !apiKey}
+            nextDisabled={
+              selectedProvider?.isCloud ? !cloudToken :
+              (!!selectedProvider?.needsKey && !apiKey)
+            }
           />
         </div>
       )}
