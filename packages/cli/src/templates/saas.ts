@@ -25,7 +25,7 @@ export interface SaaSFiles {
 	dockerCompose: string; // docker-compose.yml
 }
 
-export function saasTemplate(projectName: string): SaaSFiles {
+export function saasTemplate(projectName: string, provider = 'anthropic', model = 'claude-sonnet-4-5'): SaaSFiles {
 	// ── abf.config.yaml ────────────────────────────────────────────────────────
 	const config = stringify({
 		name: projectName,
@@ -55,8 +55,8 @@ export function saasTemplate(projectName: string): SaaSFiles {
 		role: 'Orchestrator',
 		description:
 			'Coordinates product and go-to-market teams. Runs weekly standups, delegates work, and makes roadmap decisions.',
-		provider: 'anthropic',
-		model: 'claude-sonnet-4-5',
+		provider,
+		model,
 		temperature: 0.4,
 		team: 'product',
 		reports_to: null,
@@ -120,8 +120,8 @@ Strategic, clear, action-oriented. Like a sharp VP of Product, not a project man
 		role: 'Researcher',
 		description:
 			'Researches competitors, pricing models, user needs, and market dynamics. Produces structured, sourced reports.',
-		provider: 'anthropic',
-		model: 'claude-sonnet-4-5',
+		provider,
+		model,
 		temperature: 0.2,
 		team: 'product',
 		reports_to: 'atlas',
@@ -181,8 +181,8 @@ Precise, direct, analytical. Like a senior research analyst at a top-tier firm.`
 		role: 'Writer',
 		description:
 			'Writes product documentation, changelogs, blog posts, and in-app copy. Clear, technical-but-accessible writing.',
-		provider: 'anthropic',
-		model: 'claude-sonnet-4-5',
+		provider,
+		model,
 		temperature: 0.7,
 		team: 'product',
 		reports_to: 'atlas',
@@ -244,8 +244,8 @@ Clear, direct, helpful. Technical when needed, human always.`,
 		role: 'Strategist',
 		description:
 			'Go-to-market strategy: positioning, messaging, launch planning, and channel strategy. Produces strategy briefs.',
-		provider: 'anthropic',
-		model: 'claude-sonnet-4-5',
+		provider,
+		model,
 		temperature: 0.5,
 		team: 'gtm',
 		reports_to: 'atlas',
@@ -307,8 +307,8 @@ Strategic, confident, data-informed. Like a seasoned CMO, not a marketing intern
 		role: 'Analyst',
 		description:
 			'Analyzes user feedback, support requests, and churn signals. Synthesizes patterns and escalates urgent issues.',
-		provider: 'anthropic',
-		model: 'claude-sonnet-4-5',
+		provider,
+		model,
 		temperature: 0.3,
 		team: 'gtm',
 		reports_to: 'atlas',

@@ -20,7 +20,14 @@ interface InitOptions {
 	template: string;
 	name?: string | undefined;
 	seed?: string | undefined;
+	provider?: string | undefined;
 }
+
+const PROVIDER_MODEL_MAP: Record<string, string> = {
+	anthropic: 'claude-sonnet-4-5',
+	openai: 'gpt-4o',
+	ollama: 'llama3.2',
+};
 
 export async function initCommand(options: InitOptions): Promise<void> {
 	// ── Seed-based init ──────────────────────────────────────────────
@@ -112,19 +119,59 @@ async function initFromSeed(options: InitOptions): Promise<void> {
 	const hasOpenAIKey =
 		!!process.env['OPENAI_API_KEY'] || !!(await vault.get('openai', 'api_key'));
 
-	if (hasAnthropicKey) {
+	if (options.provider) {
+		providerId = options.provider;
+		model = PROVIDER_MODEL_MAP[providerId] ?? 'claude-sonnet-4-5';
+
+		// For Ollama: detect best installed model
+		if (providerId === 'ollama') {
+			const { ensureOllama } = await import('../utils/ollama.js');
+			const ollamaResult = await ensureOllama({
+				onProgress: (msg) => console.log(chalk.dim(`  ${msg}`)),
+				autoInstall: false,
+			});
+			if (ollamaResult.ok) {
+				model = ollamaResult.model;
+			} else if (ollamaResult.message === 'not_installed') {
+				console.error(chalk.red('\n  Ollama is not installed.'));
+				console.log(`  Install: ${chalk.cyan('curl -fsSL https://ollama.com/install.sh | sh')}`);
+				console.log(`  Or visit: ${chalk.cyan('https://ollama.com/download')}\n`);
+				process.exit(1);
+			} else {
+				console.error(chalk.red(`\n  ${ollamaResult.message}\n`));
+				process.exit(1);
+			}
+		}
+	} else if (hasAnthropicKey) {
 		providerId = 'anthropic';
 		model = 'claude-sonnet-4-5';
 	} else if (hasOpenAIKey) {
 		providerId = 'openai';
 		model = 'gpt-4o';
 	} else {
-		console.error(
-			chalk.red(
-				`\n  Error: No LLM provider configured. Run ${chalk.cyan('abf auth anthropic')} first, or set ANTHROPIC_API_KEY.\n`,
-			),
-		);
-		process.exit(1);
+		// Fall back to Ollama — detect availability and best model
+		const { ensureOllama } = await import('../utils/ollama.js');
+		console.log(chalk.yellow('\n  No API key found — checking for Ollama (local LLM)...'));
+
+		const ollamaResult = await ensureOllama({
+			onProgress: (msg) => console.log(chalk.dim(`  ${msg}`)),
+			autoInstall: false,
+		});
+
+		if (ollamaResult.ok) {
+			providerId = 'ollama';
+			model = ollamaResult.model;
+			console.log(chalk.yellow(`  Using Ollama (${model}). Quality may be lower than cloud models.\n`));
+		} else {
+			console.error(
+				chalk.red(
+					`\n  Error: No LLM provider available.\n` +
+					`  Either set an API key: ${chalk.cyan('abf auth anthropic')}\n` +
+					`  Or install Ollama:     ${chalk.cyan('curl -fsSL https://ollama.com/install.sh | sh')}\n`,
+				),
+			);
+			process.exit(1);
+		}
 	}
 
 	// 5. Analyze the seed document with LLM
@@ -266,9 +313,11 @@ async function initFromSeed(options: InitOptions): Promise<void> {
 
 	console.log(chalk.dim('  Next steps:'));
 	console.log(`    ${chalk.cyan('cd')} ${projectName}`);
-	if (!hasAnthropicKey && !hasOpenAIKey) {
+	if (providerId === 'ollama') {
+		console.log(`    ${chalk.yellow('Make sure Ollama is running (ollama serve)')}`);
+	} else if (!hasAnthropicKey && !hasOpenAIKey) {
 		console.log(
-			`    ${chalk.cyan('abf auth anthropic')}          Configure your LLM`,
+			`    ${chalk.cyan(`abf auth ${providerId}`)}          Configure your LLM`,
 		);
 	}
 	console.log(
@@ -284,6 +333,30 @@ async function initFromSeed(options: InitOptions): Promise<void> {
 
 async function initFromTemplate(options: InitOptions): Promise<void> {
 	const projectName = options.name ?? 'my-business';
+	const provider = options.provider ?? 'anthropic';
+	let model = PROVIDER_MODEL_MAP[provider] ?? 'claude-sonnet-4-5';
+
+	// For Ollama: detect best installed model before creating the project
+	if (provider === 'ollama') {
+		const { ensureOllama } = await import('../utils/ollama.js');
+		console.log(chalk.dim('  Checking Ollama...'));
+		const ollamaResult = await ensureOllama({
+			onProgress: (msg) => console.log(chalk.dim(`  ${msg}`)),
+			autoInstall: false,
+		});
+		if (ollamaResult.ok) {
+			model = ollamaResult.model;
+		} else if (ollamaResult.message === 'not_installed') {
+			console.error(chalk.red('\n  Ollama is not installed.'));
+			console.log(`  Install: ${chalk.cyan('curl -fsSL https://ollama.com/install.sh | sh')}`);
+			console.log(`  Or visit: ${chalk.cyan('https://ollama.com/download')}\n`);
+			process.exit(1);
+		} else {
+			console.error(chalk.red(`\n  ${ollamaResult.message}\n`));
+			process.exit(1);
+		}
+	}
+
 	const spinner = ora(`Creating ABF project: ${projectName}`).start();
 
 	try {
@@ -320,7 +393,7 @@ async function initFromTemplate(options: InitOptions): Promise<void> {
 
 		if (options.template === 'solo-founder') {
 			const { soloFounderTemplate } = await import('../templates/solo-founder.js');
-			const files = soloFounderTemplate(projectName);
+			const files = soloFounderTemplate(projectName, provider, model);
 			await writeFile(join(root, 'abf.config.yaml'), files.config, 'utf-8');
 			await writeFile(join(root, 'agents', 'compass.agent.yaml'), files.compass, 'utf-8');
 			await writeFile(join(root, 'agents', 'scout.agent.yaml'), files.scout, 'utf-8');
@@ -338,7 +411,11 @@ async function initFromTemplate(options: InitOptions): Promise<void> {
 			console.log(chalk.bold('  Solo Founder workspace ready — 3 agents, 1 team'));
 			console.log();
 			console.log(`  ${chalk.cyan('cd')} ${projectName}`);
-			console.log(`  ${chalk.cyan('abf auth anthropic')}                          Configure your LLM`);
+			if (provider === 'ollama') {
+				console.log(`  ${chalk.yellow('Make sure Ollama is running (ollama serve)')}`);
+			} else {
+				console.log(`  ${chalk.cyan(`abf auth ${provider}`)}                          Configure your LLM`);
+			}
 			console.log(`  ${chalk.cyan('abf status')}                                  Verify 3 agents loaded`);
 			console.log();
 			console.log(chalk.dim('  Quick runs:'));
@@ -349,7 +426,7 @@ async function initFromTemplate(options: InitOptions): Promise<void> {
 
 		} else if (options.template === 'saas') {
 			const { saasTemplate } = await import('../templates/saas.js');
-			const files = saasTemplate(projectName);
+			const files = saasTemplate(projectName, provider, model);
 			await writeFile(join(root, 'abf.config.yaml'), files.config, 'utf-8');
 			await writeFile(join(root, 'agents', 'atlas.agent.yaml'), files.atlas, 'utf-8');
 			await writeFile(join(root, 'agents', 'scout.agent.yaml'), files.scout, 'utf-8');
@@ -370,7 +447,11 @@ async function initFromTemplate(options: InitOptions): Promise<void> {
 			console.log(chalk.bold('  SaaS workspace ready — 5 agents, 2 teams (product + gtm)'));
 			console.log();
 			console.log(`  ${chalk.cyan('cd')} ${projectName}`);
-			console.log(`  ${chalk.cyan('abf auth anthropic')}                          Configure your LLM`);
+			if (provider === 'ollama') {
+				console.log(`  ${chalk.yellow('Make sure Ollama is running (ollama serve)')}`);
+			} else {
+				console.log(`  ${chalk.cyan(`abf auth ${provider}`)}                          Configure your LLM`);
+			}
 			console.log(`  ${chalk.cyan('abf status')}                                  Verify 5 agents loaded`);
 			console.log();
 			console.log(chalk.dim('  Quick runs:'));
@@ -383,7 +464,7 @@ async function initFromTemplate(options: InitOptions): Promise<void> {
 
 		} else if (options.template === 'marketing-agency') {
 			const { marketingAgencyTemplate } = await import('../templates/marketing-agency.js');
-			const files = marketingAgencyTemplate(projectName);
+			const files = marketingAgencyTemplate(projectName, provider, model);
 			await writeFile(join(root, 'abf.config.yaml'), files.config, 'utf-8');
 			await writeFile(join(root, 'agents', 'director.agent.yaml'), files.director, 'utf-8');
 			await writeFile(join(root, 'agents', 'strategist.agent.yaml'), files.strategist, 'utf-8');
@@ -402,7 +483,11 @@ async function initFromTemplate(options: InitOptions): Promise<void> {
 			console.log(chalk.bold('  Marketing Agency workspace ready — 4 agents, 1 team'));
 			console.log();
 			console.log(`  ${chalk.cyan('cd')} ${projectName}`);
-			console.log(`  ${chalk.cyan('abf auth anthropic')}                          Configure your LLM`);
+			if (provider === 'ollama') {
+				console.log(`  ${chalk.yellow('Make sure Ollama is running (ollama serve)')}`);
+			} else {
+				console.log(`  ${chalk.cyan(`abf auth ${provider}`)}                          Configure your LLM`);
+			}
 			console.log(`  ${chalk.cyan('abf status')}                                  Verify 4 agents loaded`);
 			console.log();
 			console.log(chalk.dim('  Quick runs:'));
@@ -442,8 +527,8 @@ async function initFromTemplate(options: InitOptions): Promise<void> {
 				display_name: 'General Assistant',
 				role: 'Assistant',
 				description: 'A general-purpose AI assistant.',
-				provider: 'anthropic',
-				model: 'claude-sonnet-4-5',
+				provider,
+				model,
 				temperature: 0.3,
 				tools: [],
 				triggers: [{ type: 'manual', task: 'assist' }],

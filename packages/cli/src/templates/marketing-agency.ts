@@ -23,7 +23,7 @@ export interface MarketingAgencyFiles {
 	dockerCompose: string; // docker-compose.yml
 }
 
-export function marketingAgencyTemplate(projectName: string): MarketingAgencyFiles {
+export function marketingAgencyTemplate(projectName: string, provider = 'anthropic', model = 'claude-sonnet-4-5'): MarketingAgencyFiles {
 	// ── abf.config.yaml ────────────────────────────────────────────────────────
 	const config = stringify({
 		name: projectName,
@@ -53,8 +53,8 @@ export function marketingAgencyTemplate(projectName: string): MarketingAgencyFil
 		role: 'Orchestrator',
 		description:
 			'Coordinates the agency team. Manages client relationships (with approval). Routes work to Strategist, Copywriter, and Analyst.',
-		provider: 'anthropic',
-		model: 'claude-sonnet-4-5',
+		provider,
+		model,
 		temperature: 0.4,
 		team: 'agency',
 		reports_to: null,
@@ -117,8 +117,8 @@ Professional, organized, client-focused. Like a trusted account director at a to
 		role: 'Planner',
 		description:
 			'Campaign strategy, media planning, and channel selection. Produces campaign briefs from Analyst data.',
-		provider: 'anthropic',
-		model: 'claude-sonnet-4-5',
+		provider,
+		model,
 		temperature: 0.5,
 		team: 'agency',
 		reports_to: 'director',
@@ -179,8 +179,8 @@ Strategic, structured, data-informed. Think senior media planner, not junior coo
 		role: 'Writer',
 		description:
 			'Ad copy, social posts, email campaigns, and landing page content. High temperature for creative variety.',
-		provider: 'anthropic',
-		model: 'claude-sonnet-4-5',
+		provider,
+		model,
 		temperature: 0.8,
 		team: 'agency',
 		reports_to: 'director',
@@ -245,8 +245,8 @@ Adaptable. Match the client's brand voice. When in doubt: clear, confident, huma
 		role: 'Analyst',
 		description:
 			'Campaign analytics, performance reporting, A/B test analysis, and competitive analysis. Numbers-driven.',
-		provider: 'anthropic',
-		model: 'claude-sonnet-4-5',
+		provider,
+		model,
 		temperature: 0.2,
 		team: 'agency',
 		reports_to: 'director',

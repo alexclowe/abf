@@ -16,7 +16,10 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "clean": "turbo clean",
-    "abf": "node packages/cli/dist/index.js"
+    "abf": "node packages/cli/dist/index.js",
+    "quickstart": "pnpm install && pnpm build && pnpm start",
+    "start": "node packages/cli/dist/index.js dev",
+    "start:ollama": "node packages/cli/dist/index.js dev --provider ollama"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

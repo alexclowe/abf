@@ -16,6 +16,7 @@ program
 	.option('-t, --template <template>', 'Business template to use', 'custom')
 	.option('-n, --name <name>', 'Project name')
 	.option('--seed <path>', 'Path to a seed document (.docx, .pdf, .txt, .md) to generate agents from')
+	.option('--provider <provider>', 'LLM provider (anthropic, openai, ollama)')
 	.action(async (options) => {
 		const { initCommand } = await import('./commands/init.js');
 		await initCommand(options);
@@ -25,6 +26,7 @@ program
 	.command('dev')
 	.description('Start ABF in development mode')
 	.option('-p, --port <port>', 'Gateway port', '3000')
+	.option('--provider <provider>', 'LLM provider (anthropic, openai, ollama)')
 	.action(async (options) => {
 		const { devCommand } = await import('./commands/dev.js');
 		await devCommand(options);

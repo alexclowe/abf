@@ -7,14 +7,23 @@
  */
 
 import { existsSync } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import chalk from 'chalk';
 import ora from 'ora';
+import { stringify } from 'yaml';
 
 interface DevOptions {
 	port: string;
+	provider?: string;
 }
+
+const PROVIDER_MODEL_MAP: Record<string, string> = {
+	anthropic: 'claude-sonnet-4-5',
+	openai: 'gpt-4o',
+	ollama: 'llama3.2',
+};
 
 const DASHBOARD_PORT = 3001;
 
@@ -113,7 +122,95 @@ export async function devCommand(options: DevOptions): Promise<void> {
 			if (configResult.error.code === 'CONFIG_NOT_FOUND') {
 				bootstrapMode = true;
 				config = getDefaultConfig();
-				spinner.text = 'No config found — running in setup mode...';
+
+				// If --provider is set, auto-scaffold a config + starter agent
+				if (options.provider) {
+					const provider = options.provider;
+					let model = PROVIDER_MODEL_MAP[provider] ?? 'claude-sonnet-4-5';
+
+					// For Ollama: detect availability and auto-select best model
+					if (provider === 'ollama') {
+						const { ensureOllama } = await import('../utils/ollama.js');
+						spinner.text = 'Checking Ollama...';
+						const result = await ensureOllama({
+							onProgress: (msg) => { spinner.text = msg; },
+							autoInstall: false,
+						});
+
+						if (!result.ok) {
+							if (result.message === 'not_installed') {
+								spinner.fail(chalk.red('Ollama is not installed'));
+								console.log();
+								console.log(`  Install Ollama: ${chalk.cyan('curl -fsSL https://ollama.com/install.sh | sh')}`);
+								console.log(`  Or visit: ${chalk.cyan('https://ollama.com/download')}`);
+								console.log();
+								console.log(chalk.dim('  Then run this command again.'));
+								process.exit(1);
+							}
+							spinner.fail(chalk.red(result.message ?? 'Ollama setup failed'));
+							process.exit(1);
+						}
+
+						model = result.model;
+						if (result.pulled) {
+							spinner.succeed(chalk.green(`Downloaded ${model}`));
+							// new spinner for scaffolding
+							spinner.start();
+						}
+					}
+
+					spinner.text = `Scaffolding ${provider} agent...`;
+
+					const configObj = {
+						name: 'abf',
+						version: '0.1.0',
+						description: 'ABF project — auto-scaffolded',
+						storage: { backend: 'filesystem' },
+						bus: { backend: 'in-process' },
+						security: {
+							injection_detection: true,
+							bounds_enforcement: true,
+							audit_logging: true,
+						},
+						gateway: { enabled: true, port: 3000 },
+						logging: { level: 'info', format: 'pretty' },
+					};
+					await writeFile(join(process.cwd(), 'abf.config.yaml'), stringify(configObj), 'utf-8');
+
+					await mkdir(join(process.cwd(), 'agents'), { recursive: true });
+					const agentObj = {
+						name: 'assistant',
+						display_name: 'General Assistant',
+						role: 'Assistant',
+						description: 'A general-purpose AI assistant.',
+						provider,
+						model,
+						temperature: 0.3,
+						tools: [],
+						triggers: [{ type: 'manual', task: 'assist' }],
+						behavioral_bounds: {
+							allowed_actions: ['read_data', 'write_draft'],
+							forbidden_actions: ['delete_data'],
+							max_cost_per_session: '$2.00',
+							requires_approval: [],
+						},
+						charter: '# Assistant\n\nYou are a helpful general-purpose assistant.',
+					};
+					await writeFile(
+						join(process.cwd(), 'agents', 'assistant.agent.yaml'),
+						stringify(agentObj),
+						'utf-8',
+					);
+
+					// Re-load config now that we've written it
+					const reloadResult = await loadConfig(process.cwd());
+					if (reloadResult.ok) {
+						config = reloadResult.value;
+						bootstrapMode = false;
+					}
+				} else {
+					spinner.text = 'No config found — running in setup mode...';
+				}
 			} else {
 				spinner.fail(chalk.red(configResult.error.message));
 				process.exit(1);
