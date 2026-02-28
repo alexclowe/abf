@@ -268,7 +268,6 @@ export async function ensureOllama(options?: {
 	autoInstall?: boolean;
 }): Promise<EnsureOllamaResult> {
 	const { onProgress, autoInstall = false } = options ?? {};
-	let didInstall = false;
 	let didPull = false;
 
 	// 1. Check if Ollama API is running
@@ -333,7 +332,6 @@ export async function ensureOllama(options?: {
 	}
 
 	// 4. Auto-install
-	didInstall = true;
 	const installed = await installOllama(onProgress);
 	if (!installed) {
 		return {

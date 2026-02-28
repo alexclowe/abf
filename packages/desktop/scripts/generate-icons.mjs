@@ -202,7 +202,7 @@ writeFileSync(join(ICONS_DIR, 'icon.ico'), createICO(icoSizes));
 writeFileSync(join(ICONS_DIR, 'icon.icns'), createICNS(pngs));
 
 console.log('Generated placeholder icons in', ICONS_DIR);
-sizes.forEach(s => {
+for (const s of sizes) {
   const png = pngs.find(p => p.size === s);
   console.log(`  ${s}×${s}: ${png.data.length} bytes`);
-});
+}
