@@ -209,6 +209,25 @@ export async function createRuntime(
 		providerRegistry.register(new CloudProxyProvider(config.cloud, vault));
 	}
 
+	// Register OpenAI-compatible provider presets (Moonshot, DeepSeek, Groq, Together, OpenRouter)
+	const { OpenAICompatProvider } = await import('../providers/adapters/openai-compat.js');
+	const { PROVIDER_PRESETS } = await import('../providers/presets.js');
+	for (const preset of Object.values(PROVIDER_PRESETS)) {
+		providerRegistry.register(new OpenAICompatProvider(preset, vault));
+	}
+
+	// Register custom providers from config (override presets if same slug)
+	if (config.providers && config.providers.length > 0) {
+		for (const cp of config.providers) {
+			providerRegistry.register(
+				new OpenAICompatProvider(
+					{ ...cp, slug: cp.id, authType: 'api_key' },
+					vault,
+				),
+			);
+		}
+	}
+
 	// Outputs manager for cross-agent memory
 	const outputsManager = new OutputsManager(join(projectRoot, config.outputsDir));
 

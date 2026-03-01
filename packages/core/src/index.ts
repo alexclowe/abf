@@ -109,7 +109,12 @@ export {
 	AnthropicProvider,
 	OpenAIProvider,
 	OllamaProvider,
+	OpenAICompatProvider,
+	PROVIDER_PRESETS,
+	getPreset,
+	getPresetSlugs,
 } from './providers/index.js';
+export type { OpenAICompatConfig } from './providers/index.js';
 
 // ─── Credentials ──────────────────────────────────────────────────────
 export type { ICredentialVault } from './credentials/index.js';

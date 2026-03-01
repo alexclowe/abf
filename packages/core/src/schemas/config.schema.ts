@@ -68,6 +68,14 @@ const cloudSchema = z
 	})
 	.optional();
 
+const customProviderSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	base_url: z.string(),
+	env_var: z.string().optional(),
+	default_model: z.string().optional(),
+});
+
 export const configYamlSchema = z.object({
 	name: z.string(),
 	version: z.string().default('0.1.0'),
@@ -87,6 +95,7 @@ export const configYamlSchema = z.object({
 	knowledge_dir: z.string().default('knowledge'),
 	outputs_dir: z.string().default('outputs'),
 	cloud: cloudSchema,
+	providers: z.array(customProviderSchema).optional(),
 });
 
 export type ConfigYamlInput = z.input<typeof configYamlSchema>;
@@ -150,6 +159,15 @@ export function transformConfigYaml(parsed: z.output<typeof configYamlSchema>): 
 				token: parsed.cloud.token,
 				...(parsed.cloud.endpoint != null && { endpoint: parsed.cloud.endpoint }),
 			},
+		}),
+		...(parsed.providers != null && {
+			providers: parsed.providers.map((p) => ({
+				id: p.id,
+				name: p.name,
+				baseUrl: p.base_url,
+				...(p.env_var != null && { envVar: p.env_var }),
+				...(p.default_model != null && { defaultModel: p.default_model }),
+			})),
 		}),
 	};
 }
