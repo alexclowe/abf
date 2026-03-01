@@ -23,9 +23,10 @@ export class InProcessBus implements IBus {
 			// Direct message
 			this.emitter.emit(`agent:${message.to}`, message);
 
-			// Store as pending for the recipient
+			// Store as pending for the recipient (cap at 1000 per agent)
 			const pending = this.pending.get(message.to) ?? [];
 			pending.push(message);
+			if (pending.length > 1000) pending.splice(0, pending.length - 1000);
 			this.pending.set(message.to, pending);
 
 			// Store in history for receiver

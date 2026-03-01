@@ -116,16 +116,9 @@ function upsertConversationMeta(convId: string, agentId: string, userText: strin
 		existing.lastAccessed = Date.now();
 		existing.messageCount = msgCount;
 	} else {
-		// Evict oldest if at capacity
+		// Evict oldest if at capacity — Map preserves insertion order, so first key is oldest
 		if (conversationMeta.size >= MAX_CONVERSATION_META) {
-			let oldestKey: string | undefined;
-			let oldestTime = Number.POSITIVE_INFINITY;
-			for (const [key, val] of conversationMeta) {
-				if (val.lastAccessed < oldestTime) {
-					oldestTime = val.lastAccessed;
-					oldestKey = key;
-				}
-			}
+			const oldestKey = conversationMeta.keys().next().value;
 			if (oldestKey) conversationMeta.delete(oldestKey);
 		}
 		conversationMeta.set(convId, {
@@ -367,16 +360,9 @@ export function registerChatRoutes(app: Hono, deps: ChatRoutesDeps): void {
 		const feedback = typeof body['feedback'] === 'string' ? body['feedback'] : '';
 		if (!messageId) return c.json({ error: 'messageId required' }, 400);
 
-		// Evict oldest if at capacity
+		// Evict oldest if at capacity — Map preserves insertion order, so first key is oldest
 		if (feedbackStore.size >= MAX_FEEDBACK) {
-			let oldestKey: string | undefined;
-			let oldestTime = Number.POSITIVE_INFINITY;
-			for (const [key, val] of feedbackStore) {
-				if (val.timestamp < oldestTime) {
-					oldestTime = val.timestamp;
-					oldestKey = key;
-				}
-			}
+			const oldestKey = feedbackStore.keys().next().value;
 			if (oldestKey) feedbackStore.delete(oldestKey);
 		}
 

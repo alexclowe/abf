@@ -21,6 +21,13 @@ const INJECTION_PATTERNS: readonly RegExp[] = [
 	/\brole\s*:\s*(system|admin|root)\b/i,
 	/\bact\s+as\b/i,
 	/\bpretend\s+(to\s+be|you\s+are)\b/i,
+	// Encoded/obfuscated injection patterns
+	/&#x?[0-9a-f]+;/i,  // HTML entities (&#60; &#x3C;)
+	/%[0-9a-f]{2}/i,     // URL-encoded (%3C for <)
+	/\\u[0-9a-f]{4}/i,   // Unicode escapes (\u003C)
+	/\bforget\b.*\b(everything|instructions?|rules?)\b/i,
+	/\bnew\s+instructions?\b/i,
+	/\bdisregard\b.*\b(above|previous|prior)\b/i,
 ];
 
 // ─── Content Isolation ────────────────────────────────────────────────

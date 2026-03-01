@@ -87,7 +87,8 @@ export function registerOAuthRoutes(app: Hono, deps: OAuthRoutesDeps): void {
 
 		if (provider === 'openrouter') {
 			// OpenRouter uses a simple auth page, not standard OAuth
-			const authUrl = `${config.authorizationUrl}?callback_url=${encodeURIComponent(callbackUrl)}`;
+			// Include state parameter for CSRF protection
+			const authUrl = `${config.authorizationUrl}?callback_url=${encodeURIComponent(callbackUrl)}&state=${state}`;
 			return c.redirect(authUrl);
 		}
 
@@ -125,14 +126,23 @@ export function registerOAuthRoutes(app: Hono, deps: OAuthRoutesDeps): void {
 		}
 
 		if (provider === 'openrouter') {
+			// Validate CSRF state parameter
+			const orState = c.req.query('state');
+			if (!orState) {
+				return c.html(errorPage('Missing state parameter — possible CSRF attack'));
+			}
+			const orPendingState = pendingStates.get(orState);
+			if (!orPendingState || orPendingState.provider !== provider) {
+				return c.html(errorPage('Invalid state parameter — possible CSRF attack'));
+			}
+			pendingStates.delete(orState);
+
 			// OpenRouter returns the API key directly in the URL
 			const code = c.req.query('code');
 			if (!code) {
 				return c.html(errorPage('No API key received from OpenRouter'));
 			}
 
-			// Note: OpenRouter does not use standard OAuth state parameter,
-			// but we still validate the code format for safety
 			// Store the key in vault
 			await deps.vault.set('openrouter', 'api_key', code);
 			console.log(`[oauth] openrouter credential stored at=${new Date().toISOString()}`);

@@ -39,16 +39,20 @@ export class OutputsManager {
 			const files = await readdir(agentDir);
 			const sorted = files.filter((f) => f.endsWith('.md')).sort().reverse().slice(0, limit);
 
-			const entries: OutputEntry[] = [];
-			for (const file of sorted) {
-				const content = await readFile(join(agentDir, file), 'utf-8');
-				entries.push({
-					agent: agentName,
-					timestamp: file.replace('.md', '').replace(/-/g, ':').replace(/:(\d{2})$/, '.$1'),
-					content,
-				});
-			}
-			return entries;
+			// Read all files in parallel
+			const results = await Promise.allSettled(
+				sorted.map(async (file) => {
+					const content = await readFile(join(agentDir, file), 'utf-8');
+					return {
+						agent: agentName,
+						timestamp: file.replace('.md', '').replace(/-/g, ':').replace(/:(\d{2})$/, '.$1'),
+						content,
+					} as OutputEntry;
+				}),
+			);
+			return results
+				.filter((r): r is PromiseFulfilledResult<OutputEntry> => r.status === 'fulfilled')
+				.map((r) => r.value);
 		} catch {
 			return [];
 		}
@@ -61,12 +65,17 @@ export class OutputsManager {
 	async readTeamRecent(excludeAgent: string, limit = 3): Promise<readonly OutputEntry[]> {
 		try {
 			const agents = await readdir(this.outputsDir);
-			const allEntries: OutputEntry[] = [];
+			const teammates = agents.filter((a) => a !== excludeAgent);
 
-			for (const agent of agents) {
-				if (agent === excludeAgent) continue;
-				const recent = await this.readRecent(agent, limit);
-				allEntries.push(...recent);
+			// Read all teammates in parallel
+			const results = await Promise.allSettled(
+				teammates.map((agent) => this.readRecent(agent, limit)),
+			);
+			const allEntries: OutputEntry[] = [];
+			for (const result of results) {
+				if (result.status === 'fulfilled') {
+					allEntries.push(...result.value);
+				}
 			}
 
 			// Sort by timestamp descending, take the most recent
