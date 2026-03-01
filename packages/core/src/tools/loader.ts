@@ -4,7 +4,8 @@
  * wrapped as a CustomTool with real execution. Otherwise falls back to NoOpTool.
  */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
+import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parse } from 'yaml';
@@ -147,7 +148,7 @@ export async function loadToolConfigs(
 ): Promise<Result<readonly ITool[], ABFError>> {
 	let files: string[];
 	try {
-		files = readdirSync(toolsDir).filter((f) => f.endsWith('.tool.yaml'));
+		files = (await readdir(toolsDir)).filter((f) => f.endsWith('.tool.yaml'));
 	} catch {
 		// Directory doesn't exist — that's fine
 		return Ok([]);
@@ -159,7 +160,7 @@ export async function loadToolConfigs(
 		const filePath = join(toolsDir, filename);
 		let raw: unknown;
 		try {
-			raw = parse(readFileSync(filePath, 'utf8'));
+			raw = parse(await readFile(filePath, 'utf8'));
 		} catch (e) {
 			return { ok: false, error: new ABFErrorClass('RUNTIME_ERROR', `Failed to parse ${filename}: ${String(e)}`) };
 		}

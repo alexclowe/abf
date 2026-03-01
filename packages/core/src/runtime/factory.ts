@@ -88,8 +88,26 @@ export async function createRuntime(
 	const toolRegistry = new ToolRegistry();
 	const toolSandbox = new BasicToolSandbox();
 
+	// Parallel dynamic imports — group independent modules to reduce startup time
+	const [
+		{ loadMessagingRouter },
+		{ MessageTemplateRegistry },
+		{ InMemoryTaskPlanStore },
+		{ OutputsManager },
+		{ InMemoryInbox },
+		{ MemoryCompactor },
+		{ SessionEventBus },
+	] = await Promise.all([
+		import('../messaging/loader.js'),
+		import('../messaging/templates.js'),
+		import('../planning/store.js'),
+		import('../memory/outputs.js'),
+		import('../inbox/store.js'),
+		import('../memory/compactor.js'),
+		import('./session-events.js'),
+	]);
+
 	// Load messaging plugins from interfaces/ dir (needed by tool context)
-	const { loadMessagingRouter } = await import('../messaging/loader.js');
 	const messagingRouter = await loadMessagingRouter(join(projectRoot, 'interfaces'));
 
 	// Approval store (in-memory, shared across tools and gateway)
@@ -124,12 +142,10 @@ export async function createRuntime(
 	}
 
 	// Load message templates (if templates/messages/ exists)
-	const { MessageTemplateRegistry } = await import('../messaging/templates.js');
 	const messageTemplates = new MessageTemplateRegistry();
 	messageTemplates.load(join(projectRoot, 'templates', 'messages'));
 
 	// Task plan store (R6)
-	const { InMemoryTaskPlanStore } = await import('../planning/store.js');
 	const taskPlanStore = new InMemoryTaskPlanStore();
 
 	// Detect cloud deployment (ABF Cloud or known cloud platforms)
@@ -186,15 +202,12 @@ export async function createRuntime(
 	}
 
 	// Outputs manager for cross-agent memory
-	const { OutputsManager } = await import('../memory/outputs.js');
 	const outputsManager = new OutputsManager(join(projectRoot, config.outputsDir));
 
 	// Agent inbox
-	const { InMemoryInbox } = await import('../inbox/store.js');
 	const inbox = new InMemoryInbox();
 
 	// Memory compactor (R8)
-	const { MemoryCompactor } = await import('../memory/compactor.js');
 	const compactor = new MemoryCompactor(memoryStore, providerRegistry, {
 		windowSize: config.memoryWindowSize ?? 20,
 		threshold: config.memorySummarizationThreshold ?? 50,
@@ -202,7 +215,6 @@ export async function createRuntime(
 	});
 
 	// Session event bus (R12) — real-time observation of automated sessions
-	const { SessionEventBus } = await import('./session-events.js');
 	const sessionEventBus = new SessionEventBus();
 
 	// 9. Session manager — receives shared agentsMap
