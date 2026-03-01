@@ -188,6 +188,9 @@ export interface StatusResponse {
   agents: number;
   activeSessions: number;
   configured: boolean;
+  isCloud?: boolean;
+  providerConnected?: boolean;
+  connectedProvider?: string | null;
 }
 
 // ── Auth / Providers ──────────────────────────────────────────────────

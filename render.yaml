@@ -4,10 +4,14 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
+    disk:
+      name: abf-data
+      mountPath: /data
+      sizeGB: 1
     envVars:
       - key: PORT
         value: 3000
-      - key: ABF_VAULT_PASSWORD
-        generateValue: true
+      - key: ABF_PROJECT_ROOT
+        value: /data
       - key: ANTHROPIC_API_KEY
         sync: false
