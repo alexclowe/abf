@@ -12,7 +12,7 @@ This is a hard blocker for non-technical operators. It's also insecure: the curr
 
 ## Goals
 
-1. **Zero-terminal setup** — Operator clicks a button in the Dashboard (or desktop app), authenticates with their LLM provider, and is done
+1. **Zero-terminal setup** — Operator clicks a button in the Dashboard, authenticates with their LLM provider, and is done
 2. **Secure storage** — Keys encrypted with a real secret (OS keychain, master password, or hardware-backed)
 3. **Multiple auth paths** — OAuth where providers allow it, best-in-class guided key collection otherwise, local (Ollama) with no auth at all
 4. **Builder escape hatch** — Env vars and CLI still work for CI/CD, scripts, and power users
@@ -75,7 +75,7 @@ Both Anthropic and OpenAI have working OAuth PKCE flows, but **both restrict the
 
 ### How It Will Work (Architecture Ready, Awaiting Authorization)
 
-Both Anthropic and OpenAI use PKCE OAuth -- no client_secret needed, safe for local/desktop apps. The flow is identical for both:
+Both Anthropic and OpenAI use PKCE OAuth -- no client_secret needed, safe for local apps. The flow is identical for both:
 
 ```
 User clicks "Sign in with [Provider]" in Dashboard
@@ -341,8 +341,6 @@ Gateway probes localhost:11434/api/tags
            |  [Check again]                               |
            +---------------------------------------------+
 ```
-
-For the desktop installer: bundle Ollama or auto-detect and guide install.
 
 ---
 
@@ -632,51 +630,6 @@ GET /auth/oauth/callback/:provider
 
 ---
 
-## Desktop Installer Architecture
-
-For maximum operator-friendliness, ABF should ship a desktop app (Tauri preferred over Electron for size and native OS access).
-
-```
-+------------------------------------------------+
-|              ABF Desktop App (Tauri)            |
-|                                                 |
-|  +--------------+  +------------------------+  |
-|  | Tauri Shell  |  | Bundled ABF Runtime     |  |
-|  |  (Rust)      |  |                         |  |
-|  |              |  | - Node.js (embedded)    |  |
-|  | - System     |  | - @abf/core             |  |
-|  |   tray icon  |  | - @abf/cli              |  |
-|  | - Native     |  | - Gateway (HTTP)        |  |
-|  |   keychain   |  | - Scheduler             |  |
-|  |   access     |  | - All built-in tools    |  |
-|  | - OS-level   |  |                         |  |
-|  |   file perms |  | Dashboard served at     |  |
-|  | - Auto-      |  | localhost:3000          |  |
-|  |   update     |  |                         |  |
-|  +--------------+  +------------------------+  |
-|                                                 |
-|  Optional bundled:                              |
-|  - Ollama binary (one-click local AI)           |
-|  - Playwright browsers (for browse tool)        |
-+------------------------------------------------+
-
-Install flow:
-  1. Download ABF.dmg / ABF.exe / ABF.AppImage (~15MB)
-  2. Launch -> Setup Wizard in native window
-  3. Connect provider (key paste now, OAuth when available)
-  4. Pick template -> project created in ~/ABF/my-business/
-  5. System tray icon -> "Open Dashboard" opens browser
-```
-
-**Why Tauri over Electron:**
-- ~15MB bundle vs ~200MB (no bundled Chromium -- uses OS WebView)
-- Native keychain access via Rust (no node-gyp / native addon compilation)
-- Lower memory footprint (operators run this alongside actual work)
-- Auto-updater built in
-- Rust security: memory-safe keychain handling
-
----
-
 ## Implementation Phases
 
 ### Phase A: Vault v2 + Guided Key Collection (do first -- biggest impact)
@@ -710,17 +663,6 @@ No external dependencies (node:crypto + fetch only).
 
 Blocker: Client IDs from Anthropic and OpenAI. This phase can be built and tested with mock OAuth servers.
 
-### Phase C: Desktop App
-
-**What ships:** Downloadable installer for macOS, Windows, Linux. Zero-terminal experience.
-
-New package:
-- `packages/desktop/` -- Tauri app
-- `packages/desktop/src-tauri/` -- Rust shell (keychain, tray, auto-update)
-- `packages/desktop/src/` -- WebView UI (setup wizard, or reuse Dashboard)
-
-Dependencies: Tauri CLI, Rust toolchain (build-time only -- not shipped to users)
-
 ---
 
 ## Security Considerations
@@ -735,7 +677,7 @@ Dependencies: Tauri CLI, Rust toolchain (build-time only -- not shipped to users
 - Audit trail logs `credential_stored(provider, timestamp)` -- never the key value
 
 ### OAuth (Path 1 -- future)
-- PKCE with S256 -- no client_secret embedded in app (safe for desktop distribution)
+- PKCE with S256 -- no client_secret embedded in app (safe for local distribution)
 - CSRF state token: random, validated on callback, TTL 5 minutes
 - Auth code exchanged server-side (gateway) -- never exposed to browser JS
 - Callback URL is always localhost -- no external redirect server
