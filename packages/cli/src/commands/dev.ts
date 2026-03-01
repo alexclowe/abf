@@ -373,11 +373,14 @@ export async function devCommand(options: DevOptions): Promise<void> {
 		console.log();
 		console.log(chalk.dim('  Press Ctrl+C to stop'));
 
-		// Graceful shutdown
+		// Graceful shutdown with hard timeout
 		const shutdown = async (signal: string) => {
 			console.log();
 			console.log(chalk.dim(`  Received ${signal}, shutting down...`));
 			if (dashboardProcess) killDashboard(dashboardProcess);
+			// Force exit after 3s if runtime.stop() hangs (e.g. open connections)
+			const forceExit = setTimeout(() => process.exit(0), 3000);
+			forceExit.unref();
 			await runtime.stop();
 			process.exit(0);
 		};

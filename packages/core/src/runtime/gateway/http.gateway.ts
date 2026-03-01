@@ -866,6 +866,14 @@ export class HttpGateway implements IGateway {
 				return;
 			}
 			this.server.close(() => resolve());
+			// Close idle keep-alive connections immediately, then force-close
+			// any remaining (e.g. SSE streams) after a short grace period.
+			// Cast needed: Hono's ServerType doesn't expose these Node 18.2+ methods.
+			const srv = this.server as import('node:http').Server;
+			srv.closeIdleConnections();
+			setTimeout(() => {
+				srv.closeAllConnections();
+			}, 500).unref();
 		});
 	}
 }
