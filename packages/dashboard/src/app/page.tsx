@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
 import { useEventStream } from '@/lib/use-event-stream';
@@ -66,6 +66,12 @@ export default function OverviewPage() {
   const buildPlanSummary = useMemo(() => buildPlanFile ? parseBuildPlanSummary(buildPlanFile.content) : null, [buildPlanFile]);
   const isSeed = !!seedFile;
 
+  // Track build plan review state from localStorage
+  const [buildPlanReviewed, setBuildPlanReviewed] = useState(false);
+  useEffect(() => {
+    setBuildPlanReviewed(localStorage.getItem('abf_build_plan_reviewed') === 'true');
+  }, []);
+
   const onboardingData = useMemo<OnboardingData>(() => {
     const hasProvider = authStatus
       ? Object.values(authStatus).some((s) => s.connected)
@@ -77,9 +83,10 @@ export default function OverviewPage() {
       hasProvider, agentCount, hasRun, hasChannel: false, knowledgeCount,
       isSeed,
       hasBuildPlan: !!buildPlanFile,
+      buildPlanReviewed,
       companyName: seedMeta?.name,
     };
-  }, [authStatus, agents, knowledgeFiles, isSeed, buildPlanFile, seedMeta]);
+  }, [authStatus, agents, knowledgeFiles, isSeed, buildPlanFile, buildPlanReviewed, seedMeta]);
 
   // Group agents by team
   const agentsByTeam = useMemo(() => {
@@ -150,7 +157,7 @@ export default function OverviewPage() {
       {/* Build Plan card */}
       {isSeed && buildPlanSummary && (
         <Link
-          href="/knowledge"
+          href="/knowledge?file=build-plan.md"
           className="block bg-slate-900 border border-slate-800 rounded-lg p-4 hover:border-slate-700 transition-colors"
         >
           <div className="flex items-start gap-3">

@@ -20,6 +20,7 @@ export interface OnboardingData {
   knowledgeCount: number;
   isSeed?: boolean;
   hasBuildPlan?: boolean;
+  buildPlanReviewed?: boolean;
   companyName?: string;
 }
 
@@ -73,8 +74,8 @@ const SEED_CHECKLIST: ChecklistItem[] = [
     id: 'build-plan',
     label: 'Review the build plan',
     description: 'See the phased roadmap for standing up your company.',
-    href: '/knowledge',
-    check: () => false, // always shows as actionable
+    href: '/knowledge?file=build-plan.md',
+    check: (d) => d.buildPlanReviewed === true,
   },
   {
     id: 'first-run',

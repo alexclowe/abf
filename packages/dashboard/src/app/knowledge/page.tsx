@@ -1,17 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
 import { Plus, Save, Trash2, FileText, Eye, Edit3 } from 'lucide-react';
 import { MarkdownContent } from '@/components/MarkdownContent';
 
 export default function KnowledgePage() {
+  return (
+    <Suspense>
+      <KnowledgePageInner />
+    </Suspense>
+  );
+}
+
+function KnowledgePageInner() {
+  const searchParams = useSearchParams();
   const { data: files, error, mutate } = useSWR('knowledge', () => api.knowledge.list(), {
     refreshInterval: 10000,
   });
 
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [initialFileApplied, setInitialFileApplied] = useState(false);
   const [editorContent, setEditorContent] = useState('');
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -21,6 +32,25 @@ export default function KnowledgePage() {
   const [newFileName, setNewFileName] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState(false);
+
+  // Auto-select file from ?file= query param (opens in preview mode)
+  useEffect(() => {
+    if (initialFileApplied || !files) return;
+    const fileParam = searchParams.get('file');
+    if (fileParam) {
+      const match = files.find((f) => f.filename === fileParam);
+      if (match) {
+        setSelectedFile(match.filename);
+        setEditorContent(match.content);
+        setPreviewMode(true);
+        setInitialFileApplied(true);
+        // Track build plan review for onboarding checklist
+        if (fileParam === 'build-plan.md') {
+          localStorage.setItem('abf_build_plan_reviewed', 'true');
+        }
+      }
+    }
+  }, [files, searchParams, initialFileApplied]);
 
   function selectFile(filename: string) {
     const file = files?.find((f) => f.filename === filename);
