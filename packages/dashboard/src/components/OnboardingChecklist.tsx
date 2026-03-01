@@ -21,6 +21,7 @@ export interface OnboardingData {
   isSeed?: boolean;
   hasBuildPlan?: boolean;
   buildPlanReviewed?: boolean;
+  firstTaskSent?: boolean;
   companyName?: string;
 }
 
@@ -84,18 +85,11 @@ const SEED_CHECKLIST: ChecklistItem[] = [
     check: (d) => d.buildPlanReviewed === true,
   },
   {
-    id: 'first-run',
-    label: 'Run your first agent',
-    description: 'Trigger an agent session to see it work.',
+    id: 'first-task',
+    label: 'Start your first task',
+    description: 'Give an agent a task to kick off Phase 1 of your build plan.',
     href: '/',
-    check: (d) => d.hasRun,
-  },
-  {
-    id: 'approvals',
-    label: 'Watch for approval requests',
-    description: 'Some agent actions require your approval before executing.',
-    href: '/approvals',
-    check: () => false, // informational — always incomplete
+    check: (d) => d.firstTaskSent === true,
   },
 ];
 

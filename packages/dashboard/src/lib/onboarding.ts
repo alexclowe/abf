@@ -7,6 +7,7 @@
  *   onboarding:
  *     dismissed: true
  *     build_plan_reviewed: true
+ *     first_task_sent: true
  */
 
 import { api } from './api';
@@ -14,6 +15,7 @@ import { api } from './api';
 export interface OnboardingState {
   dismissed?: boolean;
   build_plan_reviewed?: boolean;
+  first_task_sent?: boolean;
 }
 
 /** Read onboarding state from config (returns {} if missing). */

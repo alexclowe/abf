@@ -88,6 +88,7 @@ export default function OverviewPage() {
       isSeed,
       hasBuildPlan: !!buildPlanFile,
       buildPlanReviewed: onboardingState.build_plan_reviewed,
+      firstTaskSent: onboardingState.first_task_sent,
       companyName: seedMeta?.name,
     };
   }, [authStatus, agents, knowledgeFiles, isSeed, buildPlanFile, onboardingState, seedMeta]);
@@ -131,6 +132,10 @@ export default function OverviewPage() {
         void api.agents.run(agentId, task.trim());
         setActiveInput(null);
         setTaskInputs((prev) => ({ ...prev, [agentId]: '' }));
+        // Mark first task sent for onboarding (only writes once)
+        if (!onboardingState.first_task_sent) {
+          void updateOnboardingState({ first_task_sent: true }).then(() => mutateConfig());
+        }
       }
     } else {
       setActiveInput(agentId);
