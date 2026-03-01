@@ -104,6 +104,18 @@ export class OpenAIProvider implements IProvider {
 			// Accumulate tool call arguments per index
 			const toolCallBuffers = new Map<number, { id: string; name: string; arguments: string }>();
 
+			// Build response_format for structured output (JSON Schema mode)
+			const responseFormat = request.responseFormat
+				? {
+						type: 'json_schema' as const,
+						json_schema: {
+							name: request.responseFormat.name,
+							schema: request.responseFormat.schema,
+							strict: request.responseFormat.strict ?? true,
+						},
+					}
+				: undefined;
+
 			const streamParams = {
 				model: request.model,
 				messages: openAiMessages,
@@ -111,6 +123,7 @@ export class OpenAIProvider implements IProvider {
 				...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
 				...(request.maxTokens !== undefined ? { max_completion_tokens: request.maxTokens } : {}),
 				...(tools ? { tools } : {}),
+				...(responseFormat ? { response_format: responseFormat } : {}),
 			};
 
 			const stream = client.chat.completions.stream(streamParams, {
@@ -196,6 +209,7 @@ export class OpenAIProvider implements IProvider {
 				maxOutputTokens: 16_384,
 				supportsTools: true,
 				supportsStreaming: true,
+				supportsStructuredOutput: true,
 				costPerInputToken: 0.000003,
 				costPerOutputToken: 0.000012,
 			},
@@ -206,6 +220,7 @@ export class OpenAIProvider implements IProvider {
 				maxOutputTokens: 16_384,
 				supportsTools: true,
 				supportsStreaming: true,
+				supportsStructuredOutput: true,
 				costPerInputToken: 0.0000025,
 				costPerOutputToken: 0.00001,
 			},
@@ -216,6 +231,7 @@ export class OpenAIProvider implements IProvider {
 				maxOutputTokens: 16_384,
 				supportsTools: true,
 				supportsStreaming: true,
+				supportsStructuredOutput: true,
 				costPerInputToken: 0.00000015,
 				costPerOutputToken: 0.0000006,
 			},

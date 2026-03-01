@@ -90,6 +90,7 @@ export type {
 	ToolCallRequest,
 	ChatRequest,
 	ChatToolDefinition,
+	ResponseFormat,
 	ChatChunkType,
 	ChatChunk,
 	TokenUsage,

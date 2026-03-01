@@ -163,10 +163,15 @@ export function registerSeedRoutes(app: Hono, deps: SeedRouteDeps): void {
 				);
 			}
 
+			const { agents: loadedAgents, warnings } = loadResult.value;
+			if (warnings.length > 0) {
+				console.warn(`[seed] ${warnings.length} agent(s) skipped due to validation errors`);
+			}
+
 			const agentsMap = deps.agentsMap as Map<string, AgentConfig>;
 			const newAgents: { id: string; name: string; displayName: string; role: string }[] = [];
 
-			for (const agent of loadResult.value) {
+			for (const agent of loadedAgents) {
 				if (!agentsMap.has(agent.id)) {
 					agentsMap.set(agent.id, agent);
 					deps.scheduler.registerAgent(agent);

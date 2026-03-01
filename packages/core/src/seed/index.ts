@@ -16,3 +16,4 @@ export * from './apply.js';
 export * from './prompts.js';
 export * from './analyzer.js';
 export { InterviewEngine } from './interview.js';
+export { COMPANY_PLAN_JSON_SCHEMA } from './schema.js';

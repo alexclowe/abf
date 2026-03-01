@@ -6,7 +6,7 @@
  * a single URL to access everything.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, cpSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -153,6 +153,23 @@ function spawnDashboard(dashboardDir: string): ChildProcess {
 	};
 
 	if (isStandalone) {
+		// Next.js standalone output excludes .next/static/ and public/ — they must
+		// be copied into the standalone directory for the server to serve them.
+		// The server.js location determines where Next.js looks for these assets:
+		// it resolves .next/static relative to the server.js parent directory.
+		const serverDir = dirname(standalonePath!);
+		const staticSrc = join(dashboardDir, '.next', 'static');
+		const staticDest = join(serverDir, '.next', 'static');
+		if (existsSync(staticSrc) && !existsSync(staticDest)) {
+			cpSync(staticSrc, staticDest, { recursive: true });
+		}
+
+		const publicSrc = join(dashboardDir, 'public');
+		const publicDest = join(serverDir, 'public');
+		if (existsSync(publicSrc) && !existsSync(publicDest)) {
+			cpSync(publicSrc, publicDest, { recursive: true });
+		}
+
 		// Production mode: standalone server built by `next build` with output: 'standalone'
 		// cwd must be the standalone root so Next.js resolves static assets correctly
 		// detached: own process group so we can kill the entire tree on shutdown

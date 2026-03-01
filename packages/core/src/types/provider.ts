@@ -38,6 +38,21 @@ export interface ToolCallRequest {
 	readonly arguments: string; // JSON string
 }
 
+/** Structured output format — forces the LLM to produce valid JSON matching a schema. */
+export interface ResponseFormat {
+	/** Currently only 'json_schema' is supported. */
+	readonly type: 'json_schema';
+	/** Schema name (required by OpenAI structured outputs). */
+	readonly name: string;
+	/** JSON Schema object defining the expected output shape. */
+	readonly schema: Readonly<Record<string, unknown>>;
+	/**
+	 * When true, the model strictly follows the schema (no extra keys).
+	 * Default: true. OpenAI supports this natively; other providers may ignore it.
+	 */
+	readonly strict?: boolean | undefined;
+}
+
 export interface ChatRequest {
 	readonly model: string;
 	readonly messages: readonly ChatMessage[];
@@ -47,6 +62,12 @@ export interface ChatRequest {
 	readonly stopSequences?: readonly string[] | undefined;
 	/** Abort signal for cooperative cancellation (e.g., session timeout or manual abort). */
 	readonly signal?: AbortSignal | undefined;
+	/**
+	 * Structured output format — when set, the provider will request JSON output
+	 * matching the given schema. Currently best supported by OpenAI models.
+	 * Providers that don't support it will ignore this field gracefully.
+	 */
+	readonly responseFormat?: ResponseFormat | undefined;
 }
 
 export interface ChatToolDefinition {
@@ -82,6 +103,7 @@ export interface ModelInfo {
 	readonly maxOutputTokens?: number | undefined;
 	readonly supportsTools: boolean;
 	readonly supportsStreaming: boolean;
+	readonly supportsStructuredOutput?: boolean | undefined;
 	readonly costPerInputToken?: number | undefined;
 	readonly costPerOutputToken?: number | undefined;
 }
