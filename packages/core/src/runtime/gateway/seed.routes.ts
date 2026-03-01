@@ -21,6 +21,22 @@ export interface SeedRouteDeps extends GatewayDeps {
 	readonly scheduler: IScheduler;
 }
 
+/** Pick a sensible default model when the caller only specifies a provider. */
+const PROVIDER_DEFAULT_MODEL: Record<string, string> = {
+	anthropic: 'claude-sonnet-4-5',
+	openai: 'gpt-4o',
+	ollama: 'llama3.2',
+};
+
+function resolveProviderModel(
+	provider: string | undefined,
+	model: string | undefined,
+): { provider: string; model: string } {
+	const p = provider ?? 'anthropic';
+	const m = model ?? PROVIDER_DEFAULT_MODEL[p] ?? 'claude-sonnet-4-5';
+	return { provider: p, model: m };
+}
+
 export function registerSeedRoutes(app: Hono, deps: SeedRouteDeps): void {
 	// Lazily-created interview engine (persists across requests)
 	let interviewEngine: import('../../seed/interview.js').InterviewEngine | null = null;
@@ -73,8 +89,7 @@ export function registerSeedRoutes(app: Hono, deps: SeedRouteDeps): void {
 				return c.json({ error: 'seedText is required' }, 400);
 			}
 
-			const provider = body.provider ?? 'anthropic';
-			const model = body.model ?? 'claude-sonnet-4-5';
+			const { provider, model } = resolveProviderModel(body.provider, body.model);
 
 			const { analyzeSeedDoc } = await import('../../seed/analyzer.js');
 			const plan = await analyzeSeedDoc(deps.providerRegistry, {
@@ -109,8 +124,7 @@ export function registerSeedRoutes(app: Hono, deps: SeedRouteDeps): void {
 				return c.json({ error: 'plan is required' }, 400);
 			}
 
-			const provider = body.provider ?? 'anthropic';
-			const model = body.model ?? 'claude-sonnet-4-5';
+			const { provider, model } = resolveProviderModel(body.provider, body.model);
 
 			const { applyCompanyPlan } = await import('../../seed/apply.js');
 			const filesWritten = await applyCompanyPlan(
@@ -192,8 +206,7 @@ export function registerSeedRoutes(app: Hono, deps: SeedRouteDeps): void {
 				return c.json({ error: 'companyType is required (must be "new" or "existing")' }, 400);
 			}
 
-			const provider = body.provider ?? 'anthropic';
-			const model = body.model ?? 'claude-sonnet-4-5';
+			const { provider, model } = resolveProviderModel(body.provider, body.model);
 
 			// Lazily create the interview engine
 			if (!interviewEngine) {
@@ -286,8 +299,7 @@ export function registerSeedRoutes(app: Hono, deps: SeedRouteDeps): void {
 				return c.json({ error: 'currentPlan is required' }, 400);
 			}
 
-			const provider = body.provider ?? 'anthropic';
-			const model = body.model ?? 'claude-sonnet-4-5';
+			const { provider, model } = resolveProviderModel(body.provider, body.model);
 
 			const { reanalyzeSeedDoc } = await import('../../seed/analyzer.js');
 			const updatedPlan = await reanalyzeSeedDoc(deps.providerRegistry, {

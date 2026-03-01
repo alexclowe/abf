@@ -1254,6 +1254,14 @@ export default function SetupPage() {
         </div>
       )}
 
+      {/* Analysis error shown on step 4 when not in analyzing state */}
+      {step === 4 && !analyzing && error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
       {/* Analyzing state (shown during seed analysis from any seed path) */}
       {step === 4 && analyzing && (
         <div className="space-y-6">
