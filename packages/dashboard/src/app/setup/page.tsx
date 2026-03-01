@@ -1234,20 +1234,24 @@ export default function SetupPage() {
         />
       )}
 
-      {step === 4 && companyType === 'has-document' && !analyzing && (
-        <SeedDocumentInput
-          isExistingCompany={false}
-          onAnalyze={handleAnalyze}
-          onBack={handleSeedBack}
-        />
+      {step === 4 && companyType === 'has-document' && (
+        <div className={analyzing ? 'hidden' : undefined}>
+          <SeedDocumentInput
+            isExistingCompany={false}
+            onAnalyze={handleAnalyze}
+            onBack={handleSeedBack}
+          />
+        </div>
       )}
 
-      {step === 4 && companyType === 'existing-company' && !analyzing && (
-        <SeedDocumentInput
-          isExistingCompany={true}
-          onAnalyze={handleAnalyze}
-          onBack={handleSeedBack}
-        />
+      {step === 4 && companyType === 'existing-company' && (
+        <div className={analyzing ? 'hidden' : undefined}>
+          <SeedDocumentInput
+            isExistingCompany={true}
+            onAnalyze={handleAnalyze}
+            onBack={handleSeedBack}
+          />
+        </div>
       )}
 
       {/* Analyzing state (shown during seed analysis from any seed path) */}
