@@ -162,6 +162,8 @@ export {
 	detectFormat,
 	applyCompanyPlan,
 	generateArchitectAgent,
+	generateBuilderAgent,
+	formatBuildPlanMarkdown,
 	ANALYZER_SYSTEM_PROMPT,
 	REANALYZE_SYSTEM_PROMPT,
 	INTERVIEW_SYSTEM_PROMPT,
@@ -185,6 +187,9 @@ export type {
 	KPIPlan,
 	BoundsPlan,
 	WorkflowStepPlan,
+	BuildPlan,
+	BuildPhase,
+	BuildStep,
 } from './seed/types.js';
 export type { AnalyzerOptions, ReanalyzeOptions } from './seed/analyzer.js';
 

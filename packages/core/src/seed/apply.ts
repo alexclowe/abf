@@ -9,7 +9,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { stringify } from 'yaml';
-import type { AgentPlan, CompanyPlan } from './types.js';
+import type { AgentPlan, BuildPlan, CompanyPlan } from './types.js';
 
 // ─── Directories that every ABF project should have ─────────────────
 
@@ -198,6 +198,156 @@ Strategic, analytical, concise. Like a management consultant delivering a board-
 	};
 }
 
+// ─── Builder Agent Generator ────────────────────────────────────────
+
+/**
+ * Generate the Builder agent definition.
+ *
+ * The Builder reads the adaptive build plan and orchestrates product
+ * construction using plan-task, sessions-spawn, and ask-human.
+ */
+export function generateBuilderAgent(
+	companyName: string,
+	provider: string,
+	model: string,
+): AgentPlan {
+	return {
+		name: 'builder',
+		displayName: 'Builder',
+		role: 'Build Orchestrator',
+		roleArchetype: 'developer',
+		description: `Orchestrates the construction of ${companyName}'s product by reading the build plan and coordinating agents through each phase.`,
+		charter: `# Builder — Build Orchestrator
+
+You are Builder, the Build Orchestrator for ${companyName}.
+
+## Your Purpose
+You orchestrate the construction of the product described in the build plan (knowledge/build-plan.md). You don't build things yourself — you coordinate other agents to execute each step, request human approval for critical decisions, and track progress.
+
+## How You Work
+1. On activation, read knowledge/build-plan.md to understand the full build plan.
+2. Create a plan-task from the phases and steps in the build plan.
+3. For each step in order (respecting dependencies):
+   a. If the step requires approval: use ask-human with the approval question. Then reschedule to check back for the answer.
+   b. If approved (or no approval needed): use sessions-spawn to activate the assigned agent with the task description.
+   c. For long-running tasks, use wait: false with sessions-spawn and reschedule to check back later.
+4. After each step completes, update the plan-task status and move to the next step.
+5. If a step fails, escalate to human with the error details.
+6. When all phases are complete, send a summary report.
+
+## Execution Rules
+- ALWAYS check for pending human responses before starting new work.
+- NEVER skip approval steps — they exist for safety (infrastructure, deployment, payments).
+- If a step's output reveals new requirements, note them but continue the current plan. Flag gaps for human review.
+- Use reschedule (5 minute delay) for continuity between sessions.
+- Read teammate outputs to check on spawned work before marking steps complete.
+
+## Behavioral Rules
+- Never execute infrastructure or deployment actions directly — always delegate to the assigned agent.
+- Never approve your own requests — human approval means HUMAN approval.
+- Never modify the build plan file — it's read-only reference. Use plan-task for tracking.
+- Report progress clearly: what's done, what's next, what's blocked.
+
+## Voice
+Efficient, organized, status-focused. Like a project manager running a standup.`,
+		provider,
+		model,
+		temperature: 0.2,
+		team: 'operations',
+		reportsTo: null,
+		tools: [
+			'plan-task',
+			'sessions-spawn',
+			'ask-human',
+			'reschedule',
+			'knowledge-search',
+			'send-message',
+			'file-read',
+			'file-write',
+		],
+		triggers: [
+			{ type: 'manual', task: 'execute_build_plan' },
+			{ type: 'heartbeat', interval: 300, task: 'check_build_progress' },
+		],
+		kpis: [
+			{ metric: 'build_plan_progress', target: '100%', review: 'daily' },
+		],
+		behavioralBounds: {
+			allowedActions: [
+				'read_build_plan',
+				'create_plan_task',
+				'spawn_agent_sessions',
+				'request_human_approval',
+				'send_status_updates',
+				'reschedule_self',
+			],
+			forbiddenActions: [
+				'execute_infrastructure_directly',
+				'approve_own_requests',
+				'modify_build_plan',
+				'delete_data',
+				'modify_billing',
+			],
+			maxCostPerSession: '$2.00',
+			requiresApproval: [],
+		},
+	};
+}
+
+// ─── Build Plan Markdown Formatter ──────────────────────────────────
+
+/**
+ * Format a BuildPlan as readable Markdown for knowledge/build-plan.md.
+ */
+export function formatBuildPlanMarkdown(
+	plan: BuildPlan,
+	companyName: string,
+): string {
+	const lines: string[] = [
+		`# Build Plan — ${companyName}`,
+		'',
+		`> **Goal**: ${plan.goal}`,
+		`> **Strategy**: ${plan.strategy}`,
+		`> **Total Steps**: ${plan.totalSteps}`,
+		'',
+		'---',
+		'',
+	];
+
+	for (const phase of plan.phases) {
+		lines.push(`## Phase: ${phase.name}`);
+		lines.push('');
+		lines.push(phase.description);
+		if (phase.dependsOn && phase.dependsOn.length > 0) {
+			lines.push('');
+			lines.push(`**Depends on**: ${phase.dependsOn.join(', ')}`);
+		}
+		lines.push('');
+
+		for (const step of phase.steps) {
+			const approval = step.requiresApproval ? ' :lock: **Requires Approval**' : '';
+			const complexity = `\`${step.complexity}\``;
+			lines.push(`### ${step.id}: ${step.description}${approval}`);
+			lines.push('');
+			lines.push(`- **Agent**: ${step.agent}`);
+			lines.push(`- **Complexity**: ${complexity}`);
+			lines.push(`- **Tools**: ${step.tools.join(', ')}`);
+			if (step.dependsOn && step.dependsOn.length > 0) {
+				lines.push(`- **Depends on**: ${step.dependsOn.join(', ')}`);
+			}
+			if (step.requiresApproval && step.approvalQuestion) {
+				lines.push(`- **Approval Question**: ${step.approvalQuestion}`);
+			}
+			lines.push('');
+			lines.push('**Task**:');
+			lines.push(`> ${step.task}`);
+			lines.push('');
+		}
+	}
+
+	return lines.join('\n');
+}
+
 // ─── Apply Company Plan ─────────────────────────────────────────────
 
 /**
@@ -339,7 +489,44 @@ ${plan.seedText}
 	await writeProjectFile(projectRoot, 'knowledge/seed.md', seedMd);
 	written.push('knowledge/seed.md');
 
-	// ── 6. Decisions file (memory/decisions.md) ──────────────────────
+	// ── 6. Build plan (if present) ──────────────────────────────────
+
+	if (plan.buildPlan) {
+		// Write knowledge/build-plan.md
+		const buildPlanMd = formatBuildPlanMarkdown(
+			plan.buildPlan,
+			plan.company.name,
+		);
+		await writeProjectFile(projectRoot, 'knowledge/build-plan.md', buildPlanMd);
+		written.push('knowledge/build-plan.md');
+
+		// Inject Builder agent if not already in agents array
+		const hasBuilder = agents.some((a) => a.name === 'builder');
+		if (!hasBuilder) {
+			const builder = generateBuilderAgent(
+				plan.company.name,
+				provider,
+				model,
+			);
+			// Place builder in the first team
+			const firstTeam = plan.teams[0];
+			if (firstTeam) {
+				builder.team = firstTeam.name;
+				if (!firstTeam.members.includes('builder')) {
+					firstTeam.members.push('builder');
+				}
+			}
+			agents.push(builder);
+
+			// Write the builder agent YAML
+			const relativePath = 'agents/builder.agent.yaml';
+			const yamlContent = stringify(agentPlanToYaml(builder));
+			await writeProjectFile(projectRoot, relativePath, yamlContent);
+			written.push(relativePath);
+		}
+	}
+
+	// ── 7. Decisions file (memory/decisions.md) ──────────────────────
 
 	const date = now.split('T')[0];
 	const agentNames = agents.map((a) => a.displayName).join(', ');
@@ -363,7 +550,7 @@ The seed document describes: ${plan.company.description}
 - All external communications require human approval before sending.
 - The Company Architect agent conducts weekly coverage assessments.
 - Escalation rules are enforced by the runtime, not by agent discretion.
-- See knowledge/seed.md for the original business plan.
+- See knowledge/seed.md for the original business plan.${plan.buildPlan ? '\n- The Builder agent will execute the adaptive build plan in knowledge/build-plan.md.' : ''}
 `;
 	await writeProjectFile(projectRoot, 'memory/decisions.md', decisionsMd);
 	written.push('memory/decisions.md');

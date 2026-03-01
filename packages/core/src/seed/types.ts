@@ -30,6 +30,9 @@ export interface CompanyPlan {
 	/** Capabilities mentioned in the seed doc that don't map to built-in ABF tools. */
 	toolGaps: ToolGap[];
 
+	/** Adaptive build plan — only when the seed doc describes a product to build. */
+	buildPlan?: BuildPlan;
+
 	/** ISO timestamp of when this plan was generated. */
 	generatedAt: string;
 
@@ -141,6 +144,58 @@ export interface ToolGap {
 	suggestion: string;
 	/** Priority: how critical is this for the business to function. */
 	priority: 'required' | 'important' | 'nice-to-have';
+}
+
+// ─── Build Plan Types ────────────────────────────────────────────────
+
+/**
+ * Adaptive build plan — describes HOW agents construct the product,
+ * not how they operate it day-to-day. Only present when the seed doc
+ * describes a product that needs to be built (SaaS, website, platform).
+ */
+export interface BuildPlan {
+	/** What is being built (e.g. "PickleCoachAI web application"). */
+	goal: string;
+	/** Overall approach summary. */
+	strategy: string;
+	/** Total number of steps across all phases. */
+	totalSteps: number;
+	/** Ordered phases of the build process. */
+	phases: BuildPhase[];
+}
+
+export interface BuildPhase {
+	/** Unique phase identifier (e.g. "infrastructure"). */
+	id: string;
+	/** Human-readable phase name (e.g. "Provision Infrastructure"). */
+	name: string;
+	/** What this phase accomplishes. */
+	description: string;
+	/** Steps within this phase. */
+	steps: BuildStep[];
+	/** Phase IDs that must complete before this phase starts. */
+	dependsOn?: string[];
+}
+
+export interface BuildStep {
+	/** Unique step identifier (e.g. "provision-supabase"). */
+	id: string;
+	/** What this step does. */
+	description: string;
+	/** Agent name from the team that will execute this step. */
+	agent: string;
+	/** Detailed instruction for the agent. */
+	task: string;
+	/** Tools the agent needs for this step. */
+	tools: string[];
+	/** Whether human approval is required before execution. */
+	requiresApproval: boolean;
+	/** Question to ask the human (when requiresApproval is true). */
+	approvalQuestion?: string;
+	/** Step IDs within the same phase that must complete first. */
+	dependsOn?: string[];
+	/** Estimated complexity of this step. */
+	complexity: 'low' | 'medium' | 'high';
 }
 
 // ─── Interview Types ─────────────────────────────────────────────────

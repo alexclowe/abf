@@ -70,6 +70,9 @@ function extractJSON(raw: string): string {
 /**
  * Validate that a parsed object has the required CompanyPlan fields
  * (before we add our metadata).
+ *
+ * If a buildPlan is present but malformed, it is stripped with a
+ * console warning rather than failing the entire validation.
  */
 function validatePlanShape(obj: unknown): boolean {
 	if (typeof obj !== 'object' || obj === null) return false;
@@ -83,6 +86,52 @@ function validatePlanShape(obj: unknown): boolean {
 	const company = plan['company'] as Record<string, unknown>;
 	if (typeof company['name'] !== 'string' || !company['name']) return false;
 	if (typeof company['description'] !== 'string' || !company['description']) return false;
+
+	// Validate buildPlan if present (optional — strip if malformed)
+	if (plan['buildPlan'] != null) {
+		if (!validateBuildPlanShape(plan['buildPlan'], plan['agents'] as Array<Record<string, unknown>>)) {
+			console.warn('[seed-analyzer] buildPlan is malformed and will be removed from the plan.');
+			delete plan['buildPlan'];
+		}
+	}
+
+	return true;
+}
+
+/**
+ * Validate the shape of a buildPlan object.
+ * Returns false if the plan is malformed (caller should strip it).
+ */
+function validateBuildPlanShape(
+	buildPlan: unknown,
+	agents: Array<Record<string, unknown>>,
+): boolean {
+	if (typeof buildPlan !== 'object' || buildPlan === null) return false;
+	const bp = buildPlan as Record<string, unknown>;
+
+	// Must have goal and at least one phase
+	if (typeof bp['goal'] !== 'string' || !bp['goal']) return false;
+	if (!Array.isArray(bp['phases']) || bp['phases'].length === 0) return false;
+
+	// Collect known agent names for cross-validation
+	const agentNames = new Set(agents.map((a) => a['name'] as string));
+
+	for (const phase of bp['phases'] as Array<Record<string, unknown>>) {
+		if (typeof phase['id'] !== 'string' || !phase['id']) return false;
+		if (!Array.isArray(phase['steps']) || phase['steps'].length === 0) return false;
+
+		for (const step of phase['steps'] as Array<Record<string, unknown>>) {
+			if (typeof step['id'] !== 'string' || !step['id']) return false;
+			if (typeof step['agent'] !== 'string' || !step['agent']) return false;
+
+			// Warn (but don't fail) if step references an unknown agent
+			if (!agentNames.has(step['agent'] as string)) {
+				console.warn(
+					`[seed-analyzer] buildPlan step "${step['id']}" references unknown agent "${step['agent']}".`,
+				);
+			}
+		}
+	}
 
 	return true;
 }
