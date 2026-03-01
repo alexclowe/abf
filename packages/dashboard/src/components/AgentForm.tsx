@@ -559,10 +559,10 @@ export function AgentForm({ initialData, archetypes, onSubmit, submitLabel, isEd
       </div>
       )}
 
-      {/* Behavioral Bounds */}
+      {/* Permissions */}
       {activeTab === 'advanced' && (
       <div className={card}>
-        <h2 className={sectionHeader}>Behavioral Bounds</h2>
+        <h2 className={sectionHeader}>Permissions</h2>
         <div className="space-y-4">
           <ActionMultiSelect
             label="Allowed Actions"
