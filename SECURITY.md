@@ -2,6 +2,8 @@
 
 ABF is a security-first framework. Agents run with real credentials, execute real actions, and operate autonomously — so the security of the runtime is critical. We take vulnerability reports seriously and respond promptly.
 
+> **Looking for the full security guide?** See [docs/security.md](docs/security.md) for a comprehensive overview of ABF's security architecture, deployment checklists, risk assessment, custom tool guidelines, and incident response procedures.
+
 ## Reporting a Vulnerability
 
 **Do not open a public GitHub issue for security vulnerabilities.**

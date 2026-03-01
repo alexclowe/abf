@@ -1,267 +1,137 @@
 # ABF -- Agentic Business Framework
 
-**The open-source framework for building companies that run on AI agents.**
+**Build companies that run on AI agents.** Not companies that use AI -- companies where agents ARE the employees.
 
 <!-- badges -->
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Node.js 20+](https://img.shields.io/badge/node-%3E%3D20-green.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue.svg)
-
----
-
-## What is ABF?
-
-ABF is a framework for building companies where AI agents *are* the employees. Not companies that bolt AI onto existing workflows -- companies where agents handle research, writing, customer support, finance, and operations autonomously. Agents have roles, tools, memory, behavioral bounds, and communicate through a shared message bus, just like a real team.
-
-Think of it as WordPress for agentic businesses. Pick a template, configure your agents, and launch. A web dashboard lets non-technical operators manage everything visually. Developers get YAML-as-code agent definitions, a TypeScript SDK, CLI tooling, and full filesystem access. Every agent definition, memory file, and configuration is a plain file you can track in git.
-
-ABF serves two users:
-
-- **Operators** (non-technical): Interact entirely through a web Dashboard. Setup wizard, visual agent management, approval queues, metrics, one-click deployment. Never touch a config file.
-- **Builders** (developers): Full filesystem access. YAML agent definitions, custom tools, MCP servers, TypeScript SDK. Use the Dashboard, CLI, and files together.
-
-ABF's Seed-to-Company pipeline is its most powerful feature: describe your business in plain English -- through an interactive interview or a document you've already written -- and ABF generates a complete AI agent team, knowledge base, workflows, and project structure. No configuration required. The pipeline analyzes your business plan, identifies the roles needed, creates agent charters, maps tools to business functions, and flags any capabilities that need custom development.
-
----
-
-## Key Features
-
-- **Multi-agent teams** -- Agents with roles, tools, memory, and triggers organized into teams with orchestrators. Agents communicate through a typed message bus.
-- **Seed-to-Company pipeline** -- Describe your business idea and ABF generates a complete agent team. Upload a business plan (.docx, .pdf, .txt, .md), use the interactive interview, or paste text. The analyzer creates agents, teams, knowledge files, workflows, and identifies tool gaps. A Company Architect meta-agent runs weekly assessments of team coverage.
-- **Provider-agnostic LLM access** -- Anthropic, OpenAI, Google, Ollama, or any OpenAI-compatible endpoint. Mix providers per agent. Swap models with a config change.
-- **Dashboard for operators** -- 11-page Next.js dashboard with setup wizard, agent management, workflow visualization, approval queues, metrics, KPI tracking, and logs.
-- **YAML-as-code agent definitions** -- Every agent is a YAML file with an embedded charter. Git-trackable, diffable, reviewable.
-- **Layered memory** -- Charter (identity), History (per-agent learnings, append-only), Decisions (team-wide), Knowledge (shared Markdown files), Session (ephemeral).
-- **Inter-agent message bus** -- Typed messages (REQUEST, RESPONSE, ALERT, ESCALATION, STATUS, BROADCAST) with priority routing. Backends: in-process (default), Redis, BullMQ.
-- **Security-first architecture** -- Behavioral bounds enforced by the runtime. Approval queues for sensitive actions. Full audit trail. Sandboxed tool execution.
-- **Business database** -- Config-driven datastore (SQLite or PostgreSQL). Schema YAML files, numbered SQL migrations, query and write tools for agents.
-- **Workflow orchestration** -- Multi-agent workflows defined in YAML. Sequential, parallel, and conditional steps with timeouts and failure handling.
-- **External monitoring** -- Watch URLs for changes and trigger agents automatically. Configurable intervals, content hashing, event-based dispatch.
-- **Knowledge base** -- Shared Markdown files in `knowledge/` injected into agent prompts. Searchable via the `knowledge-search` tool.
-- **Role archetypes** -- 10 built-in archetypes (researcher, writer, orchestrator, analyst, customer-support, developer, marketer, finance, monitor, generalist) with sensible defaults.
-- **3 starter templates** -- Solo Founder, SaaS Startup, and Marketing Agency. Full agent teams, ready to run.
-
----
-
-## Quick Start
+![v1.1.0](https://img.shields.io/badge/version-1.1.0-brightgreen.svg)
 
 ```bash
-# Create a new project from a template
 npx @abf/cli init --template solo-founder --name my-business
 cd my-business
-
-# Configure your LLM provider
-abf auth anthropic   # or: openai, ollama
-
-# Start the runtime (dashboard + API on one port)
+abf auth anthropic
 abf dev
-
-# Open http://localhost:3000 — dashboard and API on the same port
+# Open http://localhost:3000
 ```
 
-See the full [Quickstart Guide](docs/quickstart.md) for a detailed walkthrough.
+Three agents are now running: an executive assistant, a researcher, and a content writer -- coordinating through a message bus, sharing memory, and reporting to you through a web dashboard. That took under 2 minutes.
 
-### From a Business Plan
+---
 
-Already have a business plan or seed document? Skip templates entirely:
+## Why ABF?
+
+Most AI agent frameworks are developer tools. ABF is a business-building framework. The difference:
+
+- **Describe your business, get an agent team.** ABF's Seed-to-Company pipeline reads your business plan (or interviews you about your idea) and generates a complete agent team -- roles, tools, knowledge base, workflows, and project structure. No configuration required.
+- **Two users, one framework.** Operators manage agents through a visual Dashboard. Builders work in YAML, TypeScript, and the CLI. Both see the same system.
+- **Files are the API.** Every agent definition, memory file, and configuration is a plain file (YAML, Markdown, JSON). Version control, code review, and diffing work out of the box.
+- **Security is structural, not optional.** Behavioral bounds are enforced by the runtime, not the LLM. Agents cannot bypass their permissions. Approval queues gate sensitive actions. Everything is audited.
+
+---
+
+## Documentation
+
+### Start here
+
+| | |
+|---|---|
+| **[Getting Started](docs/getting-started.md)** | Install ABF, create a project, run your first agent, and customize it. Takes 5 minutes. |
+| **[Concepts](docs/concepts.md)** | Understand ABF's 6 primitives: Agents, Teams, Memory, Bus, Tools, and Triggers. |
+
+### Build your business
+
+| | |
+|---|---|
+| **[Seed-to-Company Guide](docs/guides/seed-to-company.md)** | Turn a business plan, pitch deck, or interview into a running agent team. |
+| **[Security Guide](docs/security.md)** | Risks of autonomous agents, how ABF protects you, deployment checklist, and incident response. |
+
+### Deploy and operate
+
+| | |
+|---|---|
+| **[Self-Hosting Guide](docs/self-hosting.md)** | Deploy with Docker, Railway, Render, or Fly.io. Production configuration. |
+| **[API Reference](docs/api-reference.md)** | All 45+ REST API endpoints with request/response shapes. |
+
+### Contribute
+
+| | |
+|---|---|
+| **[Contributing Guide](CONTRIBUTING.md)** | Developer setup, conventions, and how to add tools, archetypes, and templates. |
+| **[Changelog](CHANGELOG.md)** | Release history. |
+| **[Security Policy](SECURITY.md)** | Vulnerability reporting and disclosure process. |
+
+---
+
+## What You Can Build
+
+ABF ships with 3 templates and can generate custom teams from any business description:
+
+| Template | Agents | Use Case |
+|---|---|---|
+| **Solo Founder** | Compass (assistant), Scout (researcher), Scribe (writer) | One-person startup needing a virtual executive team |
+| **SaaS Startup** | Atlas, Scout, Scribe, Signal, Herald | Early-stage SaaS with product and go-to-market teams |
+| **Marketing Agency** | Director, Strategist, Copywriter, Analyst | Campaign planning, copywriting, and analytics |
+| **Custom (Seed)** | AI-designed team | Any business: upload a plan or answer interview questions |
+
+Have a business plan? Generate a custom team in one command:
 
 ```bash
 abf init --seed ./my-business-plan.md
 ```
 
-ABF will analyze your document with an LLM, generate the optimal agent team, and create a complete project -- agents, teams, knowledge base, and workflows.
+ABF accepts `.docx`, `.pdf`, `.txt`, and `.md` files. [Full Seed-to-Company guide](docs/guides/seed-to-company.md).
 
 ---
 
-## Architecture
+## How It Works
 
-ABF runs as a single Node.js process with five core components:
+ABF is built on **6 primitives**: [Agents](docs/concepts.md) (autonomous workers with roles and tools), [Teams](docs/concepts.md) (agent groups with an orchestrator), [Memory](docs/concepts.md) (5-layer persistence from session to knowledge base), a [Message Bus](docs/concepts.md) (typed inter-agent communication), [Tools](docs/concepts.md) (30+ built-in, MCP servers, and custom `.tool.js`), and [Triggers](docs/concepts.md) (cron, event, message, webhook).
+
+The runtime is a single Node.js process with five components:
 
 ```
-                        +------------------+
-                        |    Scheduler     |  Cron + heartbeat triggers
-                        +--------+---------+
-                                 |
-                                 v
-+-----------+           +--------+---------+           +-----------+
-|           |           |                  |           |           |
-|  Agents   +---------->+   Dispatcher     +---------->+   Bus     |
-|  (YAML)   |           |                  |           | (messages)|
-|           |           +--------+---------+           |           |
-+-----------+                    |                     +-----+-----+
-                                 v                           |
-+-----------+           +--------+---------+                 |
-|           |           |                  |                 |
-|  Memory   +<----------+ Session Manager  +<----------------+
-|  (files)  |           |                  |
-|           |           +--------+---------+
-+-----------+                    |
-                                 v
-+-----------+           +--------+---------+
-|           |           |                  |
-|Providers  +<----------+    Gateway       +-------> HTTP API + Dashboard
-|(LLM APIs) |           |    (Hono)        |
-|           |           +------------------+
-+-----------+
+  Scheduler ──> Dispatcher ──> Session Manager ──> Bus
+                                    │                │
+                                    v                v
+                              Gateway (API)     Agents (YAML)
+                              + Dashboard       + Memory (files)
+                              + SSE events      + Providers (LLM)
 ```
 
-**Scheduler** fires cron and heartbeat triggers as activation events. **Dispatcher** receives activations and spawns work sessions. **Session Manager** loads agent context, calls the LLM, executes tools in a loop, writes memory, and logs results. **Bus** routes inter-agent messages and triggers message-based activations. **Gateway** serves the HTTP API, webhooks, and the Dashboard.
+**Scheduler** fires triggers. **Dispatcher** spawns work sessions. **Session Manager** runs an 8-step lifecycle: load context, build prompt, call LLM, execute tools, route messages, write memory, check escalations, log results. **Bus** routes inter-agent messages. **Gateway** serves the REST API, SSE events, webhooks, and Dashboard on a single port.
 
----
-
-## Agent Definition Example
-
-Every agent is defined in a single YAML file with an embedded charter:
-
-```yaml
-name: compass
-display_name: Executive Assistant
-role: Orchestrator
-description: >
-  Organizes the founder's day, routes research tasks to Scout
-  and writing tasks to Scribe.
-provider: anthropic
-model: claude-sonnet-4-5
-temperature: 0.4
-team: founders
-tools: [web-search]
-triggers:
-  - type: cron
-    schedule: '0 9 * * 1-5'
-    task: daily_briefing
-  - type: manual
-    task: daily_briefing
-escalation_rules:
-  - condition: requires_human_decision
-    target: human
-behavioral_bounds:
-  allowed_actions: [read_data, write_draft, send_alert]
-  forbidden_actions: [delete_data, modify_billing]
-  max_cost_per_session: $2.00
-  requires_approval: [send_client_email, publish_content]
-kpis:
-  - metric: tasks_delegated
-    target: 100%
-    review: daily
-charter: |
-  # Compass -- Executive Assistant
-
-  You are Compass, the Executive Assistant and orchestrator
-  for this founder's workspace.
-
-  ## Your Purpose
-  Keep the founder focused on what matters most. Each morning
-  you deliver a concise daily briefing: what needs attention,
-  what Scout has researched, what Scribe has drafted.
-  ...
-```
-
----
-
-## Directory Structure
-
-Every ABF project follows this layout:
-
-```
-my-business/
-├── abf.config.yaml              # Global configuration
-├── agents/                       # Agent definitions (*.agent.yaml)
-│   ├── compass.agent.yaml
-│   ├── scout.agent.yaml
-│   └── scribe.agent.yaml
-├── teams/                        # Team definitions (*.team.yaml)
-│   └── founders.team.yaml
-├── tools/                        # Custom tools + MCP configs
-│   ├── mcp-servers.yaml
-│   └── custom-tool.tool.ts
-├── memory/                       # Persistent agent memory
-│   ├── agents/{name}/charter.md, history.md
-│   ├── decisions.md
-│   └── knowledge/
-├── knowledge/                    # Shared knowledge base (*.md)
-│   ├── company.md
-│   └── brand-voice.md
-├── outputs/                      # Cross-agent session outputs
-│   └── {agentName}/
-├── datastore/                    # Business database
-│   ├── schemas/                  # *.schema.yaml table definitions
-│   └── migrations/               # Numbered *.sql migrations
-├── workflows/                    # Multi-agent workflows (*.workflow.yaml)
-├── monitors/                     # External URL monitors (*.monitor.yaml)
-├── templates/messages/           # Message templates (*.template.yaml)
-├── logs/                         # Audit trail
-│   ├── bus/
-│   ├── sessions/
-│   └── escalations/
-└── docker-compose.yml            # Docker deployment
-```
-
----
-
-## Templates
-
-ABF ships with three starter templates. Each generates a complete project with agents, teams, memory files, knowledge base, and Docker configuration.
-
-| Template | Command | Agents | Teams | Use Case |
-|---|---|---|---|---|
-| **Solo Founder** | `--template solo-founder` | 3 (compass, scout, scribe) | 1 | Individual founders needing an executive assistant, researcher, and writer |
-| **SaaS Startup** | `--template saas` | 5 (atlas, scout, scribe, signal, herald) | 2 | Early-stage SaaS with product and go-to-market teams |
-| **Marketing Agency** | `--template marketing-agency` | 4 (director, strategist, copywriter, analyst) | 1 | Marketing agencies with campaign planning, copywriting, and analytics |
-
-For custom businesses, use the Seed-to-Company pipeline instead of templates. Write a business plan document (or let ABF interview you), and the analyzer generates a tailored agent team -- often more precise than a template because it's designed specifically for your business. See the [Quickstart Guide](docs/quickstart.md) for details.
-
----
-
-## Dashboard
-
-The ABF Dashboard is a Next.js application that provides a visual interface for operators. Pages include:
-
-- **Overview** -- System status at a glance
-- **Agents** -- View, configure, and trigger agents; send tasks to agent inboxes
-- **Teams** -- Team composition and orchestrator relationships
-- **Workflows** -- Visual workflow management
-- **Approvals** -- Review and approve/reject queued agent actions
-- **Escalations** -- Human-in-the-loop escalation handling
-- **Metrics** -- Runtime metrics with auto-refresh
-- **KPIs** -- Agent performance tracking
-- **Providers** -- LLM provider configuration
-- **Logs** -- Session and audit logs
-- **Setup** -- 6-step setup wizard: choose provider, configure API key, select company type (new idea, existing document, existing company, or template), interview or upload, review generated plan, and create project
-
-The Dashboard is served through the Gateway on port 3000 — a single URL for everything.
-
----
-
-## CLI Commands
-
-| Command | Description |
-|---|---|
-| `abf init` | Initialize a new ABF project (with `--template`, `--name`, or `--seed` options) |
-| `abf dev` | Start the runtime in development mode (with `--port` for gateway port) |
-| `abf run <agent>` | Manually trigger an agent (with `--task` option) |
-| `abf status` | Show agent and system status (with `--verbose` for details) |
-| `abf auth [provider]` | Manage LLM provider credentials (`--list`, `--remove`) |
-| `abf logs` | View agent session logs (`--agent`, `--lines`) |
-| `abf setup` | Open the visual setup wizard in your browser |
-| `abf migrate` | Run datastore schema and SQL migrations |
-| `abf agent add` | Scaffold a new agent (`--name`, `--archetype`, `--team`) |
-| `abf workflow add` | Scaffold a workflow from a template (`--template`, `--name`) |
-| `abf deploy` | Generate cloud deployment config (`--target railway\|render\|fly`) |
+Read the [Concepts Guide](docs/concepts.md) for the full explanation.
 
 ---
 
 ## Security
 
-ABF is built on six security pillars:
+Autonomous agents run with real credentials and take real actions. ABF is built for containment:
 
-1. **Least Privilege** -- Agents start with zero permissions. Access is explicitly granted per-agent in the YAML definition.
-2. **Sandboxed Execution** -- Every tool call runs in isolation. No shell access, no eval, no arbitrary code execution.
-3. **Managed Tools** -- Agents cannot install tools at runtime. The tool surface is locked and operator-approved.
-4. **Behavioral Bounds** -- Enforced by the runtime, not the LLM. Allowed/forbidden actions, cost limits, and approval requirements are checked before execution.
-5. **Memory Integrity** -- Append-only history files with checksums. Anomaly detection and snapshot rollback.
-6. **Audit Trail** -- Every session, tool call, message, memory write, and escalation is logged. Immutable retention.
+- **Behavioral bounds** enforced by the runtime (not the LLM) gate every action
+- **Credential isolation** -- each tool only sees the API keys it needs ([ScopedVault](docs/security.md#2-credential-isolation))
+- **Execution sandboxing** -- code runs without access to credentials or home directory
+- **Approval queues** -- sensitive actions require human sign-off before executing
+- **Prompt injection defense** -- source tagging, content isolation, and detection pipeline
+- **Full audit trail** -- every session, tool call, message, and memory write is logged
 
-Additional defenses include input source tagging, content isolation for external data, injection detection, and output validation against behavioral bounds.
+No framework makes autonomous agents completely safe. The [Security Guide](docs/security.md) is transparent about what ABF protects against, what it cannot, and how to configure your deployment for safety. Required reading before going to production.
+
+---
+
+## Deployment
+
+```bash
+abf deploy --target railway    # or: render, fly
+```
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy?repo=https://github.com/alexclowe/abf&branch=main&envs=ABF_VAULT_PASSWORD,ANTHROPIC_API_KEY&optionalEnvs=ANTHROPIC_API_KEY&ABF_VAULT_PASSWORDDesc=Encryption+password+for+credential+vault&ANTHROPIC_API_KEYDesc=Optional+Anthropic+API+key+(can+configure+later+via+dashboard))
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/alexclowe/abf)
+
+Docker, Railway, Render, and Fly.io are all supported. See the [Self-Hosting Guide](docs/self-hosting.md) for production configuration including PostgreSQL, Redis, TLS, and API authentication.
 
 ---
 
@@ -270,7 +140,7 @@ Additional defenses include input source tagging, content isolation for external
 | Layer | Technology |
 |---|---|
 | Runtime | Node.js / TypeScript |
-| Dashboard | React / Next.js |
+| Dashboard | React / Next.js 15 |
 | Default storage | Filesystem (Markdown files) |
 | Production storage | PostgreSQL + pgvector |
 | Message bus | In-process (default), Redis / BullMQ |
@@ -280,56 +150,17 @@ Additional defenses include input source tagging, content isolation for external
 
 ---
 
-## Deployment
-
-ABF supports multiple deployment targets:
-
-- **Local development**: `abf dev` -- filesystem storage, hot-reload
-- **Docker**: `docker compose up` -- single container, production-ready
-- **Railway**: `abf deploy --target railway` -- one-click deploy with Postgres + Redis
-- **Render**: `abf deploy --target render`
-- **Fly.io**: `abf deploy --target fly`
-
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy?repo=https://github.com/alexclowe/abf&branch=main&envs=ABF_VAULT_PASSWORD,ANTHROPIC_API_KEY&optionalEnvs=ANTHROPIC_API_KEY&ABF_VAULT_PASSWORDDesc=Encryption+password+for+credential+vault&ANTHROPIC_API_KEYDesc=Optional+Anthropic+API+key+(can+configure+later+via+dashboard))
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/alexclowe/abf)
-
-See the [deployment guide](docs/deployment.md) for detailed instructions.
-
----
-
 ## Contributing
 
-Contributions are welcome. To get started:
-
 ```bash
-# Clone the repository
 git clone https://github.com/alexclowe/abf.git
 cd abf
-
-# Install dependencies (requires pnpm 10+)
-pnpm install
-
-# Build all packages
+pnpm install    # requires pnpm 10+
 pnpm build
-
-# Run tests
 pnpm test
-
-# Type check
-pnpm typecheck
-
-# Lint
-pnpm lint
 ```
 
-The project uses a monorepo structure with three packages:
-
-- `packages/core` -- Runtime, providers, tools, memory, bus, schemas
-- `packages/cli` -- CLI application and project templates
-- `packages/dashboard` -- Next.js dashboard application
-
-Please open an issue before starting work on large changes.
+The monorepo has three packages: `packages/core` (runtime, providers, tools), `packages/cli` (CLI and templates), and `packages/dashboard` (Next.js dashboard). See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions and guidelines.
 
 ---
 

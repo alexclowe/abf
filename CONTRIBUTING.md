@@ -5,12 +5,12 @@ Thank you for your interest in contributing. ABF is an open-source framework and
 ## Prerequisites
 
 - **Node.js** 20 or later
-- **pnpm** 9 or later (`npm install -g pnpm`)
+- **pnpm** 10 or later (`npm install -g pnpm`)
 
 ## Setup
 
 ```bash
-git clone https://github.com/your-org/abf.git
+git clone https://github.com/alexclowe/abf.git
 cd abf
 pnpm install
 pnpm build

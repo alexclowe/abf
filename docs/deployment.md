@@ -9,7 +9,7 @@ always-on processes.
 Railway is the easiest way to deploy ABF. It provides persistent processes,
 managed Postgres and Redis, and a generous free tier.
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy?repo=https://github.com/your-org/abf&branch=main)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy?repo=https://github.com/alexclowe/abf&branch=main)
 
 ### What you get
 - ABF runtime running 24/7
