@@ -74,6 +74,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
   });
+  const { data: config } = useSWR<Record<string, unknown>>(`${API_BASE}/api/config`, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 120_000,
+  });
+  const projectName = typeof config?.name === 'string' ? config.name : 'ABF Dashboard';
 
   // Fetch pending approval/escalation counts for badges
   const { data: approvals } = useSWR(`${API_BASE}/api/approvals?status=pending`, fetcher, {
@@ -107,7 +112,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <div className="p-4 border-b border-slate-800">
         <div className="flex items-center gap-2">
           <Layers className="text-sky-400" size={20} />
-          <span className="font-bold text-white text-sm tracking-wide">ABF Dashboard</span>
+          <span className="font-bold text-white text-sm tracking-wide">{projectName}</span>
         </div>
       </div>
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">

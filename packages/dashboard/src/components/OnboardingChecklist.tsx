@@ -12,15 +12,18 @@ interface ChecklistItem {
   check: (data: OnboardingData) => boolean;
 }
 
-interface OnboardingData {
+export interface OnboardingData {
   hasProvider: boolean;
   agentCount: number;
   hasRun: boolean;
   hasChannel: boolean;
   knowledgeCount: number;
+  isSeed?: boolean;
+  hasBuildPlan?: boolean;
+  companyName?: string;
 }
 
-const CHECKLIST: ChecklistItem[] = [
+const DEFAULT_CHECKLIST: ChecklistItem[] = [
   {
     id: 'provider',
     label: 'Connect an AI provider',
@@ -58,6 +61,37 @@ const CHECKLIST: ChecklistItem[] = [
   },
 ];
 
+const SEED_CHECKLIST: ChecklistItem[] = [
+  {
+    id: 'agents-ready',
+    label: 'Your agents are ready',
+    description: 'Agents were generated from your seed document.',
+    href: '/agents',
+    check: (d) => d.agentCount > 0,
+  },
+  {
+    id: 'build-plan',
+    label: 'Review the build plan',
+    description: 'See the phased roadmap for standing up your company.',
+    href: '/knowledge',
+    check: () => false, // always shows as actionable
+  },
+  {
+    id: 'first-run',
+    label: 'Run your first agent',
+    description: 'Trigger an agent session to see it work.',
+    href: '/',
+    check: (d) => d.hasRun,
+  },
+  {
+    id: 'approvals',
+    label: 'Watch for approval requests',
+    description: 'Some agent actions require your approval before executing.',
+    href: '/approvals',
+    check: () => false, // informational — always incomplete
+  },
+];
+
 const STORAGE_KEY = 'abf_onboarding_dismissed';
 
 export function OnboardingChecklist({ data }: { data: OnboardingData }) {
@@ -71,8 +105,18 @@ export function OnboardingChecklist({ data }: { data: OnboardingData }) {
 
   if (dismissed) return null;
 
-  const completedCount = CHECKLIST.filter((item) => item.check(data)).length;
-  const allDone = completedCount === CHECKLIST.length;
+  const isSeed = data.isSeed ?? false;
+  const seedChecklist = isSeed && data.hasBuildPlan
+    ? SEED_CHECKLIST
+    : isSeed
+      ? SEED_CHECKLIST.filter((item) => item.id !== 'build-plan')
+      : null;
+  const checklist = seedChecklist ?? DEFAULT_CHECKLIST;
+  const completedCount = checklist.filter((item) => item.check(data)).length;
+  const allDone = completedCount === checklist.length;
+  const title = isSeed
+    ? allDone ? 'Setup Complete!' : `Quick Start — ${data.companyName || 'Your Company'}`
+    : allDone ? 'Setup Complete!' : 'Getting Started';
 
   function handleDismiss() {
     localStorage.setItem(STORAGE_KEY, 'true');
@@ -92,10 +136,10 @@ export function OnboardingChecklist({ data }: { data: OnboardingData }) {
           </button>
           <div>
             <h2 className="text-sm font-medium text-white">
-              {allDone ? 'Setup Complete!' : 'Getting Started'}
+              {title}
             </h2>
             <p className="text-xs text-slate-500">
-              {completedCount}/{CHECKLIST.length} steps completed
+              {completedCount}/{checklist.length} steps completed
             </p>
           </div>
         </div>
@@ -104,7 +148,7 @@ export function OnboardingChecklist({ data }: { data: OnboardingData }) {
           <div className="w-24 h-1.5 bg-slate-800 rounded-full overflow-hidden">
             <div
               className="h-full bg-sky-500 rounded-full transition-all duration-500"
-              style={{ width: `${(completedCount / CHECKLIST.length) * 100}%` }}
+              style={{ width: `${(completedCount / checklist.length) * 100}%` }}
             />
           </div>
           <button
@@ -120,7 +164,7 @@ export function OnboardingChecklist({ data }: { data: OnboardingData }) {
 
       {!collapsed && (
         <div className="border-t border-slate-800">
-          {CHECKLIST.map((item) => {
+          {checklist.map((item) => {
             const done = item.check(data);
             return (
               <Link
