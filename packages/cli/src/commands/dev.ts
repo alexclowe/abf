@@ -155,20 +155,41 @@ function spawnDashboard(dashboardDir: string): ChildProcess {
 	if (isStandalone) {
 		// Production mode: standalone server built by `next build` with output: 'standalone'
 		// cwd must be the standalone root so Next.js resolves static assets correctly
+		// detached: own process group so we can kill the entire tree on shutdown
 		return spawn('node', [standalonePath!], {
 			stdio: 'pipe',
 			env,
 			cwd: standaloneRoot,
+			detached: true,
 		});
 	}
 
 	// Dev mode: use npx next dev
+	// detached: own process group so shell→npx→next→next-server all die together
 	return spawn('npx', ['next', 'dev', '-p', String(DASHBOARD_PORT)], {
 		stdio: 'pipe',
 		env,
 		cwd: dashboardDir,
 		shell: true,
+		detached: true,
 	});
+}
+
+/** Kill a dashboard process and all its children by killing the process group. */
+function killDashboard(proc: ChildProcess): void {
+	if (!proc.pid || proc.killed) return;
+	try {
+		// Negative PID = kill entire process group
+		process.kill(-proc.pid, 'SIGTERM');
+	} catch {
+		try { proc.kill('SIGTERM'); } catch {}
+	}
+	// Force-kill after 2s if still alive
+	setTimeout(() => {
+		if (!proc.killed) {
+			try { process.kill(-proc.pid!, 'SIGKILL'); } catch {}
+		}
+	}, 2000).unref();
 }
 
 export async function devCommand(options: DevOptions): Promise<void> {
@@ -339,9 +360,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
 		const shutdown = async (signal: string) => {
 			console.log();
 			console.log(chalk.dim(`  Received ${signal}, shutting down...`));
-			if (dashboardProcess && !dashboardProcess.killed) {
-				dashboardProcess.kill('SIGTERM');
-			}
+			if (dashboardProcess) killDashboard(dashboardProcess);
 			await runtime.stop();
 			process.exit(0);
 		};
@@ -352,9 +371,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
 		// Keep process alive
 		await new Promise(() => {});
 	} catch (error) {
-		if (dashboardProcess && !dashboardProcess.killed) {
-			dashboardProcess.kill('SIGTERM');
-		}
+		if (dashboardProcess) killDashboard(dashboardProcess);
 		spinner.fail(chalk.red('Failed to start development server'));
 		console.error(error);
 		process.exit(1);
