@@ -23,4 +23,6 @@ export interface BuiltinToolContext {
 	readonly messageTemplates?: import('../../messaging/templates.js').MessageTemplateRegistry | undefined;
 	/** Task plan store for plan-task tool. */
 	readonly taskPlanStore?: import('../../types/task-plan.js').ITaskPlanStore | undefined;
+	/** Whether running in ABF Cloud mode (dashboard-managed credentials). */
+	readonly isCloud: boolean;
 }

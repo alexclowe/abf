@@ -6,6 +6,7 @@ import type { ITool, ToolDefinition } from '../../types/tool.js';
 import type { ToolId, USDCents } from '../../types/common.js';
 import { Ok, Err, ToolError } from '../../types/errors.js';
 import type { BuiltinToolContext } from './context.js';
+import { credentialError } from './credential-error.js';
 
 // Simple token bucket rate limiter: max 1 request/second
 let lastRequestTime = 0;
@@ -82,10 +83,12 @@ export function createWebSearchTool(ctx: BuiltinToolContext): ITool {
 					results: [],
 					totalEstimated: 0,
 					query,
-					error:
-						'web-search requires BRAVE_SEARCH_API_KEY. ' +
-						'Set it via: export BRAVE_SEARCH_API_KEY=your-key ' +
-						'or run: abf auth brave-search',
+					...credentialError(ctx.isCloud, {
+						provider: 'brave-search',
+						envVar: 'BRAVE_SEARCH_API_KEY',
+						dashboardPath: '/settings/integrations/brave-search',
+						displayName: 'Brave Search',
+					}),
 				});
 			}
 

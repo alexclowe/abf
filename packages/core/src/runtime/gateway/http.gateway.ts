@@ -603,6 +603,51 @@ export class HttpGateway implements IGateway {
 			});
 		}
 
+		// -- Stripe Webhook (must be before generic /webhook/* handler) ----------
+		app.post('/webhook/stripe', async (c) => {
+			const signature = c.req.header('Stripe-Signature');
+			if (!signature) {
+				return c.json({ error: 'Missing Stripe-Signature header' }, 400);
+			}
+
+			let webhookSecret = process.env['STRIPE_WEBHOOK_SECRET'];
+			if (!webhookSecret && deps.vault) {
+				webhookSecret = (await deps.vault.get('stripe', 'webhook_secret')) ?? undefined;
+			}
+			if (!webhookSecret) {
+				return c.json({ error: 'STRIPE_WEBHOOK_SECRET not configured' }, 500);
+			}
+
+			const rawBody = await c.req.text();
+
+			try {
+				const { default: Stripe } = await import('stripe');
+				const stripe = new Stripe(process.env['STRIPE_SECRET_KEY'] ?? 'unused');
+				const event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+
+				// Find an agent that handles Stripe events and dispatch to it
+				const stripeAgents = [...deps.agentsMap.values()].filter(
+					(a) => a.tools?.includes('stripe-billing'),
+				);
+				if (stripeAgents.length > 0) {
+					const targetAgent = stripeAgents[0]!;
+					const activation = {
+						id: createActivationId(),
+						agentId: targetAgent.id,
+						trigger: { type: 'webhook' as const, path: '/webhook/stripe', task: `stripe:${event.type}` },
+						timestamp: toISOTimestamp(),
+						payload: { event_type: event.type, event_id: event.id, data: event.data?.object },
+					};
+					void deps.dispatcher.dispatch(activation);
+				}
+
+				return c.json({ received: true, type: event.type });
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				return c.json({ error: `Webhook verification failed: ${message}` }, 400);
+			}
+		});
+
 		// -- Webhook passthrough --------------------------------------------------
 		app.post('/webhook/*', async (c) => {
 			const path = c.req.path.slice('/webhook/'.length);

@@ -58,6 +58,8 @@ export interface AgentPlan {
 	name: string;
 	displayName: string;
 	role: string;
+	/** Closest built-in archetype (provides default tools, temperature, charter). */
+	roleArchetype?: string | null;
 	description: string;
 	charter: string;
 	provider: string;

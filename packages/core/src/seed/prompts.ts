@@ -10,13 +10,44 @@
 
 const AVAILABLE_TOOLS = `
 Available ABF built-in tools:
-- web-search: Search the web for information
+- web-search: Search the web for information (Brave Search API)
+- web-fetch: Fetch the content of a specific URL (HTML, JSON, or plain text)
 - knowledge-search: Search the company knowledge base and agent memory
-- send-message: Send messages to other agents or external channels (email, Slack, Discord)
-- database-query: Query the business database (SELECT only)
-- database-write: Write to the business database (INSERT/UPDATE/DELETE)
-- browse: Browse web pages with a headless browser
-- reschedule: Self-reschedule the agent for future activation
+- send-message: Send messages to other agents or external channels (Slack, Discord, dashboard)
+- email-send: Send transactional or marketing emails via Resend or SMTP (supports templates, tracking)
+- database-query: Query the business database (SELECT only; requires datastore config)
+- database-write: Write to the business database (INSERT/UPDATE/DELETE; requires datastore config)
+- browse: Browse web pages with a headless browser (handles JavaScript-rendered pages)
+- reschedule: Self-reschedule the agent for future activation (heartbeat loops)
+- file-read: Read a file from the project filesystem
+- file-write: Write or update a file in the project filesystem
+- data-transform: Transform, filter, and reshape structured data (JSON/CSV)
+- image-render: Render HTML/CSS to PNG/JPEG images (social cards, reports, certificates, OG images)
+- social-publish: Publish and schedule social media posts via Buffer (Twitter/X, LinkedIn, Instagram)
+- stripe-billing: Manage Stripe payments — checkout sessions, subscriptions, invoices, refunds, webhooks
+- github-ci: Interact with GitHub repos and CI/CD — branches, commits, PRs, workflow dispatch, status checks
+- calendar: Create events, check availability, read schedules (requires datastore config)
+- privacy-ops: Manage consent records and data deletion requests for GDPR/CCPA compliance (requires datastore config)
+- plan-task: Decompose complex objectives into structured sub-tasks with dependencies
+- ask-human: Request human input or approval inline during a session
+- app-generate: Generate UI components and web apps using v0 (supports Next.js, React, Vue, Svelte)
+- app-deploy: Deploy web applications to Vercel (create projects, deploy files, set env vars, add domains)
+- backend-provision: Provision and manage Supabase backends (create projects, run migrations, configure auth, get API keys)
+- code-generate: Generate or modify code using Claude Code headless mode (sandboxed to project directory)
+`;
+
+const AVAILABLE_ARCHETYPES = `
+Available ABF role archetypes (use as "roleArchetype" field — provides default tools, temperature, and charter template; explicit values in the agent definition always override):
+- researcher: temp 0.3, tools [web-search, knowledge-search] — information gathering and analysis
+- writer: temp 0.7, tools [knowledge-search, image-render] — content creation and copywriting
+- orchestrator: temp 0.2, tools [send-message, knowledge-search] — team coordination and task delegation
+- analyst: temp 0.2, tools [database-query, knowledge-search] — data analysis and reporting
+- customer-support: temp 0.4, tools [send-message, knowledge-search, database-query, email-send, privacy-ops] — customer help and issue resolution
+- developer: temp 0.3, tools [knowledge-search, github-ci, app-generate, app-deploy, backend-provision, code-generate] — code, PRs, deployments, and technical solutions
+- marketer: temp 0.6, tools [web-search, knowledge-search, send-message, email-send, image-render, social-publish] — campaigns, SEO, and growth
+- finance: temp 0.1, tools [database-query, knowledge-search, stripe-billing, privacy-ops] — revenue tracking, costs, and financial reporting
+- monitor: temp 0.1, tools [web-search, knowledge-search, send-message] — change detection and alerting
+- generalist: temp 0.4, tools [knowledge-search] — versatile assistant for miscellaneous tasks
 `;
 
 // ─── Analyzer Prompt ─────────────────────────────────────────────────
@@ -62,13 +93,19 @@ Analyze the seed document and produce a structured company plan in JSON format. 
 
 7. **Define KPIs** — Map business metrics from the seed doc to specific agents responsible for tracking them.
 
-8. **Identify tool gaps** — Compare capabilities mentioned in the seed doc against available ABF tools. Flag anything that needs a custom tool or MCP server.
+8. **Assign role archetypes** — For each agent, pick the closest built-in archetype. The archetype provides default tools, temperature, and a charter template — you only need to override what differs for this specific agent. If no archetype fits, omit "roleArchetype" and specify everything manually.
+
+${AVAILABLE_ARCHETYPES}
+
+9. **Assign tools** — Give each agent the tools they need from the list below. Agents with an archetype inherit its default tools; add extras as needed. Only flag a tool gap when NO built-in tool covers the capability.
 
 ${AVAILABLE_TOOLS}
 
-9. **Define escalation rules** — Extract any decisions or actions that require human approval.
+10. **Identify tool gaps** — Compare capabilities mentioned in the seed doc against the full tool list above. ONLY flag a gap when no existing tool covers the need. Include a suggestion for how to address it (custom tool, MCP server, or external integration).
 
-10. **Suggest workflows** — If the seed doc describes multi-step processes, define them as workflows with agent assignments.
+11. **Define escalation rules** — Extract any decisions or actions that require human approval.
+
+12. **Suggest workflows** — If the seed doc describes multi-step processes, define them as workflows with agent assignments.
 
 ## Agent Configuration Rules
 
@@ -101,6 +138,7 @@ Return ONLY valid JSON matching this schema (no markdown, no explanation, just J
       "name": string (lowercase, hyphenated, e.g. "head-coach"),
       "displayName": string (e.g. "Head Coach"),
       "role": string (e.g. "Orchestrator"),
+      "roleArchetype": string | null (one of: researcher, writer, orchestrator, analyst, customer-support, developer, marketer, finance, monitor, generalist — or null if none fits),
       "description": string (1-2 sentences),
       "charter": string (200-400 words, markdown),
       "provider": string,
@@ -108,7 +146,7 @@ Return ONLY valid JSON matching this schema (no markdown, no explanation, just J
       "temperature": number,
       "team": string (lowercase team name),
       "reportsTo": string | null (agent name or null for team leads),
-      "tools": string[],
+      "tools": string[] (archetype defaults plus any extras needed),
       "triggers": [{ "type": string, "schedule"?: string, "interval"?: number, "task": string, "from"?: string }],
       "kpis": [{ "metric": string, "target": string, "review": "daily" | "weekly" | "monthly" }],
       "behavioralBounds": {
