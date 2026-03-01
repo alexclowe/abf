@@ -10,7 +10,7 @@ import { parse } from 'yaml';
 import type { MonitorDefinition, MonitorSnapshot } from '../types/monitor.js';
 import type { AgentId } from '../types/common.js';
 import { monitorYamlSchema, transformMonitorYaml } from '../schemas/monitor.schema.js';
-import { toISOTimestamp } from '../util/id.js';
+import { createActivationId, toISOTimestamp } from '../util/id.js';
 
 type DispatchFn = (activation: import('../types/trigger.js').Activation) => void;
 
@@ -106,7 +106,6 @@ export class MonitorRunner {
 
 			// If content changed (and we had a previous snapshot), trigger the agent
 			if (prevSnapshot && prevSnapshot.contentHash !== contentHash && this.dispatchFn) {
-				const { createActivationId } = await import('../util/id.js');
 				this.dispatchFn({
 					id: createActivationId(),
 					agentId: monitor.agentId as AgentId,

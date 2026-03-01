@@ -120,9 +120,10 @@ export class SessionManager implements ISessionManager {
 		const sessionId = createSessionId();
 		const startedAt = toISOTimestamp();
 
-		// Enforce session timeout via Promise.race
-		const timeoutPromise = new Promise<never>((_, reject) =>
-			setTimeout(
+		// Enforce session timeout via Promise.race (clear timer on completion to prevent leaks)
+		let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+		const timeoutPromise = new Promise<never>((_, reject) => {
+			timeoutTimer = setTimeout(
 				() =>
 					reject(
 						new ABFErrorClass(
@@ -131,8 +132,8 @@ export class SessionManager implements ISessionManager {
 						),
 					),
 				this.deps.sessionTimeoutMs,
-			),
-		);
+			);
+		});
 
 		try {
 			const result = await Promise.race([
@@ -170,6 +171,8 @@ export class SessionManager implements ISessionManager {
 				memoryUpdates: [],
 				error: e instanceof Error ? e.message : String(e),
 			});
+		} finally {
+			if (timeoutTimer) clearTimeout(timeoutTimer);
 		}
 	}
 
@@ -323,15 +326,17 @@ export class SessionManager implements ISessionManager {
 						continue;
 					}
 
+					const parsedArgs = JSON.parse(tc.arguments) as Record<string, unknown>;
+
 					emitChunk({
 						type: 'tool_use',
 						toolName: tc.name,
-						toolArguments: JSON.parse(tc.arguments) as Record<string, unknown>,
+						toolArguments: parsedArgs,
 					});
 
 					const call: ToolCall = {
 						toolId: tc.name as import('../types/common.js').ToolId,
-						arguments: JSON.parse(tc.arguments) as Record<string, unknown>,
+						arguments: parsedArgs,
 						agentId: agent.id,
 						timestamp: toISOTimestamp(),
 					};
@@ -531,9 +536,10 @@ export class SessionManager implements ISessionManager {
 					continue;
 				}
 
+				const parsedArgs = JSON.parse(tc.arguments) as Record<string, unknown>;
 				const call: ToolCall = {
 					toolId: tc.name as import('../types/common.js').ToolId,
-					arguments: JSON.parse(tc.arguments) as Record<string, unknown>,
+					arguments: parsedArgs,
 					agentId: agent.id,
 					timestamp: toISOTimestamp(),
 				};
@@ -543,7 +549,7 @@ export class SessionManager implements ISessionManager {
 				this.deps.sessionEventBus?.emitStreamEvent(activation.agentId, sessionId, {
 					type: 'tool_use',
 					toolName: tc.name,
-					toolArguments: call.arguments,
+					toolArguments: parsedArgs,
 				});
 
 				const budgetRemaining = ((agent.behavioralBounds.maxCostPerSession as number) -

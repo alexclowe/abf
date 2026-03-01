@@ -20,6 +20,8 @@ export class Scheduler implements IScheduler {
 	private readonly onActivation: ActivationHandler;
 	private readonly onProactiveEval?: ProactiveEvalHandler | undefined;
 	private readonly intervalMs: number = 5_000;
+	/** Cached Cron instances keyed by expression string — avoids re-parsing each tick. */
+	private readonly cronCache = new Map<string, Cron>();
 
 	constructor(
 		onActivation: ActivationHandler,
@@ -53,6 +55,15 @@ export class Scheduler implements IScheduler {
 	}
 
 	unregisterAgent(agentId: AgentId): void {
+		// Clear cached cron instances for this agent's triggers
+		const agent = this.agents.get(agentId);
+		if (agent) {
+			for (const trigger of agent.triggers) {
+				if ((trigger.type === 'cron' || trigger.type === 'proactive') && 'schedule' in trigger) {
+					this.cronCache.delete(trigger.schedule);
+				}
+			}
+		}
 		this.agents.delete(agentId);
 	}
 
@@ -110,7 +121,12 @@ export class Scheduler implements IScheduler {
 
 	private matchesCron(expression: string, now: Date): boolean {
 		try {
-			const cron = new Cron(expression, { timezone: 'UTC' });
+			// Use cached Cron instance to avoid re-parsing on every tick
+			let cron = this.cronCache.get(expression);
+			if (!cron) {
+				cron = new Cron(expression, { timezone: 'UTC' });
+				this.cronCache.set(expression, cron);
+			}
 			// Get the next scheduled time starting from one interval ago
 			const windowStart = new Date(now.getTime() - this.intervalMs);
 			const nextInWindow = cron.nextRun(windowStart);

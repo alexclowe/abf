@@ -24,6 +24,9 @@ import { computeChecksum, verifyChecksum } from '../util/checksum.js';
 import { toISOTimestamp } from '../util/id.js';
 
 export class FilesystemMemoryStore implements IMemoryStore {
+	/** Cached history file content — avoids re-reading entire file after append. */
+	private readonly contentCache = new Map<string, string>();
+
 	constructor(private readonly basePath: string) {}
 
 	async read(agentId: AgentId, layer: MemoryLayer): Promise<Result<string, ABFError>> {
@@ -54,8 +57,15 @@ export class FilesystemMemoryStore implements IMemoryStore {
 			const entry = `\n---\n_${timestamp}_\n\n${content}\n`;
 			await appendFile(filePath, entry, 'utf-8');
 
-			// Write checksum sidecar
-			const fullContent = await readFile(filePath, 'utf-8');
+			// Compute checksum without re-reading the full file:
+			// use cached content if available, otherwise read once
+			let fullContent = this.contentCache.get(filePath);
+			if (fullContent !== undefined) {
+				fullContent += entry;
+			} else {
+				fullContent = await readFile(filePath, 'utf-8');
+			}
+			this.contentCache.set(filePath, fullContent);
 			const checksum = computeChecksum(fullContent);
 			await writeFile(`${filePath}.checksum`, checksum, 'utf-8');
 
