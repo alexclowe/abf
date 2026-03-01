@@ -1,5 +1,7 @@
 # ABF Quickstart Guide
 
+> **Note**: This page has been superseded by the [Getting Started Guide](getting-started.md), which is more comprehensive and up to date. This page is kept for existing links.
+
 This guide walks you through creating your first ABF project, configuring an LLM provider, running your agents, and understanding what happens under the hood.
 
 ---
@@ -29,7 +31,7 @@ abf --version
 You should see output like:
 
 ```
-0.1.0
+1.0.0
 ```
 
 ---

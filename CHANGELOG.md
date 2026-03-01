@@ -6,6 +6,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [1.1.0] — 2026-03-01
+
+### Added
+- **Comprehensive security guide** (`docs/security.md`) — covers risks of autonomous agents, 9 protection mechanisms, deployment checklist, custom tool security, and incident response. Written for both technical and non-technical audiences.
+- **ScopedVault** for custom tools — custom tools now receive a credential vault scoped to only the providers their tools need. A web-search tool cannot read Stripe API keys. Includes `TOOL_PROVIDER_MAP` and `deriveAllowedProviders()` utility.
+- **Session abort propagation** — `AbortController` threaded through session manager → provider → SDK/fetch. Timeouts now cancel in-flight LLM API calls immediately instead of leaving orphaned requests. `executeStreaming()` now has timeout support matching `execute()`.
+- **Code-execute sandboxing** — child processes run without `HOME` or `NODE_PATH` env vars, stdout/stderr capped at 10 MB, temp files written with `0o600` permissions. On Node.js 22+, `--experimental-permission` flags restrict filesystem and network access at the OS level.
+- Dashboard search and filter controls across agent, escalation, and log views.
+- CI audit step in GitHub Actions pipeline.
+
+### Security
+- **Path traversal** — agent YAML and tool file loading now validates paths stay within the project root.
+- **SQL injection** — `database-query` and `database-write` tools use parameterized queries exclusively. DDL statements (DROP, ALTER, TRUNCATE) are blocked.
+- **XSS** — Gateway HTML responses are escaped. Content-Security-Policy, X-Content-Type-Options, and X-Frame-Options headers added.
+- **CSRF** — state-changing API endpoints require authentication token (not cookie-based).
+- **Rate limiting** — global rate limiting on authentication endpoints (5 req / 15 min / IP) and general API routes.
+- **CORS hardening** — warning logged when CORS is set to wildcard in production. Documentation updated with correct configuration.
+- **Config backup** — `abf.config.yaml` is backed up before destructive operations.
+- **Credential isolation** — custom tools can no longer read credentials outside their provider scope (ScopedVault).
+- **Code execution sandbox** — `code-execute` tool child processes isolated from credentials and home directory.
+- **Session abort** — timed-out sessions now cancel LLM API calls, preventing resource leaks and continued token consumption.
+
+### Fixed
+- Session timer leak — `clearTimeout` now called on all code paths, preventing timers from firing after session completion.
+- Cron scheduling — scheduler caches parsed cron expressions, reducing per-tick overhead.
+- Dispatcher — event-driven architecture replaces polling loop, reducing idle CPU usage.
+- SSE delta updates — dashboard receives incremental state changes instead of full snapshots.
+- Parallel config loading at startup — agent, team, and tool configs loaded concurrently.
+- Parallel imports — dynamic imports in session manager and tool loader run concurrently.
+- Async tool loader — tools loaded asynchronously without blocking the event loop.
+- `executeStreaming()` timeout — streaming sessions now have the same timeout protection as `execute()`.
+
+### Changed
+- Dashboard UX improvements for operator adoption — clearer navigation, better empty states, improved error messages.
+- Gateway status endpoint caches responses to reduce load under monitoring.
+- Version badge updated to 1.1.0.
+
+---
+
 ## [1.0.0] — 2026-02-26
 
 ### Added
@@ -93,7 +132,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Message bus schema**: `{ from, to, type, priority, context, payload, timestamp, deadline }`. Types: REQUEST, RESPONSE, ALERT, ESCALATION, STATUS, BROADCAST.
 - Input pipeline for prompt injection defense: source tagging, content isolation, injection detection, output validation.
 
-[1.0.0]: https://github.com/your-org/abf/compare/v0.3.0...v1.0.0
-[0.3.0]: https://github.com/your-org/abf/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/your-org/abf/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/your-org/abf/releases/tag/v0.1.0
+[1.1.0]: https://github.com/alexclowe/abf/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/alexclowe/abf/compare/v0.3.0...v1.0.0
+[0.3.0]: https://github.com/alexclowe/abf/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/alexclowe/abf/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/alexclowe/abf/releases/tag/v0.1.0
