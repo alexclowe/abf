@@ -5,9 +5,15 @@
  * - `additionalProperties: false` on every object
  * - All properties in `required` (use nullable types instead of optional)
  * - No `$ref` or schema composition (`anyOf` for nullability is OK)
+ * - No dynamic-key objects (Record<string, string> is NOT allowed)
  *
  * This schema represents the LLM's output — it omits metadata fields (generatedAt,
  * seedVersion, seedText) that the analyzer adds after parsing.
+ *
+ * NOTE: `knowledge` is represented as an array of { filename, content } pairs
+ * because OpenAI strict mode doesn't support dynamic-key maps. The analyzer
+ * converts this back to Record<string, string> after parsing via
+ * `normalizeStructuredOutput()`.
  */
 
 export const COMPANY_PLAN_JSON_SCHEMA: Record<string, unknown> = {
@@ -106,8 +112,16 @@ export const COMPANY_PLAN_JSON_SCHEMA: Record<string, unknown> = {
 			},
 		},
 		knowledge: {
-			type: 'object',
-			additionalProperties: { type: 'string' },
+			type: 'array',
+			items: {
+				type: 'object',
+				additionalProperties: false,
+				required: ['filename', 'content'],
+				properties: {
+					filename: { type: 'string' },
+					content: { type: 'string' },
+				},
+			},
 		},
 		workflows: {
 			type: 'array',
@@ -215,3 +229,29 @@ export const COMPANY_PLAN_JSON_SCHEMA: Record<string, unknown> = {
 		},
 	},
 };
+
+/**
+ * Normalize structured output from OpenAI back to the CompanyPlan shape.
+ *
+ * OpenAI strict mode can't represent `Record<string, string>`, so the schema
+ * uses `knowledge: [{ filename, content }]` instead. This function converts
+ * the array back to a Record. Safe to call on non-structured output (no-ops
+ * if knowledge is already a Record).
+ */
+export function normalizeStructuredOutput(parsed: Record<string, unknown>): void {
+	const knowledge = parsed['knowledge'];
+	if (Array.isArray(knowledge)) {
+		const map: Record<string, string> = {};
+		for (const entry of knowledge) {
+			if (
+				typeof entry === 'object' &&
+				entry !== null &&
+				typeof (entry as Record<string, unknown>)['filename'] === 'string' &&
+				typeof (entry as Record<string, unknown>)['content'] === 'string'
+			) {
+				map[(entry as Record<string, string>)['filename']!] = (entry as Record<string, string>)['content']!;
+			}
+		}
+		parsed['knowledge'] = map;
+	}
+}

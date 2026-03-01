@@ -10,7 +10,7 @@ import type { IProviderRegistry } from '../types/provider.js';
 import type { ChatMessage, ChatRequest, ResponseFormat } from '../types/provider.js';
 import type { CompanyPlan } from './types.js';
 import { ANALYZER_SYSTEM_PROMPT, REANALYZE_SYSTEM_PROMPT } from './prompts.js';
-import { COMPANY_PLAN_JSON_SCHEMA } from './schema.js';
+import { COMPANY_PLAN_JSON_SCHEMA, normalizeStructuredOutput } from './schema.js';
 
 // ─── Options ────────────────────────────────────────────────────────
 
@@ -221,6 +221,9 @@ export async function analyzeSeedDoc(
 			const json = extractJSON(response);
 			const parsed = JSON.parse(json);
 
+			// Normalize structured output quirks (e.g. knowledge array → Record)
+			normalizeStructuredOutput(parsed);
+
 			if (!validatePlanShape(parsed)) {
 				throw new Error(
 					'Invalid company plan: missing required fields (company, agents[], teams[]).',
@@ -332,6 +335,9 @@ export async function reanalyzeSeedDoc(
 		try {
 			const json = extractJSON(response);
 			const parsed = JSON.parse(json);
+
+			// Normalize structured output quirks (e.g. knowledge array → Record)
+			normalizeStructuredOutput(parsed);
 
 			if (!validatePlanShape(parsed)) {
 				throw new Error(
