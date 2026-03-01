@@ -56,7 +56,8 @@ class InMemoryKeychain implements IKeychain {
 	}
 
 	async getMasterKey(): Promise<Buffer | null> {
-		return this.store.get('master') ?? null;
+		const buf = this.store.get('master');
+		return buf ? Buffer.from(buf) : null;
 	}
 
 	async deleteMasterKey(): Promise<void> {
