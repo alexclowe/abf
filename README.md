@@ -6,7 +6,7 @@
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Node.js 20+](https://img.shields.io/badge/node-%3E%3D20-green.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue.svg)
-![v1.1.0](https://img.shields.io/badge/version-1.1.0-brightgreen.svg)
+![v1.2.0](https://img.shields.io/badge/version-1.2.0-brightgreen.svg)
 
 ```bash
 npx @abf/cli init --template solo-founder --name my-business
@@ -75,13 +75,13 @@ ABF ships with 3 templates and can generate custom teams from any business descr
 | **Marketing Agency** | Director, Strategist, Copywriter, Analyst | Campaign planning, copywriting, and analytics |
 | **Custom (Seed)** | AI-designed team | Any business: upload a plan or answer interview questions |
 
-Have a business plan? Generate a custom team in one command:
+Have a business plan? Generate a custom team -- and a plan to build the product -- in one command:
 
 ```bash
 abf init --seed ./my-business-plan.md
 ```
 
-ABF accepts `.docx`, `.pdf`, `.txt`, and `.md` files. [Full Seed-to-Company guide](docs/guides/seed-to-company.md).
+ABF accepts `.docx`, `.pdf`, `.txt`, and `.md` files. When your seed document describes a product to build (SaaS, marketplace, platform), the analyzer generates an **adaptive build plan** alongside the agent team. A Builder agent orchestrates product construction -- provisioning databases, generating frontends, configuring payments, deploying -- with human approval at every critical step. [Full Seed-to-Company guide](docs/guides/seed-to-company.md).
 
 ---
 

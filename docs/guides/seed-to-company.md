@@ -95,10 +95,13 @@ Project created: /home/user/coachai
 |---|---|
 | `abf.config.yaml` | Project configuration with project name |
 | `agents/*.agent.yaml` | One file per agent with name, role, provider, tools, triggers, behavioral bounds, KPIs, and charter |
+| `agents/architect.agent.yaml` | Company Architect meta-agent (auto-injected) |
+| `agents/builder.agent.yaml` | Builder agent for product construction (auto-injected, only when a build plan is generated) |
 | `teams/*.team.yaml` | Team definitions with orchestrators and member lists |
 | `knowledge/seed.md` | Your original document with frontmatter (company name, date, version) |
 | `knowledge/company.md` | Company overview derived from the seed |
 | `knowledge/brand-voice.md` | Brand voice guidelines |
+| `knowledge/build-plan.md` | Adaptive build plan with phases, steps, agent assignments, and approval checkpoints (only when seed describes a product to build) |
 | `knowledge/tool-gaps.md` | Tool gaps with priority levels (if any) |
 | `memory/decisions.md` | Initial decision log |
 | `workflows/*.workflow.yaml` | Multi-agent workflows (if the analyzer designs any) |
@@ -113,6 +116,27 @@ Every seed-generated project includes a special agent called the **Company Archi
 - Cannot modify agents directly -- only recommends changes for human approval
 
 The Architect ensures your agent team stays aligned with your business as it evolves.
+
+### The Builder Agent
+
+When the seed document describes a product that needs to be built (SaaS, marketplace, platform, web app), the analyzer generates an **adaptive build plan** and injects a **Builder** agent alongside the Architect. The Builder:
+
+- Reads `knowledge/build-plan.md` on activation (5-minute heartbeat)
+- Creates a structured plan-task from the build phases and steps
+- For each step: requests human approval (for infrastructure, deployment, payments), then spawns the assigned agent to execute
+- Uses `sessions-spawn` to delegate work to developer, marketer, and other agents
+- Tracks progress across sessions using `plan-task` and `reschedule`
+
+The build plan is adaptive -- the LLM generates it based on what your specific business needs:
+
+| Business Type | Typical Build Phases |
+|---|---|
+| SaaS / Platform | Provision database, generate frontend, configure auth, set up payments, deploy |
+| Agency / Services | Build landing page, set up email/CRM, launch marketing |
+| Content Business | Configure CMS/social channels, create initial content, launch |
+| E-Commerce | Provision backend, generate storefront, configure payments, deploy |
+
+Every step that provisions infrastructure, deploys, or configures payments requires human approval before execution. The Builder cannot approve its own requests.
 
 ---
 
@@ -131,6 +155,7 @@ The Dashboard setup wizard provides a visual version of the same pipeline.
    - Team composition diagram
    - Knowledge file previews
    - Tool gaps with colored priority badges (red = required, yellow = important, green = nice-to-have)
+   - **Build plan** with expandable phases, step-by-step details, agent assignments, complexity badges, and approval checkpoints (only when a product needs building)
    - Workflow outlines
 6. **Click "Create Project"** -- Files are written and agents are hot-loaded into the runtime
 
@@ -181,15 +206,21 @@ If you do not have a document but have a business idea, ABF can interview you to
 
 1. **Choose provider** and **enter API key** in the setup wizard
 2. **Select "Start a new company from an idea"**
-3. **Answer 8-12 questions** -- The interview engine asks about:
+3. **Answer 8-13 questions** -- The interview engine asks about:
    - Your company's vision and what problem it solves
    - Target customers and their pain points
    - Revenue model and pricing
-   - Core operations and business functions
+   - Core product/service offering
+   - **Product type** -- Does it need a web app, mobile app, or API built? (skipped for pure services)
+   - **MVP features** -- The 3-5 most important features for launch
+   - **Payment model** -- Subscriptions, one-time, credits (if applicable)
+   - **Authentication needs** -- User accounts, social login, etc.
+   - Competitive positioning
+   - Key operations and business functions
    - Key metrics and KPIs
    - Brand voice and communication style
    - Governance and decision-making processes
-4. **Review the generated seed document** -- The interview produces a comprehensive seed document (800-2000 words)
+4. **Review the generated seed document** -- The interview produces a comprehensive seed document (800-2000 words) including an "MVP Technical Requirements" section when a product needs to be built
 5. **Review the company plan** -- Same review interface as Path B
 6. **Create the project**
 
@@ -287,6 +318,16 @@ The analyzer works best with documents that cover:
 - **Metrics** -- What success looks like (KPIs, targets)
 - **Communication style** -- Brand voice, formality level
 - **Decision-making** -- What requires human approval vs. agent autonomy
+
+If your business involves building a product (SaaS, platform, marketplace), also include:
+
+- **Product type** -- Web app, mobile app, API, etc.
+- **Key features for launch** -- The 3-5 most important features
+- **Authentication needs** -- User accounts, social login, OAuth
+- **Payment model** -- Subscriptions, one-time purchase, credits, free tier
+- **Database needs** -- What data is stored and queried
+
+This "MVP Technical Requirements" section gives the analyzer enough context to generate a good adaptive build plan. Without it, the analyzer will still generate an agent team, but may not produce a build plan.
 
 A 500-2000 word document typically produces the best results. Very short documents (under 200 words) may produce generic agents. Very long documents (over 5000 words) may overwhelm the analyzer with details.
 

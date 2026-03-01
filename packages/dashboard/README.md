@@ -15,7 +15,7 @@ A Next.js 15 application that provides:
 - **Metrics Dashboard** -- Runtime metrics with auto-refresh (every 5 seconds)
 - **KPI Tracking** -- Per-agent performance tracking with target vs. actual gauges
 - **Session Logs** -- Browse session logs and audit trail
-- **Setup Wizard** -- 6-step onboarding: provider selection, API key, company type (interview / document / template), plan review, project creation
+- **Setup Wizard** -- 6-step onboarding: provider selection, API key, company type (interview / document / template), plan review (agents, teams, knowledge, tool gaps, build plan), project creation
 
 ## How It Works
 

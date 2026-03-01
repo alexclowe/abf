@@ -27,7 +27,7 @@ This is a pnpm monorepo managed with Turborepo.
 packages/
   core/        # Runtime, providers, tools, memory, bus, seed pipeline
   cli/         # `abf` CLI — commands: init, dev, run, status, auth, logs, migrate
-  dashboard/   # Next.js 14 dashboard — operator UI and REST API routes
+  dashboard/   # Next.js 15 dashboard — operator UI and REST API routes
 ```
 
 All packages are written in TypeScript and share `tsconfig.base.json` at the repo root.

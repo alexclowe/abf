@@ -7,7 +7,7 @@ The runtime engine for the [Agentic Business Framework (ABF)](https://github.com
 `@abf/core` is the foundation of ABF. It includes:
 
 - **Runtime** -- Scheduler, Dispatcher, Session Manager, Message Bus, and HTTP Gateway (Hono)
-- **Providers** -- LLM provider adapters for Anthropic, OpenAI, Google, and Ollama
+- **Providers** -- LLM provider adapters for Anthropic, OpenAI, Google, Ollama, and any OpenAI-compatible endpoint
 - **Tools** -- 30+ built-in tools (web search, database, file I/O, messaging, and more)
 - **Memory** -- File-based and PostgreSQL+pgvector memory backends
 - **Schemas** -- Zod schemas for agent YAML, team YAML, config, workflows, monitors, and more
@@ -50,6 +50,8 @@ await runtime.start();
 | `extractText` | Seed document parser (docx, pdf, txt, md) |
 | `analyzeSeedDoc` | LLM-powered seed document analyzer |
 | `applyCompanyPlan` | Writes CompanyPlan to project files |
+| `generateBuilderAgent` | Creates the Builder agent definition for build plan execution |
+| `formatBuildPlanMarkdown` | Formats a BuildPlan as readable Markdown |
 | `InterviewEngine` | Stateful Q&A interview for building seed docs |
 | `ARCHETYPES` | Built-in role archetype definitions |
 
