@@ -47,6 +47,31 @@ export class MemoryCompactor {
 	}
 
 	/**
+	 * Check and compact in a single pass — loads context once.
+	 * Preferred over calling shouldCompact() + compact() separately.
+	 */
+	async compactIfNeeded(agentId: AgentId): Promise<boolean> {
+		if (!this.config.enabled) return false;
+
+		const result = await this.memoryStore.loadContext(agentId);
+		if (!result.ok) return false;
+
+		const historyText = result.value.history.map((h) => h.content).join('');
+		const entries = historyText.split(/\n---\n/).filter((e) => e.trim());
+
+		if (entries.length <= this.config.threshold) return false;
+		if (entries.length <= this.config.windowSize) return false;
+
+		const olderEntries = entries.slice(0, entries.length - this.config.windowSize);
+		const summary = await this.summarize(olderEntries.join('\n---\n'));
+		if (summary) {
+			await this.memoryStore.write(agentId, 'knowledge', summary);
+		}
+
+		return true;
+	}
+
+	/**
 	 * Compact an agent's history: summarize older entries, keep recent window.
 	 */
 	async compact(agentId: AgentId): Promise<void> {

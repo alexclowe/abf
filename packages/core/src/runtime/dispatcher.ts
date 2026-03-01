@@ -22,6 +22,8 @@ export class Dispatcher implements IDispatcher {
 	private readonly maxConcurrent: number;
 	/** Tracks pending heartbeat timers so they can be cleared on shutdown. */
 	private readonly heartbeatTimers = new Map<string, ReturnType<typeof setTimeout>>();
+	/** Waiters for dispatchAndWait — resolved when sessions complete. */
+	private readonly completionWaiters = new Map<string, (result: SessionResult) => void>();
 
 	constructor(
 		private readonly sessionManager: ISessionManager,
@@ -116,21 +118,36 @@ export class Dispatcher implements IDispatcher {
 		if (!dispatchResult.ok) return dispatchResult as unknown as Result<SessionResult, ABFError>;
 
 		const sessionId = dispatchResult.value;
-		const deadline = Date.now() + timeoutMs;
 
-		while (Date.now() < deadline) {
-			const result = this.completedSessions.get(sessionId);
-			if (result) return Ok(result);
-			await new Promise<void>((resolve) => setTimeout(resolve, 250));
+		// Check if already completed (fast path)
+		const existing = this.completedSessions.get(sessionId);
+		if (existing) return Ok(existing);
+
+		// Event-driven: register a waiter that onSessionComplete will resolve
+		const resultPromise = new Promise<SessionResult>((resolve) => {
+			this.completionWaiters.set(sessionId, resolve);
+		});
+
+		const timeoutPromise = new Promise<never>((_, reject) => {
+			setTimeout(() => {
+				this.completionWaiters.delete(sessionId);
+				reject(
+					new ABFErrorClass(
+						'SESSION_TIMEOUT',
+						`Workflow step timed out after ${timeoutMs}ms waiting for session ${sessionId}`,
+						{ sessionId },
+					),
+				);
+			}, timeoutMs);
+		});
+
+		try {
+			const result = await Promise.race([resultPromise, timeoutPromise]);
+			return Ok(result);
+		} catch (e) {
+			if (e instanceof ABFErrorClass) return Err(e);
+			return Err(new ABFErrorClass('RUNTIME_ERROR', String(e)));
 		}
-
-		return Err(
-			new ABFErrorClass(
-				'SESSION_TIMEOUT',
-				`Workflow step timed out after ${timeoutMs}ms waiting for session ${sessionId}`,
-				{ sessionId },
-			),
-		);
 	}
 
 	getActiveSessions(): readonly WorkSession[] {
@@ -186,6 +203,13 @@ export class Dispatcher implements IDispatcher {
 		if (this.completedSessions.size > 100) {
 			const firstKey = this.completedSessions.keys().next().value;
 			if (firstKey !== undefined) this.completedSessions.delete(firstKey);
+		}
+
+		// Resolve any dispatchAndWait waiter (event-driven, no polling)
+		const waiter = this.completionWaiters.get(result.sessionId);
+		if (waiter) {
+			this.completionWaiters.delete(result.sessionId);
+			waiter(result);
 		}
 
 		// Collect escalations from session result

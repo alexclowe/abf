@@ -120,11 +120,16 @@ export async function loadAgentConfigs(
 		return Ok([]); // No agents dir = no agents
 	}
 
+	// Load all agent configs in parallel
+	const results = await Promise.all(files.map((file) => loadAgentConfig(join(dir, file))));
 	const configs: AgentConfig[] = [];
-	for (const file of files) {
-		const result = await loadAgentConfig(join(dir, file));
-		if (!result.ok) return result;
-		configs.push(result.value);
+	const errors: string[] = [];
+	for (const result of results) {
+		if (!result.ok) errors.push(result.error.message);
+		else configs.push(result.value);
+	}
+	if (errors.length > 0) {
+		return Err(new ConfigError('CONFIG_INVALID', errors.join('\n')));
 	}
 
 	return Ok(configs);
@@ -182,11 +187,16 @@ export async function loadTeamConfigs(
 		return Ok([]); // No teams dir = no teams
 	}
 
+	// Load all team configs in parallel
+	const results = await Promise.all(files.map((file) => loadTeamConfig(join(dir, file))));
 	const configs: TeamConfig[] = [];
-	for (const file of files) {
-		const result = await loadTeamConfig(join(dir, file));
-		if (!result.ok) return result;
-		configs.push(result.value);
+	const errors: string[] = [];
+	for (const result of results) {
+		if (!result.ok) errors.push(result.error.message);
+		else configs.push(result.value);
+	}
+	if (errors.length > 0) {
+		return Err(new ConfigError('CONFIG_INVALID', errors.join('\n')));
 	}
 
 	return Ok(configs);
@@ -247,11 +257,16 @@ export async function loadWorkflowConfigs(
 		return Ok([]); // No workflows dir = no workflows
 	}
 
+	// Load all workflow configs in parallel
+	const results = await Promise.all(files.map((file) => loadWorkflowConfig(join(dir, file))));
 	const configs: WorkflowDefinition[] = [];
-	for (const file of files) {
-		const result = await loadWorkflowConfig(join(dir, file));
-		if (!result.ok) return result;
-		configs.push(result.value);
+	const errors: string[] = [];
+	for (const result of results) {
+		if (!result.ok) errors.push(result.error.message);
+		else configs.push(result.value);
+	}
+	if (errors.length > 0) {
+		return Err(new ConfigError('CONFIG_INVALID', errors.join('\n')));
 	}
 
 	return Ok(configs);

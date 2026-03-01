@@ -36,6 +36,40 @@ import type { ContentPart } from '../types/provider.js';
 /** Tools whose output comes from external/untrusted sources. */
 const EXTERNAL_TOOLS = new Set(['web-search', 'web-fetch', 'browse']);
 
+/** Max characters for history section in prompts. */
+const HISTORY_CHAR_BUDGET = 4000;
+
+/**
+ * Window history entries to fit within a character budget.
+ * Keeps the most recent entries, truncating older ones first.
+ */
+function windowHistory(history: readonly { content: string }[]): string {
+	if (history.length === 0) return '';
+
+	// Join all entries
+	const entries = history.map((h) => h.content);
+	const full = entries.join('\n---\n');
+	if (full.length <= HISTORY_CHAR_BUDGET) return full;
+
+	// Take entries from the end until budget is exhausted
+	const result: string[] = [];
+	let remaining = HISTORY_CHAR_BUDGET;
+	for (let i = entries.length - 1; i >= 0; i--) {
+		const entry = entries[i]!;
+		const needed = entry.length + (result.length > 0 ? 5 : 0); // 5 = '\n---\n'.length
+		if (needed > remaining) {
+			// Truncate this entry to fill remaining budget
+			if (remaining > 10) {
+				result.unshift(entry.slice(0, remaining - 1) + '\u2026');
+			}
+			break;
+		}
+		result.unshift(entry);
+		remaining -= needed;
+	}
+	return result.join('\n---\n');
+}
+
 /** Map trigger types to InputSource for the security pipeline. */
 function triggerToInputSource(trigger: import('../types/trigger.js').TriggerConfig): InputSource {
 	switch (trigger.type) {
@@ -637,11 +671,9 @@ export class SessionManager implements ISessionManager {
 				);
 			}
 
-			// Fire-and-forget compaction check (R8)
+			// Fire-and-forget compaction check (R8) — single-pass, loads context once
 			if (this.deps.compactor) {
-				void this.deps.compactor.shouldCompact(activation.agentId).then((needed) => {
-					if (needed) void this.deps.compactor!.compact(activation.agentId);
-				});
+				void this.deps.compactor.compactIfNeeded(activation.agentId);
 			}
 		}
 
@@ -900,7 +932,7 @@ export class SessionManager implements ISessionManager {
 				? `Historical Summary:\n${memory.summary}`
 				: '',
 			memory.history.length > 0
-				? `Recent History:\n${memory.history.map((h) => h.content).join('\n---\n')}`
+				? `Recent History:\n${windowHistory(memory.history)}`
 				: '',
 			memory.decisions.length > 0
 				? `Team Decisions:\n${memory.decisions.map((d) => d.content).join('\n')}`

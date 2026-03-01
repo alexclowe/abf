@@ -18,10 +18,18 @@ import { createActivationId, toISOTimestamp } from '../util/id.js';
 import type { IDispatcher } from './interfaces.js';
 
 export class WorkflowRunner {
+	/** Name→AgentConfig index for O(1) lookup by agent name in workflow steps. */
+	private readonly agentsByName: Map<string, AgentConfig>;
+
 	constructor(
 		private readonly dispatcher: IDispatcher,
-		private readonly agentsMap: ReadonlyMap<string, AgentConfig>,
-	) {}
+		agentsMap: ReadonlyMap<string, AgentConfig>,
+	) {
+		this.agentsByName = new Map();
+		for (const agent of agentsMap.values()) {
+			this.agentsByName.set(agent.name, agent);
+		}
+	}
 
 	async run(
 		workflow: WorkflowDefinition,
@@ -80,8 +88,8 @@ export class WorkflowRunner {
 		const startedAt = toISOTimestamp();
 		const task = this.interpolate(step.task, context);
 
-		// Find agent by name
-		const agent = [...this.agentsMap.values()].find((a) => a.name === step.agent);
+		// Find agent by name (O(1) via index)
+		const agent = this.agentsByName.get(step.agent);
 		if (!agent) {
 			return {
 				stepId: step.id,
