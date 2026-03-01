@@ -227,11 +227,11 @@ async function sendEmail(ctx: BuiltinToolContext, args: Readonly<Record<string, 
 				from,
 				to,
 				subject,
-				...(html ? { html } : {}),
-				...(text ? { text } : {}),
-				...(replyTo ? { reply_to: replyTo } : {}),
-				...(tagObjects ? { tags: tagObjects } : {}),
-			});
+				html: html || undefined,
+				text: text || undefined,
+				reply_to: replyTo || undefined,
+				tags: tagObjects,
+			} as Parameters<typeof resend.emails.send>[0]);
 
 			return Ok({ sent: true, id: (result as { data?: { id?: string } }).data?.id, provider: 'resend' });
 		} catch (err) {
