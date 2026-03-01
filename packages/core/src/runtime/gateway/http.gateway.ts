@@ -30,6 +30,7 @@ import { registerChannelRoutes } from './channel.routes.js';
 import { registerBillingRoutes } from './billing.routes.js';
 import { registerOAuthRoutes } from './oauth.routes.js';
 import { isValidApiKey } from './auth-utils.js';
+import { checkRateLimit } from './rate-limit.js';
 import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 
 const ABF_VERSION = '0.0.1';
@@ -114,6 +115,23 @@ export class HttpGateway implements IGateway {
 			c.res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
 			c.res.headers.set('X-XSS-Protection', '1; mode=block');
 		});
+
+		// Rate limiting middleware [H-05]
+		app.use('/api/*', async (c, next) => {
+			const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+			const result = checkRateLimit(ip, c.req.path);
+			if (!result.allowed) {
+				c.res.headers.set('Retry-After', String(Math.ceil((result.resetAt - Date.now()) / 1000)));
+				return c.json({ error: 'Too many requests' }, 429);
+			}
+			c.res.headers.set('X-RateLimit-Remaining', String(result.remaining));
+			return next();
+		});
+
+		// CORS validation warning [M-03]
+		if (process.env['ABF_CORS_ORIGINS']?.includes('*')) {
+			console.warn('[gateway] WARNING: ABF_CORS_ORIGINS contains wildcard "*". This is insecure in production.');
+		}
 
 		// CSRF protection: enforce application/json on mutating API endpoints [M-05]
 		app.use('/api/*', async (c, next) => {
@@ -263,8 +281,22 @@ export class HttpGateway implements IGateway {
 			});
 		});
 
-		// -- Status ---------------------------------------------------------------
+		// -- Status (cached provider check for 30s) --------------------------------
+		let statusCache: { data: unknown; expiresAt: number } | null = null;
 		app.get('/api/status', async (c) => {
+			// Return cached response if still fresh (30s TTL for provider status)
+			if (statusCache && Date.now() < statusCache.expiresAt) {
+				// Update dynamic fields (uptime, activeSessions) even from cache
+				const cached = statusCache.data as Record<string, unknown>;
+				return c.json({
+					...cached,
+					uptime: process.uptime(),
+					activeSessions: deps.dispatcher.getActiveSessions().length,
+					agents: deps.agentsMap.size,
+					configured: deps.agentsMap.size > 0,
+				});
+			}
+
 			const isCloud = Boolean(
 				process.env['RENDER'] || process.env['RAILWAY_ENVIRONMENT'] || process.env['FLY_APP_NAME'],
 			);
@@ -283,7 +315,7 @@ export class HttpGateway implements IGateway {
 				}
 			}
 
-			return c.json({
+			const statusData = {
 				version: ABF_VERSION,
 				uptime: process.uptime(),
 				name: 'ABF Runtime',
@@ -293,7 +325,10 @@ export class HttpGateway implements IGateway {
 				isCloud,
 				providerConnected,
 				connectedProvider,
-			});
+			};
+			// Cache the provider check result for 30s
+			statusCache = { data: statusData, expiresAt: Date.now() + 30_000 };
+			return c.json(statusData);
 		});
 
 		// -- Agents ---------------------------------------------------------------
