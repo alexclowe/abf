@@ -6,8 +6,8 @@
  * DELETE /auth/:provider       — disconnect a provider
  * GET    /auth/ollama/detect   — dedicated Ollama probe with model details
  *
- * These routes are NOT behind the ABF_API_KEY middleware — they handle
- * their own security via rate limiting and input validation.
+ * These routes ARE behind the ABF_API_KEY middleware when configured.
+ * They also have their own rate limiting and input validation.
  */
 
 import type { Hono } from 'hono';

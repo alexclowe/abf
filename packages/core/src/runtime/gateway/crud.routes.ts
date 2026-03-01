@@ -6,7 +6,7 @@
  */
 
 import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { Hono } from 'hono';
 import { stringify, parse as parseYaml } from 'yaml';
 import { loadAgentConfig } from '../../config/loader.js';
@@ -14,6 +14,7 @@ import { teamYamlSchema, transformTeamYaml } from '../../schemas/team.schema.js'
 import type { AgentConfig } from '../../types/agent.js';
 import type { IScheduler } from '../interfaces.js';
 import type { GatewayDeps } from './http.gateway.js';
+import { sanitizeFilename, isPathWithinDir } from './auth-utils.js';
 
 export interface CrudDeps extends GatewayDeps {
 	readonly scheduler: IScheduler;
@@ -279,7 +280,11 @@ export function registerCrudRoutes(app: Hono, deps: CrudDeps): void {
 		try {
 			const filename = c.req.param('filename');
 			if (!filename.endsWith('.md')) return c.json({ error: 'Only .md files supported' }, 400);
-			const content = await readFile(join(root, 'knowledge', filename), 'utf-8');
+			if (!sanitizeFilename(filename)) return c.json({ error: 'Invalid filename' }, 400);
+			const knowledgeDir = join(root, 'knowledge');
+			const filePath = resolve(knowledgeDir, filename);
+			if (!isPathWithinDir(filePath, knowledgeDir)) return c.json({ error: 'Invalid filename' }, 400);
+			const content = await readFile(filePath, 'utf-8');
 			return c.json({ filename, content });
 		} catch {
 			return c.json({ error: 'File not found' }, 404);
@@ -306,9 +311,12 @@ export function registerCrudRoutes(app: Hono, deps: CrudDeps): void {
 	app.put('/api/knowledge/:filename', async (c) => {
 		try {
 			const filename = c.req.param('filename');
-			const body = await c.req.json<{ content: string }>();
+			if (!sanitizeFilename(filename)) return c.json({ error: 'Invalid filename' }, 400);
 			const knowledgeDir = join(root, 'knowledge');
-			await writeFile(join(knowledgeDir, filename), body.content, 'utf-8');
+			const filePath = resolve(knowledgeDir, filename);
+			if (!isPathWithinDir(filePath, knowledgeDir)) return c.json({ error: 'Invalid filename' }, 400);
+			const body = await c.req.json<{ content: string }>();
+			await writeFile(filePath, body.content, 'utf-8');
 			return c.json({ success: true });
 		} catch (e) {
 			return c.json({ error: `Failed to update file: ${e instanceof Error ? e.message : String(e)}` }, 500);
@@ -318,7 +326,11 @@ export function registerCrudRoutes(app: Hono, deps: CrudDeps): void {
 	app.delete('/api/knowledge/:filename', async (c) => {
 		try {
 			const filename = c.req.param('filename');
-			await unlink(join(root, 'knowledge', filename));
+			if (!sanitizeFilename(filename)) return c.json({ error: 'Invalid filename' }, 400);
+			const knowledgeDir = join(root, 'knowledge');
+			const filePath = resolve(knowledgeDir, filename);
+			if (!isPathWithinDir(filePath, knowledgeDir)) return c.json({ error: 'Invalid filename' }, 400);
+			await unlink(filePath);
 			return c.json({ success: true });
 		} catch {
 			return c.json({ error: 'File not found' }, 404);

@@ -3,8 +3,6 @@
  *
  * Used by `abf dev --provider ollama` and `abf init --provider ollama` to
  * ensure Ollama is available and has a working model before starting the runtime.
- *
- * Also used by the desktop app's setup flow for one-click local LLM setup.
  */
 
 import { spawn } from 'node:child_process';

@@ -6,6 +6,7 @@ import type { ITool, ToolDefinition } from '../../types/tool.js';
 import type { ToolId, USDCents } from '../../types/common.js';
 import { Ok, Err, ToolError } from '../../types/errors.js';
 import type { BuiltinToolContext } from './context.js';
+import { containsSqlInjection } from '../../runtime/gateway/auth-utils.js';
 
 export function createDatabaseQueryTool(ctx: BuiltinToolContext): ITool | null {
 	if (!ctx.datastore) return null;
@@ -49,6 +50,17 @@ export function createDatabaseQueryTool(ctx: BuiltinToolContext): ITool | null {
 					new ToolError(
 						'TOOL_EXECUTION_FAILED',
 						'database-query: only SELECT statements are allowed',
+						{},
+					),
+				);
+			}
+
+			// Reject multi-statement queries (SQL injection defense)
+			if (containsSqlInjection(sql)) {
+				return Err(
+					new ToolError(
+						'TOOL_EXECUTION_FAILED',
+						'database-query: multi-statement queries, comments, and semicolons are not allowed',
 						{},
 					),
 				);
