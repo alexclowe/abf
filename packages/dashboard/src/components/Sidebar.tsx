@@ -16,6 +16,11 @@ interface NavItem {
   external?: boolean;
 }
 
+interface NavGroup {
+  label: string;
+  items: typeof fallbackNav;
+}
+
 const fallbackNav = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/agents', label: 'Agents', icon: Bot },
@@ -34,6 +39,32 @@ const fallbackNav = [
   { href: '/logs', label: 'Logs', icon: ScrollText },
 ];
 
+const fallbackNavGroups: NavGroup[] = [
+  { label: 'Core', items: [
+    { href: '/', label: 'Overview', icon: LayoutDashboard },
+    { href: '/agents', label: 'Agents', icon: Bot },
+    { href: '/teams', label: 'Teams', icon: Users },
+    { href: '/workflows', label: 'Workflows', icon: GitBranch },
+  ]},
+  { label: 'Operations', items: [
+    { href: '/approvals', label: 'Approvals', icon: ShieldCheck },
+    { href: '/escalations', label: 'Escalations', icon: AlertTriangle },
+    { href: '/channels', label: 'Channels', icon: MessageSquare },
+    { href: '/message-templates', label: 'Templates', icon: Mail },
+  ]},
+  { label: 'Intelligence', items: [
+    { href: '/knowledge', label: 'Knowledge', icon: BookOpen },
+    { href: '/monitors', label: 'Monitors', icon: Eye },
+    { href: '/kpis', label: 'KPIs', icon: TrendingUp },
+    { href: '/metrics', label: 'Metrics', icon: BarChart3 },
+  ]},
+  { label: 'System', items: [
+    { href: '/settings', label: 'Settings', icon: Settings },
+    { href: '/billing', label: 'Billing', icon: CreditCard },
+    { href: '/logs', label: 'Logs', icon: ScrollText },
+  ]},
+];
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 const fetcher = (url: string) => fetch(url).then(r => r.ok ? r.json() : null);
 
@@ -43,6 +74,18 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
   });
+
+  // Fetch pending approval/escalation counts for badges
+  const { data: approvals } = useSWR(`${API_BASE}/api/approvals?status=pending`, fetcher, {
+    refreshInterval: 30_000,
+    revalidateOnFocus: false,
+  });
+  const { data: escalations } = useSWR(`${API_BASE}/api/escalations`, fetcher, {
+    refreshInterval: 30_000,
+    revalidateOnFocus: false,
+  });
+  const pendingApprovals = Array.isArray(approvals) ? approvals.length : 0;
+  const openEscalations = Array.isArray(escalations) ? escalations.filter((e: Record<string, unknown>) => !e.resolved).length : 0;
 
   // If API returned data, use it (resolving icon strings); otherwise fall back to static
   const navItems = apiNav
@@ -67,43 +110,82 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <span className="font-bold text-white text-sm tracking-wide">ABF Dashboard</span>
         </div>
       </div>
-      <nav className="flex-1 p-3 space-y-1">
-        {mainItems.map(({ href, label, icon: Icon, badge, external }) => {
-          const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
-          if (external) {
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+        {apiNav ? (
+          /* API-provided nav — flat list */
+          mainItems.map(({ href, label, icon: Icon, badge, external }) => {
+            const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
+            if (external) {
+              return (
+                <a
+                  key={href}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={onNavigate}
+                  className="flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+                >
+                  <Icon size={16} />
+                  {label}
+                  {badge && <span className="ml-auto text-xs bg-sky-500/20 text-sky-400 px-1.5 py-0.5 rounded">{badge}</span>}
+                </a>
+              );
+            }
             return (
-              <a
+              <Link
                 key={href}
                 href={href}
-                target="_blank"
-                rel="noopener noreferrer"
                 onClick={onNavigate}
-                className="flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+                className={clsx(
+                  'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+                  isActive
+                    ? 'bg-sky-500/10 text-sky-400 font-medium'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800',
+                )}
               >
                 <Icon size={16} />
                 {label}
                 {badge && <span className="ml-auto text-xs bg-sky-500/20 text-sky-400 px-1.5 py-0.5 rounded">{badge}</span>}
-              </a>
+              </Link>
             );
-          }
-          return (
-            <Link
-              key={href}
-              href={href}
-              onClick={onNavigate}
-              className={clsx(
-                'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
-                isActive
-                  ? 'bg-sky-500/10 text-sky-400 font-medium'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800',
-              )}
-            >
-              <Icon size={16} />
-              {label}
-              {badge && <span className="ml-auto text-xs bg-sky-500/20 text-sky-400 px-1.5 py-0.5 rounded">{badge}</span>}
-            </Link>
-          );
-        })}
+          })
+        ) : (
+          /* Fallback: grouped nav with section headers */
+          fallbackNavGroups.map((group) => (
+            <div key={group.label} className="mb-2">
+              <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                {group.label}
+              </div>
+              {group.items.map(({ href, label, icon: Icon }) => {
+                const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
+                const badgeCount = href === '/approvals' ? pendingApprovals
+                  : href === '/escalations' ? openEscalations
+                  : 0;
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={onNavigate}
+                    className={clsx(
+                      'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+                      isActive
+                        ? 'bg-sky-500/10 text-sky-400 font-medium'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800',
+                    )}
+                  >
+                    <Icon size={16} />
+                    {label}
+                    {badgeCount > 0 && (
+                      <span className="ml-auto text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full font-medium min-w-[1.25rem] text-center">
+                        {badgeCount}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          ))
+        )}
       </nav>
       {bottomItems.length > 0 && (
         <div className="p-3 border-t border-slate-800 space-y-1">

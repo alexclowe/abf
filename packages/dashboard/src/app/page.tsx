@@ -110,6 +110,14 @@ export default function OverviewPage() {
                   />
                   <button
                     type="button"
+                    onClick={() => handleRunClick(a.config.id)}
+                    disabled={!taskInputs[a.config.id]?.trim()}
+                    className="px-3 py-1.5 bg-green-600 hover:bg-green-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-md text-sm font-medium transition-colors"
+                  >
+                    Send
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setActiveInput(null)}
                     className="px-2 py-1.5 text-slate-400 hover:text-white text-sm transition-colors"
                   >
@@ -123,10 +131,16 @@ export default function OverviewPage() {
       ) : (
         <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center">
           <Bot size={32} className="mx-auto text-slate-600 mb-3" />
-          <p className="text-slate-400">No agents loaded.</p>
-          <p className="text-slate-500 text-sm mt-1">
-            Run <code className="bg-slate-800 px-1.5 py-0.5 rounded text-sky-400">abf dev</code> in your project directory.
+          <p className="text-slate-400">No agents configured yet.</p>
+          <p className="text-slate-500 text-sm mt-2">
+            Set up your first agents using the Setup Wizard.
           </p>
+          <a
+            href="/setup"
+            className="inline-block mt-4 px-6 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors"
+          >
+            Get Started
+          </a>
         </div>
       )}
 
