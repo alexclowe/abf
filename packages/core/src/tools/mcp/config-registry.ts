@@ -29,6 +29,7 @@ import { hubspot } from './configs/hubspot.config.js';
 import { notion } from './configs/notion.config.js';
 import { github } from './configs/github.config.js';
 import { linear } from './configs/linear.config.js';
+import { shadcn } from './configs/shadcn.config.js';
 
 export const MCP_CONFIG_LIBRARY: readonly MCPLibraryEntry[] = [
 	stripe,
@@ -37,6 +38,7 @@ export const MCP_CONFIG_LIBRARY: readonly MCPLibraryEntry[] = [
 	notion,
 	github,
 	linear,
+	shadcn,
 ];
 
 /** Get a config by ID. */

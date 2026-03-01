@@ -120,6 +120,10 @@ export type { IKeychain } from './credentials/index.js';
 export { CloudProxyProvider } from './providers/adapters/cloud-proxy.js';
 export type { CloudConfig } from './types/config.js';
 
+// ─── Plugin Registry ─────────────────────────────────────────────────
+export { PluginRegistry } from './runtime/gateway/plugin-registry.js';
+export type { DashboardPlugin, DashboardNavItem } from './types/plugin.js';
+
 // ─── Cloud Gateway ───────────────────────────────────────────────────
 export { createCloudGateway } from './cloud/gateway.js';
 export type { CloudGatewayDeps } from './cloud/gateway.js';

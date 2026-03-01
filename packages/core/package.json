@@ -1,6 +1,6 @@
 {
   "name": "@abf/core",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "type": "module",
   "description": "ABF runtime, types, and engine — the core of the Agentic Business Framework",
   "license": "MIT",

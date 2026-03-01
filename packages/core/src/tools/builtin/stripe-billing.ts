@@ -10,6 +10,7 @@ import { Ok, Err, ToolError } from '../../types/errors.js';
 import { toISOTimestamp } from '../../util/id.js';
 import type { BuiltinToolContext } from './context.js';
 import { credentialError } from './credential-error.js';
+import { cloudProxyCall, getCloudToken } from './cloud-proxy-call.js';
 
 const WRITE_ACTIONS = ['create-checkout', 'create-subscription', 'refund'];
 const ALL_ACTIONS = [...WRITE_ACTIONS, 'list-invoices', 'list-charges', 'verify-webhook', 'get-customer', 'list-subscriptions'];
@@ -78,6 +79,14 @@ export function createStripeBillingTool(ctx: BuiltinToolContext): ITool {
 					action,
 					message: `${action} queued for approval`,
 				});
+			}
+
+			// Cloud proxy: forward to ABF Cloud if running in cloud mode
+			if (ctx.isCloud && ctx.cloudEndpoint) {
+				const cloudToken = await getCloudToken(ctx);
+				if (cloudToken) {
+					return cloudProxyCall(ctx.cloudEndpoint, 'stripe-billing', { action, ...args }, cloudToken);
+				}
 			}
 
 			// Get Stripe API key: env var first, then vault

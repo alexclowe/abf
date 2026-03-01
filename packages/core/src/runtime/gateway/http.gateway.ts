@@ -33,7 +33,7 @@ import { registerOAuthRoutes } from './oauth.routes.js';
 import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 
 /** Timing-safe API key comparison to prevent timing attacks. */
-const ABF_VERSION = '1.0.0';
+const ABF_VERSION = '0.0.1';
 
 function isValidApiKey(received: string | undefined, required: string): boolean {
 	if (!received) return false;
@@ -64,6 +64,7 @@ export interface GatewayDeps {
 	readonly channelRouter?: import('../../messaging/channel-router.js').ChannelRouter | undefined;
 	readonly sessionEventBus?: import('../session-events.js').SessionEventBus | undefined;
 	readonly billingLedger?: import('../../billing/types.js').IBillingLedger | undefined;
+	readonly pluginRegistry?: import('./plugin-registry.js').PluginRegistry | undefined;
 }
 
 /** @deprecated Use GatewayDeps instead. Kept for backwards compatibility. */
@@ -527,6 +528,35 @@ export class HttpGateway implements IGateway {
 					forbiddenActions: defaults.forbiddenActions,
 				})),
 			);
+		});
+
+		// -- Navigation & Plugins -------------------------------------------------
+		const BASE_NAV_ITEMS: import('../../types/plugin.js').DashboardNavItem[] = [
+			{ href: '/', label: 'Overview', icon: 'LayoutDashboard' },
+			{ href: '/agents', label: 'Agents', icon: 'Bot' },
+			{ href: '/teams', label: 'Teams', icon: 'Users' },
+			{ href: '/workflows', label: 'Workflows', icon: 'GitBranch' },
+			{ href: '/knowledge', label: 'Knowledge', icon: 'BookOpen' },
+			{ href: '/monitors', label: 'Monitors', icon: 'Eye' },
+			{ href: '/message-templates', label: 'Templates', icon: 'Mail' },
+			{ href: '/approvals', label: 'Approvals', icon: 'ShieldCheck' },
+			{ href: '/escalations', label: 'Escalations', icon: 'AlertTriangle' },
+			{ href: '/channels', label: 'Channels', icon: 'MessageSquare' },
+			{ href: '/metrics', label: 'Metrics', icon: 'BarChart3' },
+			{ href: '/kpis', label: 'KPIs', icon: 'TrendingUp' },
+			{ href: '/billing', label: 'Billing', icon: 'CreditCard' },
+			{ href: '/settings', label: 'Settings', icon: 'Settings' },
+			{ href: '/logs', label: 'Logs', icon: 'ScrollText' },
+		];
+
+		app.get('/api/navigation', (c) => {
+			const pluginItems = deps.pluginRegistry?.getNavItems() ?? [];
+			return c.json([...BASE_NAV_ITEMS, ...pluginItems]);
+		});
+
+		app.get('/api/plugins', (c) => {
+			const plugins = deps.pluginRegistry?.getPlugins() ?? [];
+			return c.json(plugins);
 		});
 
 		// -- MCP Library (R11) ----------------------------------------------------

@@ -9,6 +9,7 @@ import { Ok, Err, ToolError } from '../../types/errors.js';
 import { toISOTimestamp } from '../../util/id.js';
 import type { BuiltinToolContext } from './context.js';
 import { credentialError } from './credential-error.js';
+import { cloudProxyCall, getCloudToken } from './cloud-proxy-call.js';
 
 // Rate limit: max 20 emails per agent per runtime session
 const sessionEmailCounts = new Map<string, number>();
@@ -107,6 +108,14 @@ export function createEmailSendTool(ctx: BuiltinToolContext): ITool {
 						{},
 					),
 				);
+			}
+
+			// Cloud proxy: forward to ABF Cloud if running in cloud mode
+			if (ctx.isCloud && ctx.cloudEndpoint) {
+				const cloudToken = await getCloudToken(ctx);
+				if (cloudToken) {
+					return cloudProxyCall(ctx.cloudEndpoint, 'email-send', { action, ...args }, cloudToken);
+				}
 			}
 
 			switch (action) {

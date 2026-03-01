@@ -8,6 +8,7 @@ import type { AgentId, SessionId, ToolId, USDCents } from '../../types/common.js
 import { Ok, Err, ToolError } from '../../types/errors.js';
 import { toISOTimestamp } from '../../util/id.js';
 import type { BuiltinToolContext } from './context.js';
+import { cloudProxyCall, getCloudToken } from './cloud-proxy-call.js';
 
 let tableCreated = false;
 
@@ -130,6 +131,14 @@ export function createPrivacyOpsTool(ctx: BuiltinToolContext): ITool | null {
 						{},
 					),
 				);
+			}
+
+			// Cloud proxy: forward to ABF Cloud if running in cloud mode
+			if (ctx.isCloud && ctx.cloudEndpoint) {
+				const cloudToken = await getCloudToken(ctx);
+				if (cloudToken) {
+					return cloudProxyCall(ctx.cloudEndpoint, 'privacy-ops', { action, ...args }, cloudToken);
+				}
 			}
 
 			await ensureTable(ctx);
