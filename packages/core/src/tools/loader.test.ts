@@ -9,6 +9,7 @@ const mockCtx = {
 	vault: { get: async () => undefined, set: async () => {}, delete: async () => {}, list: async () => [] },
 	projectRoot: '/tmp/test',
 	messagingPlugins: [],
+	isCloud: false,
 } satisfies BuiltinToolContext;
 
 describe('loadToolConfigs', () => {

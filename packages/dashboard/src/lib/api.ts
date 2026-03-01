@@ -46,7 +46,10 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
     headers: headers({ 'Content-Type': 'application/json' }),
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => null) as { error?: string } | null;
+    throw new Error(errBody?.error ?? `${res.status} ${res.statusText}`);
+  }
   return res.json() as Promise<T>;
 }
 

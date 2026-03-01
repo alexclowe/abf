@@ -37,7 +37,7 @@ You are {{name}}, a research specialist. Your job is to gather information, anal
 
 	writer: {
 		temperature: 0.7,
-		tools: ['knowledge-search'],
+		tools: ['knowledge-search', 'image-render'],
 		allowedActions: ['read_data', 'write_draft', 'send_to_review'],
 		forbiddenActions: ['delete_data', 'publish_content', 'modify_billing'],
 		charterTemplate: `# {{name}} — Writer
@@ -94,7 +94,7 @@ You are {{name}}, a data analyst. You turn raw data into actionable business ins
 
 	'customer-support': {
 		temperature: 0.4,
-		tools: ['send-message', 'knowledge-search', 'database-query'],
+		tools: ['send-message', 'knowledge-search', 'database-query', 'email-send', 'privacy-ops'],
 		allowedActions: ['read_data', 'send_message', 'query_database', 'write_report'],
 		forbiddenActions: ['delete_data', 'modify_billing', 'access_credentials'],
 		charterTemplate: `# {{name}} — Customer Support
@@ -113,7 +113,7 @@ You are {{name}}, a customer support specialist. You help customers resolve issu
 
 	developer: {
 		temperature: 0.3,
-		tools: ['knowledge-search'],
+		tools: ['knowledge-search', 'github-ci', 'app-generate', 'app-deploy', 'backend-provision', 'code-generate'],
 		allowedActions: ['read_data', 'write_report', 'write_draft'],
 		forbiddenActions: ['delete_data', 'modify_billing', 'send_client_email'],
 		charterTemplate: `# {{name}} — Developer
@@ -132,7 +132,7 @@ You are {{name}}, a software developer. You write code, debug issues, and design
 
 	marketer: {
 		temperature: 0.6,
-		tools: ['web-search', 'knowledge-search', 'send-message'],
+		tools: ['web-search', 'knowledge-search', 'send-message', 'email-send', 'image-render', 'social-publish'],
 		allowedActions: ['read_data', 'write_draft', 'search_web', 'send_to_review'],
 		forbiddenActions: ['delete_data', 'modify_billing', 'publish_content'],
 		charterTemplate: `# {{name}} — Marketer
@@ -151,7 +151,7 @@ You are {{name}}, a marketing specialist. You craft strategies and campaigns tha
 
 	finance: {
 		temperature: 0.1,
-		tools: ['database-query', 'knowledge-search'],
+		tools: ['database-query', 'knowledge-search', 'stripe-billing', 'privacy-ops'],
 		allowedActions: ['read_data', 'write_report', 'query_database'],
 		forbiddenActions: ['delete_data', 'modify_billing', 'send_client_email', 'write_database'],
 		charterTemplate: `# {{name}} — Finance

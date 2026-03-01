@@ -20,13 +20,13 @@ import type { AgentConfig } from '../../types/agent.js';
 function defaultModel(provider: string): string {
 	switch (provider) {
 		case 'anthropic':
-			return 'claude-sonnet-4-5';
+			return 'claude-sonnet-4-6';
 		case 'openai':
-			return 'gpt-4o';
+			return 'gpt-5.2';
 		case 'ollama':
 			return 'llama3.2';
 		default:
-			return 'claude-sonnet-4-5';
+			return 'claude-sonnet-4-6';
 	}
 }
 

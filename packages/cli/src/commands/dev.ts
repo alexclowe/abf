@@ -20,8 +20,8 @@ interface DevOptions {
 }
 
 const PROVIDER_MODEL_MAP: Record<string, string> = {
-	anthropic: 'claude-sonnet-4-5',
-	openai: 'gpt-4o',
+	anthropic: 'claude-sonnet-4-6',
+	openai: 'gpt-5.2',
 	ollama: 'llama3.2',
 };
 
@@ -29,8 +29,8 @@ const DASHBOARD_PORT = 3001;
 
 /** Detect if an LLM provider API key is set via environment variables. */
 function detectProviderFromEnv(): { provider: string; model: string } | null {
-	if (process.env['ANTHROPIC_API_KEY']) return { provider: 'anthropic', model: 'claude-sonnet-4-5' };
-	if (process.env['OPENAI_API_KEY']) return { provider: 'openai', model: 'gpt-4o' };
+	if (process.env['ANTHROPIC_API_KEY']) return { provider: 'anthropic', model: 'claude-sonnet-4-6' };
+	if (process.env['OPENAI_API_KEY']) return { provider: 'openai', model: 'gpt-5.2' };
 	return null;
 }
 
@@ -108,13 +108,19 @@ function getDefaultConfig(): import('@abf/core').AbfConfig {
 
 /**
  * Find the dashboard package directory.
- * Tries monorepo layout first (../../dashboard relative to CLI dist), then npm resolution.
+ * Tries monorepo layout first, then npm resolution.
  */
 function findDashboardDir(): string | null {
-	// Monorepo: packages/cli/dist/ → packages/dashboard
-	const monorepoPath = join(dirname(new URL(import.meta.url).pathname), '..', '..', '..', 'dashboard');
-	if (existsSync(join(monorepoPath, 'package.json'))) {
-		return monorepoPath;
+	const thisDir = dirname(new URL(import.meta.url).pathname);
+
+	// Monorepo: try multiple relative paths to handle both
+	// unbundled (dist/commands/dev.js → ../../../dashboard) and
+	// bundled (dist/dev-*.js → ../../dashboard) layouts.
+	for (const rel of ['../../dashboard', '../../../dashboard']) {
+		const candidate = join(thisDir, rel);
+		if (existsSync(join(candidate, 'package.json'))) {
+			return candidate;
+		}
 	}
 
 	// npm install: try require.resolve
@@ -131,8 +137,14 @@ function findDashboardDir(): string | null {
  * Returns the child process, or null if dashboard is not available.
  */
 function spawnDashboard(dashboardDir: string): ChildProcess {
-	const standalonePath = join(dashboardDir, '.next', 'standalone', 'server.js');
-	const isStandalone = existsSync(standalonePath);
+	// In monorepos, Next.js standalone output nests server.js under the package path
+	const standaloneRoot = join(dashboardDir, '.next', 'standalone');
+	const standaloneDirect = join(standaloneRoot, 'server.js');
+	const standaloneNested = join(standaloneRoot, 'packages', 'dashboard', 'server.js');
+	const standalonePath = existsSync(standaloneDirect) ? standaloneDirect
+		: existsSync(standaloneNested) ? standaloneNested
+		: null;
+	const isStandalone = standalonePath !== null;
 
 	const env = {
 		...process.env,
@@ -142,20 +154,42 @@ function spawnDashboard(dashboardDir: string): ChildProcess {
 
 	if (isStandalone) {
 		// Production mode: standalone server built by `next build` with output: 'standalone'
-		return spawn('node', [standalonePath], {
+		// cwd must be the standalone root so Next.js resolves static assets correctly
+		// detached: own process group so we can kill the entire tree on shutdown
+		return spawn('node', [standalonePath!], {
 			stdio: 'pipe',
 			env,
-			cwd: dashboardDir,
+			cwd: standaloneRoot,
+			detached: true,
 		});
 	}
 
 	// Dev mode: use npx next dev
+	// detached: own process group so shell→npx→next→next-server all die together
 	return spawn('npx', ['next', 'dev', '-p', String(DASHBOARD_PORT)], {
 		stdio: 'pipe',
 		env,
 		cwd: dashboardDir,
 		shell: true,
+		detached: true,
 	});
+}
+
+/** Kill a dashboard process and all its children by killing the process group. */
+function killDashboard(proc: ChildProcess): void {
+	if (!proc.pid || proc.killed) return;
+	try {
+		// Negative PID = kill entire process group
+		process.kill(-proc.pid, 'SIGTERM');
+	} catch {
+		try { proc.kill('SIGTERM'); } catch {}
+	}
+	// Force-kill after 2s if still alive
+	setTimeout(() => {
+		if (!proc.killed) {
+			try { process.kill(-proc.pid!, 'SIGKILL'); } catch {}
+		}
+	}, 2000).unref();
 }
 
 export async function devCommand(options: DevOptions): Promise<void> {
@@ -181,7 +215,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
 				// If --provider is set, auto-scaffold a config + starter agent
 				if (options.provider) {
 					const provider = options.provider;
-					let model = PROVIDER_MODEL_MAP[provider] ?? 'claude-sonnet-4-5';
+					let model = PROVIDER_MODEL_MAP[provider] ?? 'claude-sonnet-4-6';
 
 					// For Ollama: detect availability and auto-select best model
 					if (provider === 'ollama') {
@@ -224,8 +258,12 @@ export async function devCommand(options: DevOptions): Promise<void> {
 						bootstrapMode = false;
 					}
 				} else {
-					// Auto-scaffold on cloud when an API key is detected via env vars
-					const detectedProvider = detectProviderFromEnv();
+					// Auto-scaffold on cloud when an API key is detected via env vars.
+					// Only on cloud platforms — local dev should show the setup wizard.
+					const isCloud = Boolean(
+						process.env['RENDER'] || process.env['RAILWAY_ENVIRONMENT'] || process.env['FLY_APP_NAME'],
+					);
+					const detectedProvider = isCloud ? detectProviderFromEnv() : null;
 					if (detectedProvider) {
 						spinner.text = `Detected ${detectedProvider.provider} API key — scaffolding starter agent...`;
 						await scaffoldStarterProject(projectRoot, detectedProvider.provider, detectedProvider.model);
@@ -261,9 +299,19 @@ export async function devCommand(options: DevOptions): Promise<void> {
 			dashboardProcess = spawnDashboard(dashboardDir);
 			dashboardPort = DASHBOARD_PORT;
 
-			// Silently log dashboard errors for debugging
-			dashboardProcess.stderr?.on('data', () => {});
-			dashboardProcess.on('error', () => {});
+			// Log dashboard errors for debugging
+			dashboardProcess.stderr?.on('data', (d: Buffer) => {
+				const msg = d.toString().trim();
+				if (msg) console.error(chalk.dim(`  [dashboard] ${msg}`));
+			});
+			dashboardProcess.on('error', (err: Error) => {
+				console.error(chalk.dim(`  [dashboard] spawn error: ${err.message}`));
+			});
+			dashboardProcess.on('exit', (code: number | null) => {
+				if (code !== null && code !== 0) {
+					console.error(chalk.dim(`  [dashboard] exited with code ${code}`));
+				}
+			});
 		}
 
 		spinner.text = 'Assembling runtime...';
@@ -312,9 +360,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
 		const shutdown = async (signal: string) => {
 			console.log();
 			console.log(chalk.dim(`  Received ${signal}, shutting down...`));
-			if (dashboardProcess && !dashboardProcess.killed) {
-				dashboardProcess.kill('SIGTERM');
-			}
+			if (dashboardProcess) killDashboard(dashboardProcess);
 			await runtime.stop();
 			process.exit(0);
 		};
@@ -325,9 +371,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
 		// Keep process alive
 		await new Promise(() => {});
 	} catch (error) {
-		if (dashboardProcess && !dashboardProcess.killed) {
-			dashboardProcess.kill('SIGTERM');
-		}
+		if (dashboardProcess) killDashboard(dashboardProcess);
 		spinner.fail(chalk.red('Failed to start development server'));
 		console.error(error);
 		process.exit(1);

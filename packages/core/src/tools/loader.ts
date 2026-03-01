@@ -26,6 +26,17 @@ import { createDatabaseQueryTool } from './builtin/database-query.js';
 import { createDatabaseWriteTool } from './builtin/database-write.js';
 import { createPlanTaskTool } from './builtin/plan-task.js';
 import { createAskHumanTool } from './builtin/ask-human.js';
+import { createCalendarTool } from './builtin/calendar.js';
+import { createPrivacyOpsTool } from './builtin/privacy-ops.js';
+import { createEmailSendTool } from './builtin/email-send.js';
+import { createImageRenderTool } from './builtin/image-render.js';
+import { createSocialPublishTool } from './builtin/social-publish.js';
+import { createGitHubCITool } from './builtin/github-ci.js';
+import { createStripeBillingTool } from './builtin/stripe-billing.js';
+import { createAppGenerateTool } from './builtin/app-generate.js';
+import { createAppDeployTool } from './builtin/app-deploy.js';
+import { createBackendProvisionTool } from './builtin/backend-provision.js';
+import { createCodeGenerateTool } from './builtin/code-generate.js';
 import { CustomTool, isCustomToolModule } from './custom-tool.js';
 import type { CustomToolContext } from './custom-tool.js';
 
@@ -96,6 +107,23 @@ export function createBuiltinTools(ctx: BuiltinToolContext): readonly ITool[] {
 	if (dbQuery) tools.push(dbQuery);
 	const dbWrite = createDatabaseWriteTool(ctx);
 	if (dbWrite) tools.push(dbWrite);
+
+	// Conditional: datastore-dependent tools
+	const calendar = createCalendarTool(ctx);
+	if (calendar) tools.push(calendar);
+	const privacyOps = createPrivacyOpsTool(ctx);
+	if (privacyOps) tools.push(privacyOps);
+
+	// Always-available tools
+	tools.push(createEmailSendTool(ctx));
+	tools.push(createImageRenderTool(ctx));
+	tools.push(createSocialPublishTool(ctx));
+	tools.push(createGitHubCITool(ctx));
+	tools.push(createStripeBillingTool(ctx));
+	tools.push(createAppGenerateTool(ctx));
+	tools.push(createAppDeployTool(ctx));
+	tools.push(createBackendProvisionTool(ctx));
+	tools.push(createCodeGenerateTool(ctx));
 
 	// Task planning tool
 	if (ctx.taskPlanStore) {

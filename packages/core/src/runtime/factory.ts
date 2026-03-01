@@ -132,6 +132,12 @@ export async function createRuntime(
 	const { InMemoryTaskPlanStore } = await import('../planning/store.js');
 	const taskPlanStore = new InMemoryTaskPlanStore();
 
+	// Detect cloud deployment (ABF Cloud or known cloud platforms)
+	const isCloud = Boolean(
+		process.env['ABF_CLOUD'] || process.env['RENDER'] ||
+		process.env['RAILWAY_ENVIRONMENT'] || process.env['FLY_APP_NAME'],
+	);
+
 	// Build tool context with all dependencies
 	const toolContext: import('../tools/builtin/context.js').BuiltinToolContext = {
 		vault,
@@ -141,6 +147,7 @@ export async function createRuntime(
 		datastore,
 		messageTemplates,
 		taskPlanStore,
+		isCloud,
 	};
 
 	// Register built-in tools

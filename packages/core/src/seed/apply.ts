@@ -79,6 +79,7 @@ function agentPlanToYaml(agent: AgentPlan) {
 		name: agent.name,
 		display_name: agent.displayName,
 		role: agent.role,
+		...(agent.roleArchetype ? { role_archetype: agent.roleArchetype } : {}),
 		description: agent.description,
 		provider: agent.provider,
 		model: agent.model,

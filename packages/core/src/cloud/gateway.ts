@@ -97,7 +97,7 @@ export function createCloudGateway(deps: CloudGatewayDeps): Hono {
 			return c.json({ error: `Provider "${providerSlug}" not available` }, 400);
 		}
 
-		const model = body.model ?? 'claude-sonnet-4-5';
+		const model = body.model ?? 'claude-sonnet-4-6';
 		const sessionId = createSessionId();
 
 		// Stream response as NDJSON

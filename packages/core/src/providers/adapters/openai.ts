@@ -109,7 +109,7 @@ export class OpenAIProvider implements IProvider {
 				messages: openAiMessages,
 				// OpenAI requires null (not undefined) to mean "use default"
 				...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
-				...(request.maxTokens !== undefined ? { max_tokens: request.maxTokens } : {}),
+				...(request.maxTokens !== undefined ? { max_completion_tokens: request.maxTokens } : {}),
 				...(tools ? { tools } : {}),
 			};
 
@@ -186,6 +186,16 @@ export class OpenAIProvider implements IProvider {
 	async models(): Promise<readonly ModelInfo[]> {
 		return [
 			{
+				id: 'gpt-5.2',
+				name: 'GPT-5.2',
+				contextWindow: 128_000,
+				maxOutputTokens: 16_384,
+				supportsTools: true,
+				supportsStreaming: true,
+				costPerInputToken: 0.000003,
+				costPerOutputToken: 0.000012,
+			},
+			{
 				id: 'gpt-4o',
 				name: 'GPT-4o',
 				contextWindow: 128_000,
@@ -210,6 +220,7 @@ export class OpenAIProvider implements IProvider {
 
 	estimateCost(model: string, tokens: number): USDCents {
 		const rates: Record<string, number> = {
+			'gpt-5.2': 0.000012,
 			'gpt-4o': 0.00001,
 			'gpt-4o-mini': 0.0000006,
 		};

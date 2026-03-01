@@ -29,7 +29,7 @@ function agentToYaml(body: Record<string, unknown>): Record<string, unknown> {
 		role: body['role'],
 		description: body['description'],
 		provider: body['provider'] ?? 'anthropic',
-		model: body['model'] ?? 'claude-sonnet-4-5',
+		model: body['model'] ?? 'claude-sonnet-4-6',
 		temperature: body['temperature'] ?? 0.3,
 		team: body['team'] ?? undefined,
 		reports_to: body['reportsTo'] ?? null,

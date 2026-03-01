@@ -23,7 +23,7 @@ export interface MarketingAgencyFiles {
 	dockerCompose: string; // docker-compose.yml
 }
 
-export function marketingAgencyTemplate(projectName: string, provider = 'anthropic', model = 'claude-sonnet-4-5'): MarketingAgencyFiles {
+export function marketingAgencyTemplate(projectName: string, provider = 'anthropic', model = 'claude-sonnet-4-6'): MarketingAgencyFiles {
 	// ── abf.config.yaml ────────────────────────────────────────────────────────
 	const config = stringify({
 		name: projectName,

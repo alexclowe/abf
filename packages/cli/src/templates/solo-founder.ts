@@ -21,7 +21,7 @@ export interface SoloFounderFiles {
 	dockerCompose: string; // docker-compose.yml
 }
 
-export function soloFounderTemplate(projectName: string, provider = 'anthropic', model = 'claude-sonnet-4-5'): SoloFounderFiles {
+export function soloFounderTemplate(projectName: string, provider = 'anthropic', model = 'claude-sonnet-4-6'): SoloFounderFiles {
 	// ── abf.config.yaml ────────────────────────────────────────────────────────
 	const config = stringify({
 		name: projectName,

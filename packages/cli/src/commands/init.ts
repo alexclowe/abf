@@ -24,8 +24,8 @@ interface InitOptions {
 }
 
 const PROVIDER_MODEL_MAP: Record<string, string> = {
-	anthropic: 'claude-sonnet-4-5',
-	openai: 'gpt-4o',
+	anthropic: 'claude-sonnet-4-6',
+	openai: 'gpt-5.2',
 	ollama: 'llama3.2',
 };
 
@@ -112,7 +112,7 @@ async function initFromSeed(options: InitOptions): Promise<void> {
 
 	// Detect which provider to use
 	let providerId = 'anthropic';
-	let model = 'claude-sonnet-4-5';
+	let model = 'claude-sonnet-4-6';
 
 	const hasAnthropicKey =
 		!!process.env['ANTHROPIC_API_KEY'] || !!(await vault.get('anthropic', 'api_key'));
@@ -121,7 +121,7 @@ async function initFromSeed(options: InitOptions): Promise<void> {
 
 	if (options.provider) {
 		providerId = options.provider;
-		model = PROVIDER_MODEL_MAP[providerId] ?? 'claude-sonnet-4-5';
+		model = PROVIDER_MODEL_MAP[providerId] ?? 'claude-sonnet-4-6';
 
 		// For Ollama: detect best installed model
 		if (providerId === 'ollama') {
@@ -144,10 +144,10 @@ async function initFromSeed(options: InitOptions): Promise<void> {
 		}
 	} else if (hasAnthropicKey) {
 		providerId = 'anthropic';
-		model = 'claude-sonnet-4-5';
+		model = 'claude-sonnet-4-6';
 	} else if (hasOpenAIKey) {
 		providerId = 'openai';
-		model = 'gpt-4o';
+		model = 'gpt-5.2';
 	} else {
 		// Fall back to Ollama — detect availability and best model
 		const { ensureOllama } = await import('../utils/ollama.js');
@@ -334,7 +334,7 @@ async function initFromSeed(options: InitOptions): Promise<void> {
 async function initFromTemplate(options: InitOptions): Promise<void> {
 	const projectName = options.name ?? 'my-business';
 	const provider = options.provider ?? 'anthropic';
-	let model = PROVIDER_MODEL_MAP[provider] ?? 'claude-sonnet-4-5';
+	let model = PROVIDER_MODEL_MAP[provider] ?? 'claude-sonnet-4-6';
 
 	// For Ollama: detect best installed model before creating the project
 	if (provider === 'ollama') {

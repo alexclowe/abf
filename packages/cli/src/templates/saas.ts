@@ -25,7 +25,7 @@ export interface SaaSFiles {
 	dockerCompose: string; // docker-compose.yml
 }
 
-export function saasTemplate(projectName: string, provider = 'anthropic', model = 'claude-sonnet-4-5'): SaaSFiles {
+export function saasTemplate(projectName: string, provider = 'anthropic', model = 'claude-sonnet-4-6'): SaaSFiles {
 	// ── abf.config.yaml ────────────────────────────────────────────────────────
 	const config = stringify({
 		name: projectName,

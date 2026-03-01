@@ -109,7 +109,7 @@ export const agentYamlSchema = z.object({
 	description: z.string(),
 	role_archetype: z.string().optional(),
 	provider: z.string().default('anthropic'),
-	model: z.string().default('claude-sonnet-4-5'),
+	model: z.string().default('claude-sonnet-4-6'),
 	temperature: z.number().min(0).max(2).optional(),
 	team: z.string().optional(),
 	reports_to: z.string().nullable().optional(),
