@@ -105,9 +105,22 @@ export default function ApprovalsPage() {
             </div>
 
             <div className="bg-slate-800 rounded-md p-3">
-              <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono">
-                {JSON.stringify(item.arguments, null, 2)}
-              </pre>
+              {item.arguments && typeof item.arguments === 'object' && !Array.isArray(item.arguments) ? (
+                <dl className="space-y-1 text-xs">
+                  {Object.entries(item.arguments).map(([key, val]) => (
+                    <div key={key} className="flex gap-2">
+                      <dt className="text-slate-500 font-medium min-w-[100px]">{key}</dt>
+                      <dd className="text-slate-300 font-mono break-all">
+                        {typeof val === 'string' ? val : JSON.stringify(val)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : (
+                <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono">
+                  {JSON.stringify(item.arguments, null, 2)}
+                </pre>
+              )}
             </div>
 
             {item.status === 'pending' && (

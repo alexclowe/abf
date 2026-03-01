@@ -1,17 +1,42 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useEventStream } from '@/lib/use-event-stream';
 import { AgentStatusBadge } from '@/components/AgentStatusBadge';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, Search } from 'lucide-react';
 
 export default function AgentsPage() {
   const { data: stream } = useEventStream();
   const sseHasAgents = !!stream?.agents?.[0]?.config;
   const { data: swrAgents, error } = useSWR(!sseHasAgents ? 'agents' : null, () => api.agents.list(), { refreshInterval: 3000 });
   const agents = (sseHasAgents ? stream!.agents : swrAgents) as { config: Record<string, any>; state?: Record<string, any> | null }[] | undefined;
+
+  const [search, setSearch] = useState('');
+  const [teamFilter, setTeamFilter] = useState('');
+
+  // Derive unique teams for filter dropdown
+  const teams = useMemo(() => {
+    if (!agents) return [];
+    const set = new Set(agents.map((a) => a.config.team).filter(Boolean));
+    return Array.from(set).sort();
+  }, [agents]);
+
+  // Filter agents
+  const filteredAgents = useMemo(() => {
+    if (!agents) return undefined;
+    return agents.filter((a) => {
+      const q = search.toLowerCase();
+      const matchesSearch = !q ||
+        a.config.displayName?.toLowerCase().includes(q) ||
+        a.config.name?.toLowerCase().includes(q) ||
+        a.config.role?.toLowerCase().includes(q);
+      const matchesTeam = !teamFilter || a.config.team === teamFilter;
+      return matchesSearch && matchesTeam;
+    });
+  }, [agents, search, teamFilter]);
 
   return (
     <div className="p-6 space-y-4">
@@ -24,6 +49,33 @@ export default function AgentsPage() {
           + New Agent
         </Link>
       </div>
+
+      {/* Search and filter */}
+      {agents && agents.length > 0 && (
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or role..."
+              className="w-full bg-slate-800 border border-slate-700 rounded-md pl-9 pr-3 py-1.5 text-sm focus:outline-none focus:border-sky-500"
+            />
+          </div>
+          {teams.length > 1 && (
+            <select
+              value={teamFilter}
+              onChange={(e) => setTeamFilter(e.target.value)}
+              className="bg-slate-800 border border-slate-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-sky-500"
+            >
+              <option value="">All Teams</option>
+              {teams.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
 
       {error && (
         <div role="alert" className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
@@ -43,8 +95,14 @@ export default function AgentsPage() {
         </div>
       )}
 
+      {filteredAgents && agents && agents.length > 0 && filteredAgents.length === 0 && (
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-6 text-center">
+          <p className="text-slate-400 text-sm">No agents match your filter.</p>
+        </div>
+      )}
+
       <div className="space-y-2">
-        {agents?.map((a) => (
+        {filteredAgents?.map((a) => (
           <Link
             key={a.config.id}
             href={`/agents/${a.config.id}`}

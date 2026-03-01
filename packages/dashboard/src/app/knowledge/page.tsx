@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
-import { Plus, Save, Trash2, FileText } from 'lucide-react';
+import { Plus, Save, Trash2, FileText, Eye, Edit3 } from 'lucide-react';
+import { MarkdownContent } from '@/components/MarkdownContent';
 
 export default function KnowledgePage() {
   const { data: files, error, mutate } = useSWR('knowledge', () => api.knowledge.list(), {
@@ -19,6 +20,7 @@ export default function KnowledgePage() {
   const [showNewFile, setShowNewFile] = useState(false);
   const [newFileName, setNewFileName] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState(false);
 
   function selectFile(filename: string) {
     const file = files?.find((f) => f.filename === filename);
@@ -216,28 +218,43 @@ export default function KnowledgePage() {
             <>
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-medium text-slate-400">
-                  Editing: <span className="text-white">{selectedFile}</span>
+                  {previewMode ? 'Preview' : 'Editing'}: <span className="text-white">{selectedFile}</span>
                   {dirty && <span className="text-amber-400 ml-2">(unsaved)</span>}
                 </h2>
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={!dirty || saving}
-                  className="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md text-sm font-medium transition-colors flex items-center gap-2"
-                >
-                  <Save size={14} />
-                  {saving ? 'Saving...' : 'Save'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewMode(!previewMode)}
+                    className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-md text-sm transition-colors flex items-center gap-1.5"
+                  >
+                    {previewMode ? <><Edit3 size={14} /> Edit</> : <><Eye size={14} /> Preview</>}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={!dirty || saving}
+                    className="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+                  >
+                    <Save size={14} />
+                    {saving ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
               </div>
-              <textarea
-                value={editorContent}
-                onChange={(e) => {
-                  setEditorContent(e.target.value);
-                  setDirty(true);
-                }}
-                className="flex-1 w-full bg-slate-800 border border-slate-700 rounded-md px-4 py-3 text-sm font-mono focus:outline-none focus:border-sky-500 resize-none"
-                spellCheck={false}
-              />
+              {previewMode ? (
+                <div className="flex-1 w-full bg-slate-800 border border-slate-700 rounded-md px-4 py-3 overflow-auto">
+                  <MarkdownContent>{editorContent}</MarkdownContent>
+                </div>
+              ) : (
+                <textarea
+                  value={editorContent}
+                  onChange={(e) => {
+                    setEditorContent(e.target.value);
+                    setDirty(true);
+                  }}
+                  className="flex-1 w-full bg-slate-800 border border-slate-700 rounded-md px-4 py-3 text-sm font-mono focus:outline-none focus:border-sky-500 resize-none"
+                  spellCheck={false}
+                />
+              )}
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center">
