@@ -180,8 +180,16 @@ export async function createRuntime(
 	await loadMCPTools(join(projectRoot, config.toolsDir), toolRegistry);
 
 	// Load custom tools (*.tool.yaml + optional *.tool.js)
+	// Custom tools receive a ScopedVault that restricts credential access to providers
+	// their agent actually needs — enforcing least-privilege at the credential layer.
 	const { loadToolConfigs } = await import('../tools/loader.js');
-	const customToolCtx = { projectRoot, vault, datastore, log: (msg: string) => console.log(`[tools] ${msg}`) };
+	const { ScopedVault, deriveAllowedProviders } = await import('../tools/scoped-vault.js');
+	const allAgentTools = [...agentsMap.values()].flatMap((a) => a.tools);
+	const allowedProviders = deriveAllowedProviders(allAgentTools);
+	const scopedVault = new ScopedVault(vault, allowedProviders, (provider, op) => {
+		console.log(`[security] ScopedVault denied ${op} for provider "${provider}"`);
+	});
+	const customToolCtx = { projectRoot, vault: scopedVault, datastore, log: (msg: string) => console.log(`[tools] ${msg}`) };
 	const customToolsResult = await loadToolConfigs(join(projectRoot, config.toolsDir), customToolCtx);
 	if (customToolsResult.ok) {
 		for (const tool of customToolsResult.value) {
