@@ -86,8 +86,8 @@ const SEED_CHECKLIST: ChecklistItem[] = [
   },
   {
     id: 'first-task',
-    label: 'Start your first task',
-    description: 'Give an agent a task to kick off Phase 1 of your build plan.',
+    label: 'Start Phase 1',
+    description: 'Hit "Start Phase 1" on the build plan card below to kick things off.',
     href: '/',
     check: (d) => d.firstTaskSent === true,
   },
