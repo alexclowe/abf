@@ -6,6 +6,7 @@
 import type { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import type { GatewayDeps } from './http.gateway.js';
+import { isValidApiKey } from './auth-utils.js';
 
 const ABF_VERSION = '1.0.0';
 
@@ -16,8 +17,10 @@ export function registerEventRoutes(app: Hono, deps: GatewayDeps): void {
 		if (apiKey) {
 			const token = c.req.query('token');
 			const authHeader = c.req.header('Authorization');
-			const headerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
-			if (token !== apiKey && headerToken !== apiKey) {
+			// Use timing-safe comparison for both token and header
+			const tokenValid = token ? isValidApiKey(`Bearer ${token}`, apiKey) : false;
+			const headerValid = isValidApiKey(authHeader, apiKey);
+			if (!tokenValid && !headerValid) {
 				return c.json({ error: 'Unauthorized' }, 401);
 			}
 		}

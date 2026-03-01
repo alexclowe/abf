@@ -9,6 +9,7 @@
 import type { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import type { ICredentialVault } from '../../credentials/vault.js';
+import { escapeHtml } from './auth-utils.js';
 
 // ─── Provider OAuth configs ────────────────────────────────────────
 
@@ -130,6 +131,8 @@ export function registerOAuthRoutes(app: Hono, deps: OAuthRoutesDeps): void {
 				return c.html(errorPage('No API key received from OpenRouter'));
 			}
 
+			// Note: OpenRouter does not use standard OAuth state parameter,
+			// but we still validate the code format for safety
 			// Store the key in vault
 			await deps.vault.set('openrouter', 'api_key', code);
 			console.log(`[oauth] openrouter credential stored at=${new Date().toISOString()}`);
@@ -141,6 +144,17 @@ export function registerOAuthRoutes(app: Hono, deps: OAuthRoutesDeps): void {
 
 			return c.html(successPage(dashboardUrl));
 		}
+
+		// Validate CSRF state parameter for standard OAuth flows
+		const state = c.req.query('state');
+		if (!state) {
+			return c.html(errorPage('Missing state parameter — possible CSRF attack'));
+		}
+		const pendingState = pendingStates.get(state);
+		if (!pendingState || pendingState.provider !== provider) {
+			return c.html(errorPage('Invalid state parameter — possible CSRF attack'));
+		}
+		pendingStates.delete(state);
 
 		// Standard OAuth code exchange for Slack, Discord, Google
 		const code = c.req.query('code');
@@ -193,15 +207,28 @@ export function registerOAuthRoutes(app: Hono, deps: OAuthRoutesDeps): void {
 }
 
 function successPage(redirectUrl: string): string {
+	// Validate redirect URL — only allow relative paths or localhost origins
+	const safeUrl = isAllowedRedirect(redirectUrl) ? escapeHtml(redirectUrl) : '/';
 	return `<!DOCTYPE html>
 <html><head><title>Connected!</title></head>
 <body style="background:#0f172a;color:#f1f5f9;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
 <div style="text-align:center">
 <h1 style="color:#38bdf8">Connected!</h1>
 <p>Your provider has been connected. Redirecting...</p>
-<script>setTimeout(()=>window.location.href='${redirectUrl}',1500)</script>
+<script>setTimeout(()=>window.location.href='${safeUrl}',1500)</script>
 </div>
 </body></html>`;
+}
+
+/** Only allow relative paths or localhost URLs as redirects. */
+function isAllowedRedirect(url: string): boolean {
+	if (url.startsWith('/') && !url.startsWith('//')) return true;
+	try {
+		const parsed = new URL(url);
+		return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+	} catch {
+		return false;
+	}
 }
 
 function getTokenUrl(provider: string): string {
@@ -214,12 +241,13 @@ function getTokenUrl(provider: string): string {
 }
 
 function errorPage(message: string): string {
+	const safeMessage = escapeHtml(message);
 	return `<!DOCTYPE html>
 <html><head><title>Error</title></head>
 <body style="background:#0f172a;color:#f1f5f9;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
 <div style="text-align:center">
 <h1 style="color:#f87171">Connection Failed</h1>
-<p>${message}</p>
+<p>${safeMessage}</p>
 <p><a href="/" style="color:#38bdf8">Return to Dashboard</a></p>
 </div>
 </body></html>`;

@@ -5,7 +5,6 @@
 
 import type { ServerType } from '@hono/node-server';
 import { serve } from '@hono/node-server';
-import { timingSafeEqual } from 'node:crypto';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { loadTeamConfigs } from '../../config/loader.js';
@@ -30,17 +29,10 @@ import { registerSetupRoutes } from './setup.routes.js';
 import { registerChannelRoutes } from './channel.routes.js';
 import { registerBillingRoutes } from './billing.routes.js';
 import { registerOAuthRoutes } from './oauth.routes.js';
+import { isValidApiKey } from './auth-utils.js';
 import { streamSSE, type SSEStreamingApi } from 'hono/streaming';
 
-/** Timing-safe API key comparison to prevent timing attacks. */
 const ABF_VERSION = '0.0.1';
-
-function isValidApiKey(received: string | undefined, required: string): boolean {
-	if (!received) return false;
-	const expected = `Bearer ${required}`;
-	if (received.length !== expected.length) return false;
-	return timingSafeEqual(Buffer.from(received), Buffer.from(expected));
-}
 
 export interface GatewayDeps {
 	readonly agentsMap: ReadonlyMap<string, AgentConfig>;
@@ -113,6 +105,28 @@ export class HttpGateway implements IGateway {
 				allowHeaders: ['Content-Type', 'Authorization'],
 			}),
 		);
+
+		// Security headers middleware [I-01]
+		app.use('*', async (c, next) => {
+			await next();
+			c.res.headers.set('X-Content-Type-Options', 'nosniff');
+			c.res.headers.set('X-Frame-Options', 'DENY');
+			c.res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+			c.res.headers.set('X-XSS-Protection', '1; mode=block');
+		});
+
+		// CSRF protection: enforce application/json on mutating API endpoints [M-05]
+		app.use('/api/*', async (c, next) => {
+			const method = c.req.method;
+			if (method === 'POST' || method === 'PUT' || method === 'DELETE' || method === 'PATCH') {
+				const contentType = c.req.header('Content-Type') ?? '';
+				// Allow requests with no body (DELETE often has no content-type) or JSON
+				if (contentType && !contentType.includes('application/json')) {
+					return c.json({ error: 'Content-Type must be application/json' }, 415);
+				}
+			}
+			return next();
+		});
 
 		// Auth middleware — protects /api/*, /webhook/*, and /auth/* if ABF_API_KEY env var is set
 		app.use('/api/*', async (c, next) => {
@@ -745,9 +759,17 @@ export class HttpGateway implements IGateway {
 			app.all('*', async (c) => {
 				try {
 					const url = new URL(c.req.url);
+					// Only proxy non-API paths to dashboard
+					if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/') || url.pathname.startsWith('/webhook/')) {
+						return c.json({ error: 'Not found' }, 404);
+					}
 					const target = `${dashboardOrigin}${url.pathname}${url.search}`;
 					const proxyHeaders = new Headers(c.req.raw.headers);
 					proxyHeaders.delete('host');
+					// Strip sensitive headers before proxying [H-06]
+					proxyHeaders.delete('authorization');
+					proxyHeaders.delete('cookie');
+					proxyHeaders.delete('x-api-key');
 					const hasBody = c.req.method !== 'GET' && c.req.method !== 'HEAD';
 					const init: RequestInit = {
 						method: c.req.method,

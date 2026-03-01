@@ -6,7 +6,7 @@
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { stringify } from 'yaml';
 import type { AgentPlan, CompanyPlan } from './types.js';
@@ -36,13 +36,29 @@ async function ensureDir(dir: string): Promise<void> {
 	await mkdir(dir, { recursive: true });
 }
 
-/** Write a file, creating parent directories as needed. */
+/** Sanitize a name from the CompanyPlan to prevent path traversal. */
+function sanitizePlanName(name: string): string {
+	// Reject path separators and traversal patterns
+	return name
+		.replace(/[/\\]/g, '-')
+		.replace(/\.\./g, '')
+		.replace(/[^a-zA-Z0-9_\-. ]/g, '-')
+		.toLowerCase()
+		.trim() || 'unnamed';
+}
+
+/** Write a file, creating parent directories as needed. Validates path stays within project root. */
 async function writeProjectFile(
 	projectRoot: string,
 	relativePath: string,
 	content: string,
 ): Promise<void> {
-	const fullPath = join(projectRoot, relativePath);
+	const fullPath = resolve(projectRoot, relativePath);
+	const normalizedRoot = resolve(projectRoot);
+	// Guard: ensure resolved path stays within project root
+	if (!fullPath.startsWith(normalizedRoot + '/') && fullPath !== normalizedRoot) {
+		throw new Error(`Path traversal detected: ${relativePath}`);
+	}
 	await ensureDir(join(fullPath, '..'));
 	await writeFile(fullPath, content, 'utf-8');
 }
@@ -224,7 +240,8 @@ export async function applyCompanyPlan(
 	}
 
 	for (const agent of agents) {
-		const relativePath = `agents/${agent.name}.agent.yaml`;
+		const safeName = sanitizePlanName(agent.name);
+		const relativePath = `agents/${safeName}.agent.yaml`;
 		const yamlContent = stringify(agentPlanToYaml(agent));
 		await writeProjectFile(projectRoot, relativePath, yamlContent);
 		written.push(relativePath);
@@ -243,7 +260,7 @@ export async function applyCompanyPlan(
 			members.push('architect');
 		}
 
-		const relativePath = `teams/${team.name}.team.yaml`;
+		const relativePath = `teams/${sanitizePlanName(team.name)}.team.yaml`;
 		const yamlContent = stringify({
 			name: team.name,
 			display_name: team.displayName,
@@ -263,7 +280,8 @@ export async function applyCompanyPlan(
 	// ── 3. Knowledge files ───────────────────────────────────────────
 
 	for (const [filename, content] of Object.entries(plan.knowledge)) {
-		const relativePath = `knowledge/${filename}`;
+		const safeFilename = sanitizePlanName(filename.replace(/\.md$/, '')) + '.md';
+		const relativePath = `knowledge/${safeFilename}`;
 		await writeProjectFile(projectRoot, relativePath, content);
 		written.push(relativePath);
 	}
@@ -271,7 +289,7 @@ export async function applyCompanyPlan(
 	// ── 4. Workflow YAML files ───────────────────────────────────────
 
 	for (const workflow of plan.workflows) {
-		const relativePath = `workflows/${workflow.name}.workflow.yaml`;
+		const relativePath = `workflows/${sanitizePlanName(workflow.name)}.workflow.yaml`;
 		const yamlContent = stringify({
 			name: workflow.name,
 			display_name: workflow.displayName,
