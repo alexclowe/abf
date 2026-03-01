@@ -143,6 +143,9 @@ export interface SessionManagerDeps {
 }
 
 export class SessionManager implements ISessionManager {
+	/** Active sessions mapped by ID to their AbortController for cancellation. */
+	private readonly activeSessions = new Map<SessionId, AbortController>();
+
 	constructor(private readonly deps: SessionManagerDeps) {}
 
 	async execute(activation: Activation): Promise<Result<SessionResult, ABFError>> {
@@ -154,24 +157,30 @@ export class SessionManager implements ISessionManager {
 		const sessionId = createSessionId();
 		const startedAt = toISOTimestamp();
 
-		// Enforce session timeout via Promise.race (clear timer on completion to prevent leaks)
+		// AbortController for cooperative cancellation — signals propagate to providers
+		const controller = new AbortController();
+		this.activeSessions.set(sessionId, controller);
+
+		// Enforce session timeout via Promise.race (abort the session on timeout)
 		let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
 		const timeoutPromise = new Promise<never>((_, reject) => {
 			timeoutTimer = setTimeout(
-				() =>
+				() => {
+					controller.abort();
 					reject(
 						new ABFErrorClass(
 							'SESSION_TIMEOUT',
 							`Session exceeded ${this.deps.sessionTimeoutMs}ms`,
 						),
-					),
+					);
+				},
 				this.deps.sessionTimeoutMs,
 			);
 		});
 
 		try {
 			const result = await Promise.race([
-				this.runSession(agent, activation, sessionId, startedAt),
+				this.runSession(agent, activation, sessionId, startedAt, controller.signal),
 				timeoutPromise,
 			]);
 			return result;
@@ -207,6 +216,7 @@ export class SessionManager implements ISessionManager {
 			});
 		} finally {
 			if (timeoutTimer) clearTimeout(timeoutTimer);
+			this.activeSessions.delete(sessionId);
 		}
 	}
 
@@ -223,6 +233,27 @@ export class SessionManager implements ISessionManager {
 		const sessionId = createSessionId();
 		const startedAt = toISOTimestamp();
 
+		// AbortController for cooperative cancellation
+		const controller = new AbortController();
+		this.activeSessions.set(sessionId, controller);
+
+		// Timeout for streaming sessions (mirrors execute() pattern)
+		let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+		const timeoutPromise = new Promise<never>((_, reject) => {
+			timeoutTimer = setTimeout(
+				() => {
+					controller.abort();
+					reject(
+						new ABFErrorClass(
+							'SESSION_TIMEOUT',
+							`Streaming session exceeded ${this.deps.sessionTimeoutMs}ms`,
+						),
+					);
+				},
+				this.deps.sessionTimeoutMs,
+			);
+		});
+
 		// Emit session start for streaming sessions (R12)
 		this.deps.sessionEventBus?.emitSessionStart(activation.agentId, sessionId);
 
@@ -237,212 +268,258 @@ export class SessionManager implements ISessionManager {
 			: onChunk;
 
 		try {
-			// Step 1: Load context (lightweight for chat — skip heavy memory loads)
-			const [memoryResult, knowledgeFiles] = await Promise.all([
-				this.deps.memoryStore.loadContext(activation.agentId),
-				this.deps.knowledgeDir
-					? loadKnowledgeFiles(this.deps.knowledgeDir)
-					: Promise.resolve({} as Record<string, string>),
+			const sessionResult = await Promise.race([
+				this.runStreamingSession(
+					agent, activation, sessionId, startedAt, controller.signal,
+					emitChunk, conversationHistory,
+				),
+				timeoutPromise,
 			]);
-			if (!memoryResult.ok) return memoryResult;
-			const memory = memoryResult.value;
-			const mergedKnowledge = { ...memory.knowledge, ...knowledgeFiles };
-
-			// Step 2: Build prompt — system message with charter + context
-			const messages: ChatMessage[] = this.buildPrompt(agent, memory, activation, mergedKnowledge);
-
-			// Inject conversation history before the final user message
-			if (conversationHistory && conversationHistory.length > 0) {
-				// Remove the default user message added by buildPrompt (last element)
-				const userMsg = messages.pop();
-				// Add conversation history
-				for (const h of conversationHistory) {
-					messages.push({
-						role: h.role as ChatMessage['role'],
-						content: h.content as string,
-					});
-				}
-				// Re-add the user message
-				if (userMsg) messages.push(userMsg);
-			}
-
-			// Handle multimodal content in user message
-			const payload = activation.payload as Record<string, unknown> | undefined;
-			if (payload?.['contentParts']) {
-				// Replace the last user message with multimodal content
-				const lastIdx = messages.length - 1;
-				if (messages[lastIdx]?.role === 'user') {
-					messages[lastIdx] = {
-						role: 'user',
-						content: payload['contentParts'] as ContentPart[],
-					};
-				}
-			}
-
-			// Step 3: Get provider + tools
-			const provider = this.deps.providerRegistry.getBySlug(agent.provider);
-			if (!provider) {
-				return Err(new ABFErrorClass('PROVIDER_NOT_FOUND', `Provider ${agent.provider} not registered`));
-			}
-
-			const agentTools = this.deps.toolRegistry.getForAgent(agent.id, agent.tools);
-			const chatTools = agentTools.map((t) => {
-				const properties: Record<string, { type: string; description: string }> = {};
-				const required: string[] = [];
-				for (const p of t.definition.parameters) {
-					properties[p.name] = { type: p.type, description: p.description };
-					if (p.required) required.push(p.name);
-				}
-				return {
-					name: t.definition.name,
-					description: t.definition.description,
-					parameters: { type: 'object', properties, required },
-				};
-			});
-
-			// Step 4: Streaming tool loop
-			let loopCount = 0;
-			const maxLoops = agent.maxToolLoops ?? 10;
-			let totalUsage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
-			let totalCost: USDCents = 0 as USDCents;
-			const toolCalls: ToolCall[] = [];
-			const toolResults: ToolResult[] = [];
-
-			while (loopCount < maxLoops) {
-				loopCount++;
-
-				const chunks = provider.chat({
-					model: agent.model,
-					messages,
-					temperature: agent.temperature,
-					tools: chatTools.length > 0 ? chatTools : undefined,
-				});
-
-				let responseText = '';
-				const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
-
-				for await (const chunk of chunks) {
-					if (chunk.type === 'error') {
-						emitChunk({ type: 'error', error: chunk.error ?? 'Provider error' });
-						throw new ABFErrorClass('PROVIDER_ERROR', chunk.error ?? 'Provider error');
-					}
-					if (chunk.type === 'text' && chunk.text) {
-						responseText += chunk.text;
-						emitChunk({ type: 'token', text: chunk.text });
-					}
-					if (chunk.type === 'tool_call' && chunk.toolCall) {
-						pendingToolCalls.push(chunk.toolCall);
-					}
-					if (chunk.type === 'usage' && chunk.usage) {
-						totalUsage = {
-							inputTokens: totalUsage.inputTokens + chunk.usage.inputTokens,
-							outputTokens: totalUsage.outputTokens + chunk.usage.outputTokens,
-							totalTokens: totalUsage.totalTokens + chunk.usage.totalTokens,
-						};
-					}
-				}
-
-				if (pendingToolCalls.length === 0) {
-					messages.push({ role: 'assistant', content: responseText });
-					break;
-				}
-
-				// Execute tool calls with streaming events
-				for (const tc of pendingToolCalls) {
-					const tool = this.deps.toolRegistry.get(tc.name as import('../types/common.js').ToolId);
-					if (!tool) continue;
-
-					// Behavioral bounds enforcement (R3)
-					const boundsMsg = await this.checkAndEnforceBounds(tc.name, agent, sessionId, totalCost);
-					if (boundsMsg) {
-						emitChunk({ type: 'tool_result', toolName: tc.name, toolOutput: boundsMsg });
-						messages.push({ role: 'tool', content: boundsMsg, toolCallId: tc.id });
-						continue;
-					}
-
-					const parsedArgs = JSON.parse(tc.arguments) as Record<string, unknown>;
-
-					emitChunk({
-						type: 'tool_use',
-						toolName: tc.name,
-						toolArguments: parsedArgs,
-					});
-
-					const call: ToolCall = {
-						toolId: tc.name as import('../types/common.js').ToolId,
-						arguments: parsedArgs,
-						agentId: agent.id,
-						timestamp: toISOTimestamp(),
-					};
-					toolCalls.push(call);
-
-					const budgetRemaining = ((agent.behavioralBounds.maxCostPerSession as number) -
-						(totalCost as number)) as USDCents;
-
-					const result = await this.deps.toolSandbox.execute(call, tool, budgetRemaining);
-					if (result.ok) {
-						toolResults.push(result.value);
-						totalCost = ((totalCost as number) + ((result.value.cost ?? 0) as number)) as USDCents;
-
-						// Input security pipeline for external tool results (R4)
-						let toolOutput = JSON.stringify(result.value.output);
-						if (EXTERNAL_TOOLS.has(tc.name)) {
-							const analysis = processInput(toolOutput, 'web');
-							toolOutput = analysis.sanitizedContent;
-						}
-
-						emitChunk({
-							type: 'tool_result',
-							toolName: tc.name,
-							toolOutput: result.value.output,
-						});
-
-						messages.push({
-							role: 'tool',
-							content: toolOutput,
-							toolCallId: tc.id,
-						});
-					}
-				}
-			}
-
-			// Step 8: Report
-			totalCost = ((totalCost as number) +
-				provider.estimateCost(agent.model, totalUsage.totalTokens)) as USDCents;
-
-			const lastMsg = messages[messages.length - 1];
-			const outputText = lastMsg && lastMsg.role === 'assistant' && typeof lastMsg.content === 'string'
-				? lastMsg.content
-				: undefined;
-
-			// Emit session end for streaming sessions (R12)
-			this.deps.sessionEventBus?.emitSessionEnd(activation.agentId, sessionId, 'completed', outputText);
-
-			return Ok({
-				sessionId,
-				agentId: activation.agentId,
-				status: 'completed' as import('../types/session.js').SessionStatus,
-				startedAt,
-				completedAt: toISOTimestamp(),
-				toolCalls,
-				toolResults,
-				messagesEmitted: [],
-				escalations: [],
-				kpiReports: [],
-				tokenUsage: totalUsage,
-				cost: totalCost,
-				memoryUpdates: [],
-				outputText,
-			});
+			return sessionResult;
 		} catch (e) {
+			const status: import('../types/session.js').SessionStatus =
+				e instanceof ABFErrorClass && e.code === 'SESSION_TIMEOUT' ? 'timeout' : 'failed';
+
 			// Emit session end on error (R12)
-			this.deps.sessionEventBus?.emitSessionEnd(activation.agentId, sessionId, 'failed');
+			this.deps.sessionEventBus?.emitSessionEnd(activation.agentId, sessionId, status);
+
+			if (status === 'timeout') {
+				return Ok({
+					sessionId,
+					agentId: activation.agentId,
+					status,
+					startedAt,
+					completedAt: toISOTimestamp(),
+					toolCalls: [],
+					toolResults: [],
+					messagesEmitted: [],
+					escalations: [],
+					kpiReports: [],
+					tokenUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+					cost: 0 as USDCents,
+					memoryUpdates: [],
+					error: e instanceof Error ? e.message : String(e),
+				});
+			}
 
 			return Err(new ABFErrorClass(
 				'SESSION_FAILED',
 				e instanceof Error ? e.message : String(e),
 			));
+		} finally {
+			if (timeoutTimer) clearTimeout(timeoutTimer);
+			this.activeSessions.delete(sessionId);
 		}
+	}
+
+	/** Inner streaming session logic — extracted for timeout wrapping via Promise.race. */
+	private async runStreamingSession(
+		agent: AgentConfig,
+		activation: Activation,
+		sessionId: SessionId,
+		startedAt: ISOTimestamp,
+		signal: AbortSignal,
+		emitChunk: (event: StreamEvent) => void,
+		conversationHistory?: { role: string; content: ChatMessage['content'] }[],
+	): Promise<Result<SessionResult, ABFError>> {
+		// Step 1: Load context (lightweight for chat — skip heavy memory loads)
+		const [memoryResult, knowledgeFiles] = await Promise.all([
+			this.deps.memoryStore.loadContext(activation.agentId),
+			this.deps.knowledgeDir
+				? loadKnowledgeFiles(this.deps.knowledgeDir)
+				: Promise.resolve({} as Record<string, string>),
+		]);
+		if (!memoryResult.ok) return memoryResult;
+		const memory = memoryResult.value;
+		const mergedKnowledge = { ...memory.knowledge, ...knowledgeFiles };
+
+		// Step 2: Build prompt — system message with charter + context
+		const messages: ChatMessage[] = this.buildPrompt(agent, memory, activation, mergedKnowledge);
+
+		// Inject conversation history before the final user message
+		if (conversationHistory && conversationHistory.length > 0) {
+			// Remove the default user message added by buildPrompt (last element)
+			const userMsg = messages.pop();
+			// Add conversation history
+			for (const h of conversationHistory) {
+				messages.push({
+					role: h.role as ChatMessage['role'],
+					content: h.content as string,
+				});
+			}
+			// Re-add the user message
+			if (userMsg) messages.push(userMsg);
+		}
+
+		// Handle multimodal content in user message
+		const payload = activation.payload as Record<string, unknown> | undefined;
+		if (payload?.['contentParts']) {
+			// Replace the last user message with multimodal content
+			const lastIdx = messages.length - 1;
+			if (messages[lastIdx]?.role === 'user') {
+				messages[lastIdx] = {
+					role: 'user',
+					content: payload['contentParts'] as ContentPart[],
+				};
+			}
+		}
+
+		// Step 3: Get provider + tools
+		const provider = this.deps.providerRegistry.getBySlug(agent.provider);
+		if (!provider) {
+			return Err(new ABFErrorClass('PROVIDER_NOT_FOUND', `Provider ${agent.provider} not registered`));
+		}
+
+		const agentTools = this.deps.toolRegistry.getForAgent(agent.id, agent.tools);
+		const chatTools = agentTools.map((t) => {
+			const properties: Record<string, { type: string; description: string }> = {};
+			const required: string[] = [];
+			for (const p of t.definition.parameters) {
+				properties[p.name] = { type: p.type, description: p.description };
+				if (p.required) required.push(p.name);
+			}
+			return {
+				name: t.definition.name,
+				description: t.definition.description,
+				parameters: { type: 'object', properties, required },
+			};
+		});
+
+		// Step 4: Streaming tool loop
+		let loopCount = 0;
+		const maxLoops = agent.maxToolLoops ?? 10;
+		let totalUsage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+		let totalCost: USDCents = 0 as USDCents;
+		const toolCalls: ToolCall[] = [];
+		const toolResults: ToolResult[] = [];
+
+		while (loopCount < maxLoops) {
+			loopCount++;
+
+			const chunks = provider.chat({
+				model: agent.model,
+				messages,
+				temperature: agent.temperature,
+				tools: chatTools.length > 0 ? chatTools : undefined,
+				signal,
+			});
+
+			let responseText = '';
+			const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
+
+			for await (const chunk of chunks) {
+				if (chunk.type === 'error') {
+					emitChunk({ type: 'error', error: chunk.error ?? 'Provider error' });
+					throw new ABFErrorClass('PROVIDER_ERROR', chunk.error ?? 'Provider error');
+				}
+				if (chunk.type === 'text' && chunk.text) {
+					responseText += chunk.text;
+					emitChunk({ type: 'token', text: chunk.text });
+				}
+				if (chunk.type === 'tool_call' && chunk.toolCall) {
+					pendingToolCalls.push(chunk.toolCall);
+				}
+				if (chunk.type === 'usage' && chunk.usage) {
+					totalUsage = {
+						inputTokens: totalUsage.inputTokens + chunk.usage.inputTokens,
+						outputTokens: totalUsage.outputTokens + chunk.usage.outputTokens,
+						totalTokens: totalUsage.totalTokens + chunk.usage.totalTokens,
+					};
+				}
+			}
+
+			if (pendingToolCalls.length === 0) {
+				messages.push({ role: 'assistant', content: responseText });
+				break;
+			}
+
+			// Execute tool calls with streaming events
+			for (const tc of pendingToolCalls) {
+				const tool = this.deps.toolRegistry.get(tc.name as import('../types/common.js').ToolId);
+				if (!tool) continue;
+
+				// Behavioral bounds enforcement (R3)
+				const boundsMsg = await this.checkAndEnforceBounds(tc.name, agent, sessionId, totalCost);
+				if (boundsMsg) {
+					emitChunk({ type: 'tool_result', toolName: tc.name, toolOutput: boundsMsg });
+					messages.push({ role: 'tool', content: boundsMsg, toolCallId: tc.id });
+					continue;
+				}
+
+				const parsedArgs = JSON.parse(tc.arguments) as Record<string, unknown>;
+
+				emitChunk({
+					type: 'tool_use',
+					toolName: tc.name,
+					toolArguments: parsedArgs,
+				});
+
+				const call: ToolCall = {
+					toolId: tc.name as import('../types/common.js').ToolId,
+					arguments: parsedArgs,
+					agentId: agent.id,
+					timestamp: toISOTimestamp(),
+				};
+				toolCalls.push(call);
+
+				const budgetRemaining = ((agent.behavioralBounds.maxCostPerSession as number) -
+					(totalCost as number)) as USDCents;
+
+				const result = await this.deps.toolSandbox.execute(call, tool, budgetRemaining);
+				if (result.ok) {
+					toolResults.push(result.value);
+					totalCost = ((totalCost as number) + ((result.value.cost ?? 0) as number)) as USDCents;
+
+					// Input security pipeline for external tool results (R4)
+					let toolOutput = JSON.stringify(result.value.output);
+					if (EXTERNAL_TOOLS.has(tc.name)) {
+						const analysis = processInput(toolOutput, 'web');
+						toolOutput = analysis.sanitizedContent;
+					}
+
+					emitChunk({
+						type: 'tool_result',
+						toolName: tc.name,
+						toolOutput: result.value.output,
+					});
+
+					messages.push({
+						role: 'tool',
+						content: toolOutput,
+						toolCallId: tc.id,
+					});
+				}
+			}
+		}
+
+		// Step 8: Report
+		totalCost = ((totalCost as number) +
+			provider.estimateCost(agent.model, totalUsage.totalTokens)) as USDCents;
+
+		const lastMsg = messages[messages.length - 1];
+		const outputText = lastMsg && lastMsg.role === 'assistant' && typeof lastMsg.content === 'string'
+			? lastMsg.content
+			: undefined;
+
+		// Emit session end for streaming sessions (R12)
+		this.deps.sessionEventBus?.emitSessionEnd(activation.agentId, sessionId, 'completed', outputText);
+
+		return Ok({
+			sessionId,
+			agentId: activation.agentId,
+			status: 'completed' as import('../types/session.js').SessionStatus,
+			startedAt,
+			completedAt: toISOTimestamp(),
+			toolCalls,
+			toolResults,
+			messagesEmitted: [],
+			escalations: [],
+			kpiReports: [],
+			tokenUsage: totalUsage,
+			cost: totalCost,
+			memoryUpdates: [],
+			outputText,
+		});
 	}
 
 	private async runSession(
@@ -450,6 +527,7 @@ export class SessionManager implements ISessionManager {
 		activation: Activation,
 		sessionId: SessionId,
 		startedAt: ISOTimestamp,
+		signal?: AbortSignal,
 	): Promise<Result<SessionResult, ABFError>> {
 		const toolCalls: ToolCall[] = [];
 		const toolResults: ToolResult[] = [];
@@ -528,6 +606,7 @@ export class SessionManager implements ISessionManager {
 				messages,
 				temperature: agent.temperature,
 				tools: chatTools.length > 0 ? chatTools : undefined,
+				signal,
 			});
 
 			let responseText = '';
@@ -765,8 +844,12 @@ export class SessionManager implements ISessionManager {
 		});
 	}
 
-	async abort(_sessionId: SessionId): Promise<void> {
-		// In v0.1, abort is a no-op — sessions run to completion or timeout
+	async abort(sessionId: SessionId): Promise<void> {
+		const controller = this.activeSessions.get(sessionId);
+		if (controller) {
+			controller.abort();
+			this.activeSessions.delete(sessionId);
+		}
 	}
 
 	/**

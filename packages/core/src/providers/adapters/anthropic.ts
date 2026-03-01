@@ -128,7 +128,9 @@ export class AnthropicProvider implements IProvider {
 				...(tools ? { tools } : {}),
 			};
 
-			const stream = client.messages.stream(streamParams);
+			const stream = client.messages.stream(streamParams, {
+				signal: request.signal ?? undefined,
+			});
 
 			// Buffer for accumulating tool use input
 			type ToolBuffer = { id: string; name: string; inputJson: string };
@@ -183,7 +185,9 @@ export class AnthropicProvider implements IProvider {
 				}
 			}
 		} catch (e: unknown) {
-			if (e instanceof Anthropic.APIError) {
+			if (e instanceof Error && e.name === 'AbortError') {
+				yield { type: 'error', error: 'Request aborted' };
+			} else if (e instanceof Anthropic.APIError) {
 				if (e.status === 401) {
 					yield { type: 'error', error: `Authentication failed: ${e.message}` };
 				} else if (e.status === 429) {

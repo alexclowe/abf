@@ -113,7 +113,9 @@ export class OpenAIProvider implements IProvider {
 				...(tools ? { tools } : {}),
 			};
 
-			const stream = client.chat.completions.stream(streamParams);
+			const stream = client.chat.completions.stream(streamParams, {
+				signal: request.signal ?? undefined,
+			});
 
 			for await (const chunk of stream) {
 				const choice = chunk.choices[0];
@@ -169,7 +171,9 @@ export class OpenAIProvider implements IProvider {
 
 			yield { type: 'done' };
 		} catch (e: unknown) {
-			if (e instanceof OpenAI.APIError) {
+			if (e instanceof Error && e.name === 'AbortError') {
+				yield { type: 'error', error: 'Request aborted' };
+			} else if (e instanceof OpenAI.APIError) {
 				if (e.status === 401) {
 					yield { type: 'error', error: `Authentication failed: ${e.message}` };
 				} else if (e.status === 429) {

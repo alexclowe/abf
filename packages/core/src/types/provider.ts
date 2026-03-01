@@ -45,6 +45,8 @@ export interface ChatRequest {
 	readonly maxTokens?: number | undefined;
 	readonly tools?: readonly ChatToolDefinition[] | undefined;
 	readonly stopSequences?: readonly string[] | undefined;
+	/** Abort signal for cooperative cancellation (e.g., session timeout or manual abort). */
+	readonly signal?: AbortSignal | undefined;
 }
 
 export interface ChatToolDefinition {
