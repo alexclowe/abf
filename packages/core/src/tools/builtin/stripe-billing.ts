@@ -125,7 +125,6 @@ export function createStripeBillingTool(ctx: BuiltinToolContext): ITool {
 	};
 }
 
-// biome-ignore lint: Stripe is dynamically imported, use any for the instance type
 type StripeInstance = any;
 
 async function createCheckout(

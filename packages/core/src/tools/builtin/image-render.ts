@@ -180,7 +180,7 @@ async function loadFont(): Promise<ArrayBuffer> {
 				return readFileSync(fp).buffer as ArrayBuffer;
 			}
 		} catch {
-			continue;
+			// font not found at this path, try next
 		}
 	}
 

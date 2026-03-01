@@ -151,7 +151,6 @@ export function createGitHubCITool(ctx: BuiltinToolContext): ITool {
 	};
 }
 
-// biome-ignore lint: Octokit is dynamically imported, use any for the instance type
 type OctokitInstance = any;
 
 async function createBranch(
