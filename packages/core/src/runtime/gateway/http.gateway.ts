@@ -685,10 +685,17 @@ export class HttpGateway implements IGateway {
 						(init as Record<string, unknown>)['duplex'] = 'half';
 					}
 					const resp = await fetch(target, init);
+					// Node fetch auto-decompresses the body but keeps the
+					// original content-encoding/content-length headers — strip
+					// them so the browser doesn't try to gunzip plain data.
+					const respHeaders = new Headers(resp.headers);
+					respHeaders.delete('content-encoding');
+					respHeaders.delete('content-length');
+					respHeaders.delete('transfer-encoding');
 					return new Response(resp.body, {
 						status: resp.status,
 						statusText: resp.statusText,
-						headers: resp.headers,
+						headers: respHeaders,
 					});
 				} catch {
 					return c.text('Dashboard unavailable', 502);

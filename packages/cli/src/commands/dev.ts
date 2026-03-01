@@ -108,13 +108,19 @@ function getDefaultConfig(): import('@abf/core').AbfConfig {
 
 /**
  * Find the dashboard package directory.
- * Tries monorepo layout first (../../dashboard relative to CLI dist), then npm resolution.
+ * Tries monorepo layout first, then npm resolution.
  */
 function findDashboardDir(): string | null {
-	// Monorepo: packages/cli/dist/ → packages/dashboard
-	const monorepoPath = join(dirname(new URL(import.meta.url).pathname), '..', '..', '..', 'dashboard');
-	if (existsSync(join(monorepoPath, 'package.json'))) {
-		return monorepoPath;
+	const thisDir = dirname(new URL(import.meta.url).pathname);
+
+	// Monorepo: try multiple relative paths to handle both
+	// unbundled (dist/commands/dev.js → ../../../dashboard) and
+	// bundled (dist/dev-*.js → ../../dashboard) layouts.
+	for (const rel of ['../../dashboard', '../../../dashboard']) {
+		const candidate = join(thisDir, rel);
+		if (existsSync(join(candidate, 'package.json'))) {
+			return candidate;
+		}
 	}
 
 	// npm install: try require.resolve
@@ -131,8 +137,14 @@ function findDashboardDir(): string | null {
  * Returns the child process, or null if dashboard is not available.
  */
 function spawnDashboard(dashboardDir: string): ChildProcess {
-	const standalonePath = join(dashboardDir, '.next', 'standalone', 'server.js');
-	const isStandalone = existsSync(standalonePath);
+	// In monorepos, Next.js standalone output nests server.js under the package path
+	const standaloneRoot = join(dashboardDir, '.next', 'standalone');
+	const standaloneDirect = join(standaloneRoot, 'server.js');
+	const standaloneNested = join(standaloneRoot, 'packages', 'dashboard', 'server.js');
+	const standalonePath = existsSync(standaloneDirect) ? standaloneDirect
+		: existsSync(standaloneNested) ? standaloneNested
+		: null;
+	const isStandalone = standalonePath !== null;
 
 	const env = {
 		...process.env,
@@ -142,10 +154,11 @@ function spawnDashboard(dashboardDir: string): ChildProcess {
 
 	if (isStandalone) {
 		// Production mode: standalone server built by `next build` with output: 'standalone'
-		return spawn('node', [standalonePath], {
+		// cwd must be the standalone root so Next.js resolves static assets correctly
+		return spawn('node', [standalonePath!], {
 			stdio: 'pipe',
 			env,
-			cwd: dashboardDir,
+			cwd: standaloneRoot,
 		});
 	}
 
@@ -224,8 +237,12 @@ export async function devCommand(options: DevOptions): Promise<void> {
 						bootstrapMode = false;
 					}
 				} else {
-					// Auto-scaffold on cloud when an API key is detected via env vars
-					const detectedProvider = detectProviderFromEnv();
+					// Auto-scaffold on cloud when an API key is detected via env vars.
+					// Only on cloud platforms — local dev should show the setup wizard.
+					const isCloud = Boolean(
+						process.env['RENDER'] || process.env['RAILWAY_ENVIRONMENT'] || process.env['FLY_APP_NAME'],
+					);
+					const detectedProvider = isCloud ? detectProviderFromEnv() : null;
 					if (detectedProvider) {
 						spinner.text = `Detected ${detectedProvider.provider} API key — scaffolding starter agent...`;
 						await scaffoldStarterProject(projectRoot, detectedProvider.provider, detectedProvider.model);
@@ -261,9 +278,19 @@ export async function devCommand(options: DevOptions): Promise<void> {
 			dashboardProcess = spawnDashboard(dashboardDir);
 			dashboardPort = DASHBOARD_PORT;
 
-			// Silently log dashboard errors for debugging
-			dashboardProcess.stderr?.on('data', () => {});
-			dashboardProcess.on('error', () => {});
+			// Log dashboard errors for debugging
+			dashboardProcess.stderr?.on('data', (d: Buffer) => {
+				const msg = d.toString().trim();
+				if (msg) console.error(chalk.dim(`  [dashboard] ${msg}`));
+			});
+			dashboardProcess.on('error', (err: Error) => {
+				console.error(chalk.dim(`  [dashboard] spawn error: ${err.message}`));
+			});
+			dashboardProcess.on('exit', (code: number | null) => {
+				if (code !== null && code !== 0) {
+					console.error(chalk.dim(`  [dashboard] exited with code ${code}`));
+				}
+			});
 		}
 
 		spinner.text = 'Assembling runtime...';
