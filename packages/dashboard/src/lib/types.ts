@@ -374,6 +374,35 @@ export interface ToolGap {
   priority: 'required' | 'important' | 'nice-to-have';
 }
 
+// ── Build Plan Types ──────────────────────────────────────────────────
+
+export interface BuildPlan {
+  goal: string;
+  strategy: string;
+  totalSteps: number;
+  phases: BuildPhase[];
+}
+
+export interface BuildPhase {
+  id: string;
+  name: string;
+  description: string;
+  steps: BuildStep[];
+  dependsOn?: string[];
+}
+
+export interface BuildStep {
+  id: string;
+  description: string;
+  agent: string;
+  task: string;
+  tools: string[];
+  requiresApproval: boolean;
+  approvalQuestion?: string;
+  dependsOn?: string[];
+  complexity: 'low' | 'medium' | 'high';
+}
+
 export interface CompanyPlan {
   company: CompanyInfo;
   agents: AgentPlan[];
@@ -382,6 +411,7 @@ export interface CompanyPlan {
   workflows: WorkflowPlan[];
   escalationRules: EscalationRule[];
   toolGaps: ToolGap[];
+  buildPlan?: BuildPlan;
   generatedAt: string;
   seedVersion: number;
   seedText: string;

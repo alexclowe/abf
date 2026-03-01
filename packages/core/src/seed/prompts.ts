@@ -108,6 +108,24 @@ ${AVAILABLE_TOOLS}
 
 12. **Suggest workflows** — If the seed doc describes multi-step processes, define them as workflows with agent assignments.
 
+13. **Generate a build plan (if applicable)** — If the seed document describes a product that needs to be BUILT (SaaS, website, marketplace, platform, app), generate an adaptive build plan. The build plan describes HOW agents construct the product, not how they operate it day-to-day (operations are covered by triggers and workflows).
+
+Common build patterns (adapt to the specific business):
+- SaaS/Platform: provision database → generate frontend → configure auth → set up payments → deploy
+- Agency/Services: build landing page → set up email/CRM → launch marketing
+- Content Business: configure CMS/social channels → create initial content → launch
+- E-Commerce: provision backend → generate storefront → configure payments → deploy
+- Marketplace: provision database → build both sides of marketplace → payments → deploy
+
+Build plan rules:
+- Only include steps where ABF tools exist to execute them (see tool list above)
+- Every step that provisions infrastructure, deploys, or configures payments MUST have requiresApproval: true
+- Assign steps to agents from the team you designed (developer for technical, marketer for marketing, etc.)
+- Use meaningful phase IDs (e.g. "infrastructure", "frontend", "payments", "deployment")
+- Use meaningful step IDs (e.g. "provision-supabase", "generate-app", "configure-stripe")
+- If no product needs building (pure consulting, services-only, etc.), omit buildPlan entirely
+- Mark complexity: "low" for config/setup, "medium" for generation/integration, "high" for complex multi-step tasks
+
 ## Agent Configuration Rules
 
 - Provider should be set to the value provided in the request (default: "anthropic")
@@ -197,7 +215,33 @@ Return ONLY valid JSON matching this schema (no markdown, no explanation, just J
       "suggestion": string,
       "priority": "required" | "important" | "nice-to-have"
     }
-  ]
+  ],
+  "buildPlan": {                        // OPTIONAL — only if seed doc describes a product to build
+    "goal": string,                     // e.g. "PickleCoachAI web application"
+    "strategy": string,                 // Overall approach summary
+    "totalSteps": number,
+    "phases": [
+      {
+        "id": string,                   // e.g. "infrastructure"
+        "name": string,                 // e.g. "Provision Infrastructure"
+        "description": string,
+        "dependsOn": string[],          // Phase IDs (optional)
+        "steps": [
+          {
+            "id": string,              // e.g. "provision-supabase"
+            "description": string,
+            "agent": string,           // Agent name from the team
+            "task": string,            // Detailed instruction for the agent
+            "tools": string[],         // Tools the agent needs
+            "requiresApproval": boolean,
+            "approvalQuestion": string, // Only when requiresApproval is true
+            "dependsOn": string[],     // Step IDs within same phase (optional)
+            "complexity": "low" | "medium" | "high"
+          }
+        ]
+      }
+    ]
+  }
 }`;
 
 // ─── Interview Prompt ────────────────────────────────────────────────
@@ -232,12 +276,17 @@ Adapt based on answers, but generally follow this arc:
 2. Who is the customer? (target market)
 3. How will it make money? (revenue model)
 4. What does the product/service look like? (core offering)
-5. What makes it different? (positioning/competitive advantage)
-6. What are the key daily/weekly operations? (business functions)
-7. What metrics define success? (KPIs)
-8. What's the brand personality? (voice/tone)
-9. What needs human approval vs. autonomous execution? (governance)
-10. Any specific tools or integrations needed? (tech requirements)
+5. Does it need a web app, mobile app, or API built? (product type — skip if pure services/consulting)
+6. What are the 3-5 most important features for launch? (MVP scope — only if building a product)
+7. Will users pay through the app? How — subscriptions, one-time, credits? (payment model — only if applicable)
+8. Does it need user accounts and authentication? (auth requirements — only if building a product)
+9. What makes it different? (positioning/competitive advantage)
+10. What are the key daily/weekly operations? (business functions)
+11. What metrics define success? (KPIs)
+12. What's the brand personality? (voice/tone)
+13. What needs human approval vs. autonomous execution? (governance)
+
+**Conditional depth**: If the user describes a pure services/consulting business with no product to build, skip questions 5-8 and focus on operations, brand, and governance. The interview should naturally adapt — don't force product questions on a non-product business.
 
 ## Response Format
 
@@ -249,7 +298,16 @@ If asking a question:
 If the interview is complete:
 { "question": null, "progress": "complete", "complete": true, "seedText": "the full seed document in markdown" }
 
-The generated seed document should be comprehensive (800-2000 words) and structured with clear sections matching the Company Seed Document format: Vision, Business Model, Agent Team Roster (suggested roles), Core Workflows, MVP Scope, Success Metrics, Brand Voice.`;
+The generated seed document should be comprehensive (800-2000 words) and structured with clear sections matching the Company Seed Document format: Vision, Business Model, Agent Team Roster (suggested roles), Core Workflows, MVP Scope, Success Metrics, Brand Voice.
+
+**IMPORTANT**: If the business involves building a product (app, platform, SaaS), the seed document MUST include a "MVP Technical Requirements" section with:
+- Product type (web app, mobile app, API, etc.)
+- Key features for launch (3-5 specific features)
+- Authentication needs (user accounts, social login, etc.)
+- Payment model (subscriptions, one-time, credits, free, etc.)
+- Database needs (what data is stored)
+
+This section gives the analyzer enough information to generate an adaptive build plan. If the business is pure services/consulting with no product to build, omit this section.`;
 
 // ─── Re-analysis Prompt ──────────────────────────────────────────────
 

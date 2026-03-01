@@ -28,6 +28,8 @@ import {
   Shield,
   BookOpen,
   GitBranch,
+  Hammer,
+  Lock,
 } from 'lucide-react';
 
 // ── Constants ────────────────────────────────────────────────────────────
@@ -63,6 +65,12 @@ const priorityColors: Record<string, string> = {
   required: 'bg-red-500/20 text-red-400 border-red-500/30',
   important: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
   'nice-to-have': 'bg-slate-700/50 text-slate-400 border-slate-600/30',
+};
+
+const complexityColors: Record<string, string> = {
+  low: 'bg-green-500/20 text-green-400 border-green-500/30',
+  medium: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+  high: 'bg-red-500/20 text-red-400 border-red-500/30',
 };
 
 // ── Shared UI Components ─────────────────────────────────────────────────
@@ -202,6 +210,90 @@ function AgentRow({
               ))}
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Build Phase Row (expandable) ─────────────────────────────────────────
+
+function BuildPhaseRow({ phase }: { phase: import('@/lib/types').BuildPhase }) {
+  const [expanded, setExpanded] = useState(false);
+  const approvalCount = phase.steps.filter((s) => s.requiresApproval).length;
+
+  return (
+    <div className="border border-slate-800 rounded-lg overflow-hidden">
+      <div
+        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-800/50 transition-colors"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <span className="text-slate-500">
+          {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-sm">{phase.name}</span>
+            <span className="text-xs text-slate-500 font-mono">{phase.id}</span>
+          </div>
+          <div className="text-xs text-slate-400 truncate">{phase.description}</div>
+        </div>
+        <span className="text-xs text-slate-500">{phase.steps.length} steps</span>
+        {approvalCount > 0 && (
+          <span className="flex items-center gap-1 text-xs text-amber-400">
+            <Lock className="w-3 h-3" />
+            {approvalCount}
+          </span>
+        )}
+      </div>
+      {expanded && (
+        <div className="border-t border-slate-800 px-4 py-3 space-y-2 bg-slate-950/50">
+          {phase.dependsOn && phase.dependsOn.length > 0 && (
+            <div className="text-xs text-slate-500 mb-2">
+              Depends on: <span className="text-slate-300 font-mono">{phase.dependsOn.join(', ')}</span>
+            </div>
+          )}
+          {phase.steps.map((step) => (
+            <div
+              key={step.id}
+              className={clsx(
+                'border rounded-lg p-3',
+                step.requiresApproval
+                  ? 'border-amber-500/30 bg-amber-500/5'
+                  : 'border-slate-800 bg-slate-900/50',
+              )}
+            >
+              <div className="flex items-start gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium">{step.description}</span>
+                    <span className={clsx('text-xs px-2 py-0.5 rounded border shrink-0', complexityColors[step.complexity])}>
+                      {step.complexity}
+                    </span>
+                    {step.requiresApproval && (
+                      <span className="flex items-center gap-1 text-xs text-amber-400">
+                        <Lock className="w-3 h-3" />
+                        Approval required
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">
+                    Agent: <span className="text-slate-300">{step.agent}</span>
+                  </div>
+                  {step.approvalQuestion && (
+                    <div className="text-xs text-amber-400/80 mt-1 italic">
+                      &ldquo;{step.approvalQuestion}&rdquo;
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {step.tools.map((t) => (
+                      <span key={t} className="text-xs bg-slate-800 text-slate-300 rounded px-2 py-0.5 font-mono">{t}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -688,6 +780,25 @@ function PlanReview({
               </div>
             ))}
           </Card>
+        </div>
+      )}
+
+      {/* Build Plan */}
+      {plan.buildPlan && plan.buildPlan.phases.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Hammer className="w-5 h-5 text-emerald-400" />
+            <h3 className="text-sm font-semibold">Build Plan ({plan.buildPlan.phases.length} phases, {plan.buildPlan.totalSteps} steps)</h3>
+          </div>
+          <Card className="mb-3">
+            <div className="text-sm font-medium">{plan.buildPlan.goal}</div>
+            <div className="text-xs text-slate-400 mt-1">{plan.buildPlan.strategy}</div>
+          </Card>
+          <div className="space-y-2">
+            {plan.buildPlan.phases.map((phase) => (
+              <BuildPhaseRow key={phase.id} phase={phase} />
+            ))}
+          </div>
         </div>
       )}
 
