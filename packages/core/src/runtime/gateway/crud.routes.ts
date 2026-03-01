@@ -584,7 +584,18 @@ export function registerCrudRoutes(app: Hono, deps: CrudDeps): void {
 	app.put('/api/config', async (c) => {
 		try {
 			const body = await c.req.json<Record<string, unknown>>();
+			// Basic validation: must have at least a name field
+			if (!body || typeof body !== 'object') {
+				return c.json({ error: 'Invalid config: must be a JSON object' }, 400);
+			}
 			const configPath = join(root, 'abf.config.yaml');
+			// Back up previous config before overwriting
+			try {
+				const existing = await readFile(configPath, 'utf-8');
+				await writeFile(`${configPath}.bak`, existing, 'utf-8');
+			} catch {
+				// No existing config to back up
+			}
 			await writeFile(configPath, stringify(body), 'utf-8');
 			return c.json({ success: true });
 		} catch (e) {
