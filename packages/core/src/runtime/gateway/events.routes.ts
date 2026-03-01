@@ -1,14 +1,24 @@
 /**
  * SSE Events route — pushes real-time snapshots to the dashboard.
  * Replaces per-page SWR polling with a single persistent connection.
+ *
+ * Optimizations:
+ * - Delta-based: only sends when snapshot hash changes
+ * - Adaptive interval: 2s when sessions active, 5s when idle
+ * - Heartbeat every 30s to keep connection alive
+ * - Agent charters stripped (clients fetch on demand via /api/agents/:id)
  */
 
+import { createHash } from 'node:crypto';
 import type { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import type { GatewayDeps } from './http.gateway.js';
 import { isValidApiKey } from './auth-utils.js';
 
 const ABF_VERSION = '1.0.0';
+const IDLE_INTERVAL_MS = 5000;
+const ACTIVE_INTERVAL_MS = 2000;
+const HEARTBEAT_INTERVAL_MS = 30_000;
 
 export function registerEventRoutes(app: Hono, deps: GatewayDeps): void {
 	app.get('/api/events', (c) => {
@@ -27,14 +37,38 @@ export function registerEventRoutes(app: Hono, deps: GatewayDeps): void {
 
 		return streamSSE(c, async (stream) => {
 			let id = 0;
+			let lastHash = '';
+			let lastHeartbeat = Date.now();
+
 			while (!stream.aborted) {
 				const snapshot = buildSnapshot(deps);
-				await stream.writeSSE({
-					event: 'snapshot',
-					data: JSON.stringify(snapshot),
-					id: String(id++),
-				});
-				await stream.sleep(2000);
+				const json = JSON.stringify(snapshot);
+				const hash = createHash('md5').update(json).digest('hex');
+
+				// Only send if snapshot changed (delta-based)
+				if (hash !== lastHash) {
+					lastHash = hash;
+					await stream.writeSSE({
+						event: 'snapshot',
+						data: json,
+						id: String(id++),
+					});
+				}
+
+				// Send heartbeat every 30s for connection keep-alive
+				const now = Date.now();
+				if (now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
+					lastHeartbeat = now;
+					await stream.writeSSE({
+						event: 'heartbeat',
+						data: JSON.stringify({ ts: now }),
+						id: String(id++),
+					});
+				}
+
+				// Adaptive interval: faster when sessions active
+				const hasActiveSessions = deps.dispatcher.getActiveSessions().length > 0;
+				await stream.sleep(hasActiveSessions ? ACTIVE_INTERVAL_MS : IDLE_INTERVAL_MS);
 			}
 		});
 	});
@@ -58,9 +92,9 @@ function buildSnapshot(deps: GatewayDeps): Record<string, unknown> {
 			totalEscalations: dispatcher.getEscalations().length,
 			resolvedEscalations: dispatcher.getEscalations().filter((e) => e.resolved).length,
 		},
-		// Full agent list (config + state) for overview and agents pages
+		// Agent list with charter stripped (clients fetch full config on demand)
 		agents: [...deps.agentsMap.values()].map((cfg) => ({
-			config: cfg,
+			config: { ...cfg, charter: undefined },
 			state: dispatcher.getAgentState(cfg.id),
 		})),
 		// Flat agent states for the metrics page
