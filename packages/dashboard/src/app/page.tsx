@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
 import { useEventStream } from '@/lib/use-event-stream';
@@ -8,6 +8,7 @@ import { AgentStatusBadge } from '@/components/AgentStatusBadge';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { Bot, Play, DollarSign, Hammer, ArrowRight, Users } from 'lucide-react';
 import type { OnboardingData } from '@/components/OnboardingChecklist';
+import { getOnboardingState, updateOnboardingState } from '@/lib/onboarding';
 import Link from 'next/link';
 
 function parseSeedFrontmatter(content: string): { name?: string; description?: string; industry?: string; stage?: string } | null {
@@ -58,6 +59,7 @@ export default function OverviewPage() {
   const { data: authStatus } = useSWR('auth-status', () => api.auth.status(), { revalidateOnFocus: false });
   const { data: knowledgeFiles } = useSWR('knowledge', () => api.knowledge.list(), { revalidateOnFocus: false });
   const { data: teams } = useSWR('teams', () => api.teams.list(), { revalidateOnFocus: false });
+  const { data: projectConfig, mutate: mutateConfig } = useSWR('config', () => api.config.get(), { revalidateOnFocus: false });
 
   // Seed detection: check for seed.md and build-plan.md in knowledge files
   const seedFile = useMemo(() => knowledgeFiles?.find(f => f.filename === 'seed.md'), [knowledgeFiles]);
@@ -66,11 +68,13 @@ export default function OverviewPage() {
   const buildPlanSummary = useMemo(() => buildPlanFile ? parseBuildPlanSummary(buildPlanFile.content) : null, [buildPlanFile]);
   const isSeed = !!seedFile;
 
-  // Track build plan review state from localStorage
-  const [buildPlanReviewed, setBuildPlanReviewed] = useState(false);
-  useEffect(() => {
-    setBuildPlanReviewed(localStorage.getItem('abf_build_plan_reviewed') === 'true');
-  }, []);
+  // Onboarding state from project config (server-side, works across browsers/devices)
+  const onboardingState = useMemo(() => getOnboardingState(projectConfig), [projectConfig]);
+
+  const handleDismissChecklist = useCallback(async () => {
+    await updateOnboardingState({ dismissed: true });
+    void mutateConfig();
+  }, [mutateConfig]);
 
   const onboardingData = useMemo<OnboardingData>(() => {
     const hasProvider = authStatus
@@ -83,10 +87,10 @@ export default function OverviewPage() {
       hasProvider, agentCount, hasRun, hasChannel: false, knowledgeCount,
       isSeed,
       hasBuildPlan: !!buildPlanFile,
-      buildPlanReviewed,
+      buildPlanReviewed: onboardingState.build_plan_reviewed,
       companyName: seedMeta?.name,
     };
-  }, [authStatus, agents, knowledgeFiles, isSeed, buildPlanFile, buildPlanReviewed, seedMeta]);
+  }, [authStatus, agents, knowledgeFiles, isSeed, buildPlanFile, onboardingState, seedMeta]);
 
   // Group agents by team
   const agentsByTeam = useMemo(() => {
@@ -152,7 +156,7 @@ export default function OverviewPage() {
       </div>
 
       {/* Onboarding Checklist */}
-      <OnboardingChecklist data={onboardingData} />
+      <OnboardingChecklist data={onboardingData} dismissed={onboardingState.dismissed} onDismiss={handleDismissChecklist} />
 
       {/* Build Plan card */}
       {isSeed && buildPlanSummary && (

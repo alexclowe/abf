@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { Check, X, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -22,6 +22,12 @@ export interface OnboardingData {
   hasBuildPlan?: boolean;
   buildPlanReviewed?: boolean;
   companyName?: string;
+}
+
+interface OnboardingChecklistProps {
+  data: OnboardingData;
+  dismissed?: boolean;
+  onDismiss?: () => void;
 }
 
 const DEFAULT_CHECKLIST: ChecklistItem[] = [
@@ -93,16 +99,8 @@ const SEED_CHECKLIST: ChecklistItem[] = [
   },
 ];
 
-const STORAGE_KEY = 'abf_onboarding_dismissed';
-
-export function OnboardingChecklist({ data }: { data: OnboardingData }) {
-  const [dismissed, setDismissed] = useState(true); // default hidden until we check localStorage
+export function OnboardingChecklist({ data, dismissed, onDismiss }: OnboardingChecklistProps) {
   const [collapsed, setCollapsed] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    setDismissed(stored === 'true');
-  }, []);
 
   if (dismissed) return null;
 
@@ -120,8 +118,7 @@ export function OnboardingChecklist({ data }: { data: OnboardingData }) {
     : allDone ? 'Setup Complete!' : 'Getting Started';
 
   function handleDismiss() {
-    localStorage.setItem(STORAGE_KEY, 'true');
-    setDismissed(true);
+    onDismiss?.();
   }
 
   return (

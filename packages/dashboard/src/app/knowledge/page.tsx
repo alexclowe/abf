@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
+import { updateOnboardingState } from '@/lib/onboarding';
 import { Plus, Save, Trash2, FileText, Eye, Edit3 } from 'lucide-react';
 import { MarkdownContent } from '@/components/MarkdownContent';
 
@@ -44,9 +45,9 @@ function KnowledgePageInner() {
         setEditorContent(match.content);
         setPreviewMode(true);
         setInitialFileApplied(true);
-        // Track build plan review for onboarding checklist
+        // Track build plan review for onboarding checklist (persisted in config)
         if (fileParam === 'build-plan.md') {
-          localStorage.setItem('abf_build_plan_reviewed', 'true');
+          void updateOnboardingState({ build_plan_reviewed: true });
         }
       }
     }
