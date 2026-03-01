@@ -36,7 +36,7 @@ export async function agentAddCommand(options: AgentAddOptions): Promise<void> {
 		description: `${options.name} agent`,
 		...(options.archetype && { role_archetype: options.archetype }),
 		provider: 'anthropic',
-		model: 'claude-sonnet-4-5',
+		model: 'claude-sonnet-4-6',
 		...(archetype && { temperature: archetype.temperature }),
 		...(options.team && { team: options.team }),
 		tools: archetype ? [...archetype.tools] : [],

@@ -20,8 +20,8 @@ interface DevOptions {
 }
 
 const PROVIDER_MODEL_MAP: Record<string, string> = {
-	anthropic: 'claude-sonnet-4-5',
-	openai: 'gpt-4o',
+	anthropic: 'claude-sonnet-4-6',
+	openai: 'gpt-5.2',
 	ollama: 'llama3.2',
 };
 
@@ -29,8 +29,8 @@ const DASHBOARD_PORT = 3001;
 
 /** Detect if an LLM provider API key is set via environment variables. */
 function detectProviderFromEnv(): { provider: string; model: string } | null {
-	if (process.env['ANTHROPIC_API_KEY']) return { provider: 'anthropic', model: 'claude-sonnet-4-5' };
-	if (process.env['OPENAI_API_KEY']) return { provider: 'openai', model: 'gpt-4o' };
+	if (process.env['ANTHROPIC_API_KEY']) return { provider: 'anthropic', model: 'claude-sonnet-4-6' };
+	if (process.env['OPENAI_API_KEY']) return { provider: 'openai', model: 'gpt-5.2' };
 	return null;
 }
 
@@ -194,7 +194,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
 				// If --provider is set, auto-scaffold a config + starter agent
 				if (options.provider) {
 					const provider = options.provider;
-					let model = PROVIDER_MODEL_MAP[provider] ?? 'claude-sonnet-4-5';
+					let model = PROVIDER_MODEL_MAP[provider] ?? 'claude-sonnet-4-6';
 
 					// For Ollama: detect availability and auto-select best model
 					if (provider === 'ollama') {

@@ -23,8 +23,8 @@ export interface SeedRouteDeps extends GatewayDeps {
 
 /** Pick a sensible default model when the caller only specifies a provider. */
 const PROVIDER_DEFAULT_MODEL: Record<string, string> = {
-	anthropic: 'claude-sonnet-4-5',
-	openai: 'gpt-4o',
+	anthropic: 'claude-sonnet-4-6',
+	openai: 'gpt-5.2',
 	ollama: 'llama3.2',
 };
 
@@ -33,7 +33,7 @@ function resolveProviderModel(
 	model: string | undefined,
 ): { provider: string; model: string } {
 	const p = provider ?? 'anthropic';
-	const m = model ?? PROVIDER_DEFAULT_MODEL[p] ?? 'claude-sonnet-4-5';
+	const m = model ?? PROVIDER_DEFAULT_MODEL[p] ?? 'claude-sonnet-4-6';
 	return { provider: p, model: m };
 }
 

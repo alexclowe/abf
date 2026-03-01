@@ -64,7 +64,7 @@ describe('Agent Schema', () => {
 		const config = transformAgentYaml(parsed);
 
 		expect(config.provider).toBe('anthropic');
-		expect(config.model).toBe('claude-sonnet-4-5');
+		expect(config.model).toBe('claude-sonnet-4-6');
 		expect(config.tools).toEqual([]);
 		expect(config.triggers).toEqual([]);
 		expect(config.behavioralBounds.maxCostPerSession).toBe(200); // default $2.00

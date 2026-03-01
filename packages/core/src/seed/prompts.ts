@@ -73,7 +73,7 @@ ${AVAILABLE_TOOLS}
 ## Agent Configuration Rules
 
 - Provider should be set to the value provided in the request (default: "anthropic")
-- Model should be set to the value provided in the request (default: "claude-sonnet-4-5")
+- Model should be set to the value provided in the request (default: "claude-sonnet-4-6")
 - Temperature: 0.2-0.3 for analytical/research roles, 0.4-0.5 for orchestrators, 0.6-0.8 for creative/writing roles
 - Every agent needs at least one trigger (typically manual + heartbeat)
 - Orchestrator agents should have a cron trigger for daily briefings (weekdays 9am)
