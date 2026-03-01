@@ -93,6 +93,12 @@ export class CloudProxyProvider implements IProvider {
 	}
 
 	async *chat(request: ChatRequest): AsyncIterable<ChatChunk> {
+		// Compose session abort signal with a 120s timeout fallback
+		const timeoutSignal = AbortSignal.timeout(120_000);
+		const signal = request.signal
+			? AbortSignal.any([request.signal, timeoutSignal])
+			: timeoutSignal;
+
 		let response: Response;
 		try {
 			response = await fetch(`${this.endpoint}/chat`, {
@@ -102,9 +108,13 @@ export class CloudProxyProvider implements IProvider {
 					'Content-Type': 'application/json',
 				},
 				body: JSON.stringify(request),
-				signal: AbortSignal.timeout(120_000),
+				signal,
 			});
 		} catch (e) {
+			if (e instanceof Error && e.name === 'AbortError') {
+				yield { type: 'error', error: 'Request aborted' };
+				return;
+			}
 			yield { type: 'error', error: `ABF Cloud unreachable: ${(e as Error).message}` };
 			return;
 		}

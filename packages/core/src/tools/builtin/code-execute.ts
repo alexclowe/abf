@@ -3,6 +3,13 @@
  * Used by agents to generate documents (PPTX, DOCX, XLSX) or run data processing.
  * The code runs with access to pptxgenjs, docx, and exceljs npm packages.
  * Output files should be written to the outputs/ directory.
+ *
+ * Security hardening:
+ * - HOME stripped from child env (prevents access to ~/.abf/credentials.enc)
+ * - Temp files written with 0o600 permissions (owner-only read/write)
+ * - stdout/stderr capped at 10MB to prevent memory exhaustion
+ * - Node 22+: --experimental-permission restricts fs/network access
+ * - Node <22: best-effort env stripping + warning
  */
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -13,12 +20,44 @@ import type { ToolId } from '../../types/common.js';
 import { Ok, Err, ToolError } from '../../types/errors.js';
 import type { BuiltinToolContext } from './context.js';
 
+/** 10 MB cap on stdout/stderr to prevent memory exhaustion attacks. */
+const MAX_BUFFER = 10 * 1024 * 1024;
+
 function listFiles(dir: string): string[] {
 	try {
 		return readdirSync(dir);
 	} catch {
 		return [];
 	}
+}
+
+/** Parse Node.js semver to [major, minor, patch]. */
+function parseNodeVersion(): [number, number, number] {
+	const parts = process.versions.node.split('.').map(Number);
+	return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
+}
+
+/** Build sandboxed node flags for Node 22+ permission model. */
+function buildSandboxArgs(
+	tempFile: string,
+	projectRoot: string,
+	outputsDir: string,
+	sandboxDir: string,
+): string[] {
+	const [major] = parseNodeVersion();
+
+	if (major >= 22) {
+		return [
+			'--experimental-permission',
+			`--allow-fs-read=${projectRoot}`,
+			`--allow-fs-write=${outputsDir}`,
+			`--allow-fs-write=${sandboxDir}`,
+			tempFile,
+		];
+	}
+
+	// Node < 22: no permission model, just run the file
+	return [tempFile];
 }
 
 export function createCodeExecuteTool(ctx: BuiltinToolContext): ITool {
@@ -60,7 +99,7 @@ export function createCodeExecuteTool(ctx: BuiltinToolContext): ITool {
 			mkdirSync(sandboxDir, { recursive: true });
 
 			const tempFile = join(sandboxDir, `${randomUUID()}.js`);
-			writeFileSync(tempFile, code, 'utf-8');
+			writeFileSync(tempFile, code, { encoding: 'utf-8', mode: 0o600 });
 
 			// Snapshot outputs/ before execution
 			const outputsDir = join(ctx.projectRoot, 'outputs');
@@ -68,15 +107,30 @@ export function createCodeExecuteTool(ctx: BuiltinToolContext): ITool {
 
 			const startMs = Date.now();
 
+			// Warn on Node < 22 (no permission model)
+			const [major] = parseNodeVersion();
+			if (major < 22) {
+				console.warn(
+					'[code-execute] Node.js < 22 detected — permission sandboxing unavailable. ' +
+					'Upgrade to Node 22+ for --experimental-permission support.',
+				);
+			}
+
+			const nodeArgs = buildSandboxArgs(tempFile, ctx.projectRoot, outputsDir, sandboxDir);
+
 			try {
 				const result = await new Promise<{ stdout: string; stderr: string; exitCode: number }>(
 					(resolve, reject) => {
-						const child = spawn('node', [tempFile], {
+						let stdoutLen = 0;
+						let stderrLen = 0;
+						let truncated = false;
+
+						const child = spawn('node', nodeArgs, {
 							cwd: ctx.projectRoot,
 							env: {
 								PATH: process.env['PATH'],
-								NODE_PATH: process.env['NODE_PATH'],
-								HOME: process.env['HOME'],
+								// HOME intentionally omitted — prevents access to ~/.abf/credentials.enc
+								// NODE_PATH intentionally omitted — limits module resolution to project tree
 							},
 							timeout: 120_000,
 							stdio: ['ignore', 'pipe', 'pipe'],
@@ -85,13 +139,28 @@ export function createCodeExecuteTool(ctx: BuiltinToolContext): ITool {
 						const stdoutChunks: Buffer[] = [];
 						const stderrChunks: Buffer[] = [];
 
-						child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
-						child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
+						child.stdout.on('data', (chunk: Buffer) => {
+							if (stdoutLen + chunk.length <= MAX_BUFFER) {
+								stdoutChunks.push(chunk);
+								stdoutLen += chunk.length;
+							} else if (!truncated) {
+								truncated = true;
+								const remaining = MAX_BUFFER - stdoutLen;
+								if (remaining > 0) stdoutChunks.push(chunk.subarray(0, remaining));
+							}
+						});
+						child.stderr.on('data', (chunk: Buffer) => {
+							if (stderrLen + chunk.length <= MAX_BUFFER) {
+								stderrChunks.push(chunk);
+								stderrLen += chunk.length;
+							}
+						});
 
 						child.on('error', (err) => reject(err));
 						child.on('close', (exitCode) => {
 							resolve({
-								stdout: Buffer.concat(stdoutChunks).toString('utf-8'),
+								stdout: Buffer.concat(stdoutChunks).toString('utf-8') +
+									(truncated ? '\n[truncated: output exceeded 10MB limit]' : ''),
 								stderr: Buffer.concat(stderrChunks).toString('utf-8'),
 								exitCode: exitCode ?? 1,
 							});

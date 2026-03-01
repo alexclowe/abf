@@ -93,8 +93,13 @@ export class OllamaProvider implements IProvider {
 					},
 					...(tools ? { tools } : {}),
 				}),
+				signal: request.signal ?? null,
 			});
 		} catch (e) {
+			if (e instanceof Error && e.name === 'AbortError') {
+				yield { type: 'error', error: 'Request aborted' };
+				return;
+			}
 			yield {
 				type: 'error',
 				error: `Ollama connection failed: ${String(e)}. Is Ollama running at ${this.baseUrl}?`,
