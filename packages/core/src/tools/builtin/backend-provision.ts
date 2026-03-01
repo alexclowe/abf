@@ -10,6 +10,7 @@ import { Ok, Err, ToolError } from '../../types/errors.js';
 import { toISOTimestamp } from '../../util/id.js';
 import type { BuiltinToolContext } from './context.js';
 import { credentialError } from './credential-error.js';
+import { cloudProxyCall, getCloudToken } from './cloud-proxy-call.js';
 
 // Rate limit: max 20 API calls per agent per runtime session
 const sessionApiCounts = new Map<string, number>();
@@ -92,6 +93,14 @@ export function createBackendProvisionTool(ctx: BuiltinToolContext): ITool {
 					action,
 					message: `${action} queued for approval`,
 				});
+			}
+
+			// Cloud proxy: forward to ABF Cloud if running in cloud mode
+			if (ctx.isCloud && ctx.cloudEndpoint) {
+				const cloudToken = await getCloudToken(ctx);
+				if (cloudToken) {
+					return cloudProxyCall(ctx.cloudEndpoint, 'backend-provision', { action, ...args }, cloudToken);
+				}
 			}
 
 			// Get Supabase access token: env var first, then vault

@@ -138,6 +138,9 @@ export async function createRuntime(
 		process.env['RAILWAY_ENVIRONMENT'] || process.env['FLY_APP_NAME'],
 	);
 
+	// Cloud proxy endpoint — set when cloud config exists or running in cloud mode
+	const cloudEndpoint = config.cloud?.endpoint ?? (isCloud ? 'https://api.abf.cloud/v1' : undefined);
+
 	// Build tool context with all dependencies
 	const toolContext: import('../tools/builtin/context.js').BuiltinToolContext = {
 		vault,
@@ -148,6 +151,7 @@ export async function createRuntime(
 		messageTemplates,
 		taskPlanStore,
 		isCloud,
+		cloudEndpoint,
 	};
 
 	// Register built-in tools
@@ -278,6 +282,10 @@ export async function createRuntime(
 		channelRouter.setRoutes([...config.channels]);
 	}
 
+	// Plugin registry — extension point for cloud repo and third-party plugins
+	const { PluginRegistry } = await import('./gateway/plugin-registry.js');
+	const pluginRegistry = new PluginRegistry();
+
 	// 13. Gateway
 	const gateway = new HttpGateway(config.gateway, {
 		agentsMap,
@@ -299,6 +307,7 @@ export async function createRuntime(
 		taskPlanStore,
 		channelRouter,
 		sessionEventBus,
+		pluginRegistry,
 	});
 
 	const components: RuntimeComponents = {
@@ -316,6 +325,7 @@ export async function createRuntime(
 		gateway,
 		monitorRunner,
 		channelRouter,
+		pluginRegistry,
 	};
 
 	return new Runtime(config, projectRoot, components, vault);

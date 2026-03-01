@@ -11,6 +11,7 @@ import type { ITool, ToolDefinition } from '../../types/tool.js';
 import type { ToolId, USDCents } from '../../types/common.js';
 import { Ok, Err, ToolError } from '../../types/errors.js';
 import type { BuiltinToolContext } from './context.js';
+import { cloudProxyCall, getCloudToken } from './cloud-proxy-call.js';
 
 const MAX_DIMENSION = 4096;
 
@@ -85,6 +86,14 @@ export function createImageRenderTool(ctx: BuiltinToolContext): ITool {
 				return Err(
 					new ToolError('TOOL_EXECUTION_FAILED', 'image-render: html parameter is required', {}),
 				);
+			}
+
+			// Cloud proxy: forward to ABF Cloud if running in cloud mode
+			if (ctx.isCloud && ctx.cloudEndpoint) {
+				const cloudToken = await getCloudToken(ctx);
+				if (cloudToken) {
+					return cloudProxyCall(ctx.cloudEndpoint, 'image-render', { ...args }, cloudToken);
+				}
 			}
 
 			// Parse options with defaults and clamping

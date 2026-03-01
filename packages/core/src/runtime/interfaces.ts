@@ -110,6 +110,7 @@ export interface RuntimeComponents {
 	readonly inbox?: import('../types/inbox.js').IInbox | undefined;
 	readonly monitorRunner?: import('../monitor/runner.js').MonitorRunner | undefined;
 	readonly channelRouter?: import('../messaging/channel-router.js').ChannelRouter | undefined;
+	readonly pluginRegistry?: import('./gateway/plugin-registry.js').PluginRegistry | undefined;
 }
 
 export interface IRuntime {

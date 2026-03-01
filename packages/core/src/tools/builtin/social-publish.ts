@@ -10,6 +10,7 @@ import { Ok, Err, ToolError } from '../../types/errors.js';
 import { toISOTimestamp } from '../../util/id.js';
 import type { BuiltinToolContext } from './context.js';
 import { credentialError } from './credential-error.js';
+import { cloudProxyCall, getCloudToken } from './cloud-proxy-call.js';
 
 const BUFFER_API = 'https://api.bufferapp.com/1';
 
@@ -94,6 +95,14 @@ export function createSocialPublishTool(ctx: BuiltinToolContext): ITool {
 						{},
 					),
 				);
+			}
+
+			// Cloud proxy: forward to ABF Cloud if running in cloud mode
+			if (ctx.isCloud && ctx.cloudEndpoint) {
+				const cloudToken = await getCloudToken(ctx);
+				if (cloudToken) {
+					return cloudProxyCall(ctx.cloudEndpoint, 'social-publish', { action, ...args }, cloudToken);
+				}
 			}
 
 			// Get Buffer access token: env var first, then vault

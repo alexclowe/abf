@@ -34,6 +34,7 @@ Available ABF built-in tools:
 - app-deploy: Deploy web applications to Vercel (create projects, deploy files, set env vars, add domains)
 - backend-provision: Provision and manage Supabase backends (create projects, run migrations, configure auth, get API keys)
 - code-generate: Generate or modify code using Claude Code headless mode (sandboxed to project directory)
+- ui-components (MCP: shadcn): Browse and get source code for shadcn/ui components (React, Vue, Svelte)
 `;
 
 const AVAILABLE_ARCHETYPES = `

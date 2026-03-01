@@ -25,4 +25,6 @@ export interface BuiltinToolContext {
 	readonly taskPlanStore?: import('../../types/task-plan.js').ITaskPlanStore | undefined;
 	/** Whether running in ABF Cloud mode (dashboard-managed credentials). */
 	readonly isCloud: boolean;
+	/** ABF Cloud proxy endpoint (e.g. 'https://api.abf.cloud/v1'). Set when isCloud or cloud config present. */
+	readonly cloudEndpoint?: string | undefined;
 }
