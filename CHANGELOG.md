@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [1.2.0] — 2026-03-01
+
+### Added
+- **Adaptive build plan generation** — The seed-to-company analyzer now generates an optional `buildPlan` when the seed document describes a product to build (SaaS, marketplace, platform). The plan includes phases, steps with agent assignments, dependency ordering, complexity ratings, and human approval checkpoints.
+- **Builder agent** — Auto-injected meta-agent (alongside the existing Company Architect) that orchestrates product construction using `plan-task`, `sessions-spawn`, `ask-human`, and `reschedule`. Activates on a 5-minute heartbeat and works through build plan phases with human-in-the-loop approval for infrastructure, deployment, and payment configuration.
+- **Enhanced interview engine** — Product build questions added to the interview flow: product type (web app/mobile/API), MVP features, payment model, and authentication requirements. Generates an "MVP Technical Requirements" section in the seed document when applicable. Questions are conditionally skipped for pure services/consulting businesses.
+- **Build plan validation** — `validateBuildPlanShape()` cross-validates agent names in build steps against the agents array. Malformed build plans are stripped with a warning rather than failing the entire analysis.
+- **Dashboard build plan review** — New expandable "Build Plan" section in the setup wizard's PlanReview step. Shows phases with step counts, complexity badges (low/medium/high), approval-required markers with lock icons, agent assignments, and tool requirements per step.
+- **OpenAI-compatible provider support** — Any provider with an OpenAI-compatible API (Groq, Together, Fireworks, local vLLM, etc.) can be configured in `abf.config.yaml` with `type: openai-compat`, `base_url`, and `api_key_env`.
+
+### Changed
+- `BuildPlan`, `BuildPhase`, `BuildStep` types exported from `@abf/core`.
+- `generateBuilderAgent()` and `formatBuildPlanMarkdown()` exported from `@abf/core`.
+- `applyCompanyPlan()` now writes `knowledge/build-plan.md` and injects the Builder agent when a build plan is present.
+- Analyzer system prompt updated with section 13 (build plan generation rules) and expanded JSON schema.
+- Interview system prompt question flow expanded from 10 to 13 questions with conditional depth for product businesses.
+- Dashboard `CompanyPlan` type updated to include optional `buildPlan` field.
+
+---
+
 ## [1.1.0] — 2026-03-01
 
 ### Added
@@ -132,6 +152,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Message bus schema**: `{ from, to, type, priority, context, payload, timestamp, deadline }`. Types: REQUEST, RESPONSE, ALERT, ESCALATION, STATUS, BROADCAST.
 - Input pipeline for prompt injection defense: source tagging, content isolation, injection detection, output validation.
 
+[1.2.0]: https://github.com/alexclowe/abf/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/alexclowe/abf/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/alexclowe/abf/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/alexclowe/abf/compare/v0.2.0...v0.3.0

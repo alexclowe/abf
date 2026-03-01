@@ -316,6 +316,7 @@ Triggers define what activates an agent. An agent does nothing until a trigger f
 | `message` | Fires when a message arrives from a specific agent | Compass sends a task to Scout |
 | `webhook` | Fires when an HTTP request hits the webhook endpoint | External service posts data |
 | `manual` | Fires when a human triggers it via CLI or Dashboard | `abf run scout --task research_scan` |
+| `heartbeat` | Fires at a fixed interval (in seconds) | Builder checks build progress every 5 minutes |
 
 ### Example: Multiple triggers
 

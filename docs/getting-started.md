@@ -131,6 +131,28 @@ provider: ollama
 model: llama3.2
 ```
 
+### Any OpenAI-compatible provider
+
+ABF supports any provider with an OpenAI-compatible API (Groq, Together, Fireworks, local vLLM, etc.). Configure in `abf.config.yaml`:
+
+```yaml
+providers:
+  - slug: groq
+    name: Groq
+    type: openai-compat
+    base_url: https://api.groq.com/openai/v1
+    api_key_env: GROQ_API_KEY
+    models:
+      - llama-3.3-70b-versatile
+```
+
+Then reference it in agent YAML:
+
+```yaml
+provider: groq
+model: llama-3.3-70b-versatile
+```
+
 ### Verify your setup
 
 ```bash
@@ -311,15 +333,15 @@ Available archetypes:
 | Archetype | Temperature | Default Tools | Description |
 |---|---|---|---|
 | `researcher` | 0.3 | web-search, knowledge-search | Deep research and information gathering |
-| `writer` | 0.7 | file-write, knowledge-search | Content creation and drafting |
-| `orchestrator` | 0.4 | send-message | Team coordination and task routing |
+| `writer` | 0.7 | knowledge-search, image-render | Content creation and drafting |
+| `orchestrator` | 0.2 | send-message, knowledge-search | Team coordination and task routing |
 | `analyst` | 0.2 | database-query, knowledge-search | Data analysis and reporting |
-| `customer-support` | 0.5 | send-message, knowledge-search | Customer interaction and issue resolution |
-| `developer` | 0.2 | code-execute, file-write | Technical tasks and code-related work |
-| `marketer` | 0.6 | web-search, send-message | Marketing strategy and campaigns |
-| `finance` | 0.1 | database-query | Financial analysis and reporting |
-| `monitor` | 0.2 | web-search | Watching for changes and alerting |
-| `generalist` | 0.5 | knowledge-search | General-purpose agent |
+| `customer-support` | 0.4 | send-message, knowledge-search, database-query, email-send, privacy-ops | Customer interaction and issue resolution |
+| `developer` | 0.3 | knowledge-search, github-ci, app-generate, app-deploy, backend-provision, code-generate | Code, PRs, deployments, and technical solutions |
+| `marketer` | 0.6 | web-search, knowledge-search, send-message, email-send, image-render, social-publish | Marketing strategy, campaigns, and growth |
+| `finance` | 0.1 | database-query, knowledge-search, stripe-billing, privacy-ops | Financial analysis, billing, and reporting |
+| `monitor` | 0.1 | web-search, knowledge-search, send-message | Watching for changes and alerting |
+| `generalist` | 0.4 | knowledge-search | General-purpose agent |
 
 ---
 
