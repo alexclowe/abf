@@ -31,7 +31,7 @@ export default function MetricsPage() {
       <h1 className="text-2xl font-bold">Metrics</h1>
 
       {/* Gauges */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <GaugeCard label="Active Sessions" value={activeSessions} />
         <GaugeCard label="Agents" value={agentCount} />
         <GaugeCard label="Escalations" value={totalEscalations} color="amber" />

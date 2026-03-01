@@ -6,6 +6,8 @@ import Link from 'next/link';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
 import { AgentStatusBadge } from '@/components/AgentStatusBadge';
+import { MarkdownContent } from '@/components/MarkdownContent';
+import { MessageSquare } from 'lucide-react';
 
 type Tab = 'overview' | 'memory' | 'sessions';
 
@@ -62,6 +64,13 @@ export default function AgentDetailPage() {
           <p className="text-slate-400 mt-1">{config.role} — {config.description}</p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href={`/agents/${id}/chat`}
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md text-sm font-medium transition-colors border border-slate-700 flex items-center gap-1.5"
+          >
+            <MessageSquare size={14} />
+            Chat
+          </Link>
           <Link
             href={`/agents/${id}/edit`}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md text-sm font-medium transition-colors border border-slate-700"
@@ -256,7 +265,7 @@ export default function AgentDetailPage() {
           {memory?.charter && (
             <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
               <h3 className="text-sm font-medium text-slate-400 mb-2">Charter</h3>
-              <pre className="text-sm text-slate-300 whitespace-pre-wrap font-mono">{memory.charter}</pre>
+              <MarkdownContent>{memory.charter}</MarkdownContent>
             </div>
           )}
           {memory?.history && memory.history.length > 0 && (

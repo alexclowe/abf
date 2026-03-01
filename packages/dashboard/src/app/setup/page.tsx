@@ -342,22 +342,28 @@ function InterviewChat({
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input */}
+      {/* Input — textarea for multi-line answers, Enter to submit, Shift+Enter for newlines */}
       {currentQuestion && !loading && (
         <div className="flex gap-2">
-          <input
+          <textarea
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
-            placeholder="Type your answer..."
-            className="flex-1 bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSubmit()}
+            placeholder="Type your answer... (Shift+Enter for new line)"
+            rows={2}
+            className="flex-1 bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-sky-500 resize-none"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
             autoFocus
           />
           <button
             type="button"
             onClick={handleSubmit}
             disabled={!answer.trim()}
-            className="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-md text-sm font-medium transition-colors"
+            className="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-md text-sm font-medium transition-colors self-end"
           >
             Send
           </button>
@@ -746,21 +752,28 @@ function CreatingStep({
   plan,
   provider,
   apiKey,
+  onRetry,
+  onBack,
 }: {
   plan: CompanyPlan;
   provider: string;
   apiKey: string;
+  onRetry?: () => void;
+  onBack?: () => void;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<'creating' | 'done' | 'error'>('creating');
   const [filesWritten, setFilesWritten] = useState<string[]>([]);
   const [createdAgents, setCreatedAgents] = useState<{ id: string; name: string; displayName: string; role: string }[]>([]);
   const [error, setError] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
 
     async function apply() {
+      setStatus('creating');
+      setError('');
       try {
         // Store API key first if needed
         const selectedProvider = providers.find((p) => p.id === provider);
@@ -782,7 +795,7 @@ function CreatingStep({
 
     apply();
     return () => { cancelled = true; };
-  }, [plan, provider, apiKey]);
+  }, [plan, provider, apiKey, retryCount]);
 
   if (status === 'creating') {
     return (
@@ -814,6 +827,24 @@ function CreatingStep({
         <p className="text-sm text-slate-400">
           You can try again or go back to review the plan.
         </p>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => setRetryCount((c) => c + 1)}
+            className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors"
+          >
+            Try Again
+          </button>
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md text-sm font-medium transition-colors border border-slate-700"
+            >
+              Go Back to Review
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -892,6 +923,10 @@ export default function SetupPage() {
   // Cloud / env-key detection
   const [keyFromEnv, setKeyFromEnv] = useState(false);
   const isCloud = status?.isCloud ?? false;
+
+  // API key validation state
+  const [validatingKey, setValidatingKey] = useState(false);
+  const [keyError, setKeyError] = useState('');
 
   // Auto-skip to step 3 when provider is already connected via env var
   useEffect(() => {
@@ -1156,14 +1191,35 @@ export default function SetupPage() {
               </p>
             </Card>
           )}
+          {keyError && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
+              {keyError}
+            </div>
+          )}
           <NavButtons
-            onBack={() => setStep(1)}
-            onNext={() => setStep(3)}
+            onBack={() => { setStep(1); setKeyError(''); }}
+            onNext={() => {
+              // Validate API key if the provider needs one and we're not cloud-hosted
+              if (selectedProvider?.needsKey && apiKey && !isCloud) {
+                setValidatingKey(true);
+                setKeyError('');
+                api.auth.connectKey(provider, apiKey)
+                  .then(() => { setValidatingKey(false); setStep(3); })
+                  .catch((e: unknown) => {
+                    setValidatingKey(false);
+                    setKeyError(e instanceof Error ? e.message : 'Invalid API key. Please check and try again.');
+                  });
+              } else {
+                setStep(3);
+              }
+            }}
             nextDisabled={
-              selectedProvider?.isCloud ? !cloudToken :
+              validatingKey ||
+              (selectedProvider?.isCloud ? !cloudToken :
               (isCloud && !!selectedProvider?.needsKey) ? true :
-              (!!selectedProvider?.needsKey && !apiKey)
+              (!!selectedProvider?.needsKey && !apiKey))
             }
+            nextLabel={validatingKey ? 'Validating...' : undefined}
           />
         </div>
       )}
@@ -1372,6 +1428,7 @@ export default function SetupPage() {
           plan={plan}
           provider={provider}
           apiKey={apiKey}
+          onBack={() => setStep(5)}
         />
       )}
     </div>

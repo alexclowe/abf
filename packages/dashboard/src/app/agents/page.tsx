@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useEventStream } from '@/lib/use-event-stream';
 import { AgentStatusBadge } from '@/components/AgentStatusBadge';
+import { MessageSquare } from 'lucide-react';
 
 export default function AgentsPage() {
   const { data: stream } = useEventStream();
@@ -57,16 +58,26 @@ export default function AgentsPage() {
                 </div>
                 <div className="text-sm text-slate-400 mt-1">{a.config.role}</div>
               </div>
-              <div className="text-right text-sm">
-                {a.config.team && (
-                  <div className="text-slate-500">Team: {a.config.team}</div>
-                )}
-                <div className="text-slate-500">
-                  Sessions: {a.state?.sessionsCompleted ?? 0}
+              <div className="flex items-center gap-3">
+                <div className="text-right text-sm">
+                  {a.config.team && (
+                    <div className="text-slate-500">Team: {a.config.team}</div>
+                  )}
+                  <div className="text-slate-500">
+                    Sessions: {a.state?.sessionsCompleted ?? 0}
+                  </div>
+                  <div className="text-slate-500">
+                    Cost: ${((a.state?.totalCost ?? 0) / 100).toFixed(4)}
+                  </div>
                 </div>
-                <div className="text-slate-500">
-                  Cost: ${((a.state?.totalCost ?? 0) / 100).toFixed(4)}
-                </div>
+                <Link
+                  href={`/agents/${a.config.id}/chat`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="p-2 bg-slate-800 hover:bg-slate-700 rounded-md border border-slate-700 transition-colors"
+                  title="Chat with agent"
+                >
+                  <MessageSquare size={14} className="text-slate-400" />
+                </Link>
               </div>
             </div>
           </Link>
