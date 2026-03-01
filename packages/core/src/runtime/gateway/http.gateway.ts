@@ -90,10 +90,18 @@ export class HttpGateway implements IGateway {
 		const workflowRuns = this.workflowRuns;
 		const providerCacheRef = { current: this.providerCache };
 
-		// CORS — configurable origins (defaults to localhost dev ports)
+		// CORS — configurable origins (defaults to localhost dev ports + cloud platform URLs)
 		const allowedOrigins = process.env['ABF_CORS_ORIGINS']
 			? process.env['ABF_CORS_ORIGINS'].split(',').map((s) => s.trim())
-			: ['http://localhost:3000', 'http://localhost:3001'];
+			: (() => {
+				const origins = ['http://localhost:3000', 'http://localhost:3001'];
+				// Auto-detect cloud platform URLs
+				const renderUrl = process.env['RENDER_EXTERNAL_URL'];
+				if (renderUrl) origins.push(renderUrl);
+				const railwayDomain = process.env['RAILWAY_PUBLIC_DOMAIN'];
+				if (railwayDomain) origins.push(`https://${railwayDomain}`);
+				return origins;
+			})();
 
 		app.use(
 			'*',
@@ -241,16 +249,37 @@ export class HttpGateway implements IGateway {
 		});
 
 		// -- Status ---------------------------------------------------------------
-		app.get('/api/status', (c) =>
-			c.json({
+		app.get('/api/status', async (c) => {
+			const isCloud = Boolean(
+				process.env['RENDER'] || process.env['RAILWAY_ENVIRONMENT'] || process.env['FLY_APP_NAME'],
+			);
+
+			// Check if any LLM provider is connected via env vars or vault
+			let providerConnected = false;
+			let connectedProvider: string | null = null;
+			if (deps.vault) {
+				for (const slug of ['anthropic', 'openai', 'ollama'] as const) {
+					const key = await deps.vault.get(slug, 'api_key');
+					if (key) {
+						providerConnected = true;
+						connectedProvider = slug;
+						break;
+					}
+				}
+			}
+
+			return c.json({
 				version: ABF_VERSION,
 				uptime: process.uptime(),
 				name: 'ABF Runtime',
 				agents: deps.agentsMap.size,
 				activeSessions: deps.dispatcher.getActiveSessions().length,
 				configured: deps.agentsMap.size > 0,
-			}),
-		);
+				isCloud,
+				providerConnected,
+				connectedProvider,
+			});
+		});
 
 		// -- Agents ---------------------------------------------------------------
 		app.get('/api/agents', (c) => {

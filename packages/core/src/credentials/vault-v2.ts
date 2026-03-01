@@ -38,7 +38,7 @@ const scryptAsync = promisify(scrypt) as (
 	password: string | Buffer,
 	salt: string | Buffer,
 	keylen: number,
-	options?: { N?: number; r?: number; p?: number },
+	options?: { N?: number; r?: number; p?: number; maxmem?: number },
 ) => Promise<Buffer>;
 
 // ─── Constants ──────────────────────────────────────────────────────
@@ -182,7 +182,24 @@ export class VaultV2 implements ICredentialVault {
 		await this.ensureDir();
 
 		if (!existsSync(this.vaultPath)) {
-			// Fresh install — create empty vault
+			// Cloud containers (Render, Railway) have no keychain and no password.
+			// Use ephemeral in-memory vault — env var credentials still work because
+			// vault.get() checks process.env first.
+			const keychainAvailable = await this.keychain.isAvailable();
+			const password = this.masterPassword ?? process.env['ABF_VAULT_PASSWORD'];
+			const isCloud = Boolean(
+				process.env['RENDER'] || process.env['RAILWAY_ENVIRONMENT'] || process.env['FLY_APP_NAME'],
+			);
+
+			if (!keychainAvailable && !password && (isCloud || process.env['ABF_VAULT_INSECURE'] === 'true')) {
+				console.warn('[vault] Cloud/ephemeral mode — credentials from env vars only');
+				this.masterKey = randomBytes(KEY_LEN);
+				this.header = { version: 2, backend: 'keychain', storedAt: new Date().toISOString() };
+				this.data = {};
+				return; // no save(), no file
+			}
+
+			// Fresh local install — create empty vault
 			await this.establishMasterKey();
 			this.data = {};
 			await this.save();

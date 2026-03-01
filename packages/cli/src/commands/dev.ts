@@ -27,6 +27,58 @@ const PROVIDER_MODEL_MAP: Record<string, string> = {
 
 const DASHBOARD_PORT = 3001;
 
+/** Detect if an LLM provider API key is set via environment variables. */
+function detectProviderFromEnv(): { provider: string; model: string } | null {
+	if (process.env['ANTHROPIC_API_KEY']) return { provider: 'anthropic', model: 'claude-sonnet-4-5' };
+	if (process.env['OPENAI_API_KEY']) return { provider: 'openai', model: 'gpt-4o' };
+	return null;
+}
+
+/** Write a minimal config + starter agent to the project root. */
+async function scaffoldStarterProject(projectRoot: string, provider: string, model: string): Promise<void> {
+	const configObj = {
+		name: 'abf',
+		version: '0.1.0',
+		description: 'ABF project — auto-scaffolded',
+		storage: { backend: 'filesystem' },
+		bus: { backend: 'in-process' },
+		security: {
+			injection_detection: true,
+			bounds_enforcement: true,
+			audit_logging: true,
+		},
+		gateway: { enabled: true, port: 3000 },
+		logging: { level: 'info', format: 'pretty' },
+	};
+	await mkdir(projectRoot, { recursive: true });
+	await writeFile(join(projectRoot, 'abf.config.yaml'), stringify(configObj), 'utf-8');
+
+	await mkdir(join(projectRoot, 'agents'), { recursive: true });
+	const agentObj = {
+		name: 'assistant',
+		display_name: 'General Assistant',
+		role: 'Assistant',
+		description: 'A general-purpose AI assistant.',
+		provider,
+		model,
+		temperature: 0.3,
+		tools: [],
+		triggers: [{ type: 'manual', task: 'assist' }],
+		behavioral_bounds: {
+			allowed_actions: ['read_data', 'write_draft'],
+			forbidden_actions: ['delete_data'],
+			max_cost_per_session: '$2.00',
+			requires_approval: [],
+		},
+		charter: '# Assistant\n\nYou are a helpful general-purpose assistant.',
+	};
+	await writeFile(
+		join(projectRoot, 'agents', 'assistant.agent.yaml'),
+		stringify(agentObj),
+		'utf-8',
+	);
+}
+
 /** Default config used when no abf.config.yaml exists (bootstrap / setup mode). */
 function getDefaultConfig(): import('@abf/core').AbfConfig {
 	return {
@@ -114,8 +166,11 @@ export async function devCommand(options: DevOptions): Promise<void> {
 	try {
 		const { loadConfig, createRuntime } = await import('@abf/core');
 
+		// ABF_PROJECT_ROOT lets cloud hosts point to a persistent disk mount
+		const projectRoot = process.env['ABF_PROJECT_ROOT'] ?? process.cwd();
+
 		let bootstrapMode = false;
-		const configResult = await loadConfig(process.cwd());
+		const configResult = await loadConfig(projectRoot);
 		let config: import('@abf/core').AbfConfig;
 
 		if (!configResult.ok) {
@@ -160,56 +215,28 @@ export async function devCommand(options: DevOptions): Promise<void> {
 					}
 
 					spinner.text = `Scaffolding ${provider} agent...`;
-
-					const configObj = {
-						name: 'abf',
-						version: '0.1.0',
-						description: 'ABF project — auto-scaffolded',
-						storage: { backend: 'filesystem' },
-						bus: { backend: 'in-process' },
-						security: {
-							injection_detection: true,
-							bounds_enforcement: true,
-							audit_logging: true,
-						},
-						gateway: { enabled: true, port: 3000 },
-						logging: { level: 'info', format: 'pretty' },
-					};
-					await writeFile(join(process.cwd(), 'abf.config.yaml'), stringify(configObj), 'utf-8');
-
-					await mkdir(join(process.cwd(), 'agents'), { recursive: true });
-					const agentObj = {
-						name: 'assistant',
-						display_name: 'General Assistant',
-						role: 'Assistant',
-						description: 'A general-purpose AI assistant.',
-						provider,
-						model,
-						temperature: 0.3,
-						tools: [],
-						triggers: [{ type: 'manual', task: 'assist' }],
-						behavioral_bounds: {
-							allowed_actions: ['read_data', 'write_draft'],
-							forbidden_actions: ['delete_data'],
-							max_cost_per_session: '$2.00',
-							requires_approval: [],
-						},
-						charter: '# Assistant\n\nYou are a helpful general-purpose assistant.',
-					};
-					await writeFile(
-						join(process.cwd(), 'agents', 'assistant.agent.yaml'),
-						stringify(agentObj),
-						'utf-8',
-					);
+					await scaffoldStarterProject(projectRoot, provider, model);
 
 					// Re-load config now that we've written it
-					const reloadResult = await loadConfig(process.cwd());
+					const reloadResult = await loadConfig(projectRoot);
 					if (reloadResult.ok) {
 						config = reloadResult.value;
 						bootstrapMode = false;
 					}
 				} else {
-					spinner.text = 'No config found — running in setup mode...';
+					// Auto-scaffold on cloud when an API key is detected via env vars
+					const detectedProvider = detectProviderFromEnv();
+					if (detectedProvider) {
+						spinner.text = `Detected ${detectedProvider.provider} API key — scaffolding starter agent...`;
+						await scaffoldStarterProject(projectRoot, detectedProvider.provider, detectedProvider.model);
+						const reloadResult = await loadConfig(projectRoot);
+						if (reloadResult.ok) {
+							config = reloadResult.value;
+							bootstrapMode = false;
+						}
+					} else {
+						spinner.text = 'No config found — running in setup mode...';
+					}
 				}
 			} else {
 				spinner.fail(chalk.red(configResult.error.message));
@@ -240,7 +267,7 @@ export async function devCommand(options: DevOptions): Promise<void> {
 		}
 
 		spinner.text = 'Assembling runtime...';
-		const runtime = await createRuntime(patchedConfig, process.cwd(), { dashboardPort });
+		const runtime = await createRuntime(patchedConfig, projectRoot, { dashboardPort });
 
 		spinner.text = 'Loading agents...';
 		const agentsResult = await runtime.loadAgents();

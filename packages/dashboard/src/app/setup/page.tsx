@@ -889,6 +889,20 @@ export default function SetupPage() {
   const [plan, setPlan] = useState<CompanyPlan | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
 
+  // Cloud / env-key detection
+  const [keyFromEnv, setKeyFromEnv] = useState(false);
+  const isCloud = status?.isCloud ?? false;
+
+  // Auto-skip to step 3 when provider is already connected via env var
+  useEffect(() => {
+    if (!status) return;
+    if (status.providerConnected && status.connectedProvider && step === 1) {
+      setProvider(status.connectedProvider);
+      setKeyFromEnv(true);
+      setStep(3);
+    }
+  }, [status, step]);
+
   const selectedProvider = providers.find((p) => p.id === provider);
 
   // Determine total steps for progress bar based on flow
@@ -1021,22 +1035,30 @@ export default function SetupPage() {
           <div>
             <p className="text-xs text-slate-500 font-medium mb-2 uppercase tracking-wide">Bring Your Own Key</p>
             <div className="grid grid-cols-3 gap-3">
-              {providers.filter((p) => !p.isCloud).map((p) => (
-                <button
-                  type="button"
-                  key={p.id}
-                  onClick={() => setProvider(p.id)}
-                  className={clsx(
-                    'border rounded-lg p-4 text-left transition-colors',
-                    provider === p.id
-                      ? 'border-sky-500 bg-sky-500/10'
-                      : 'border-slate-800 bg-slate-900 hover:border-slate-700',
-                  )}
-                >
-                  <div className="font-medium text-sm">{p.name}</div>
-                  <div className="text-xs text-slate-400 mt-1">{p.desc}</div>
-                </button>
-              ))}
+              {providers.filter((p) => !p.isCloud).map((p) => {
+                const disabled = isCloud && p.id === 'ollama';
+                return (
+                  <button
+                    type="button"
+                    key={p.id}
+                    onClick={() => !disabled && setProvider(p.id)}
+                    disabled={disabled}
+                    className={clsx(
+                      'border rounded-lg p-4 text-left transition-colors',
+                      disabled
+                        ? 'border-slate-800 bg-slate-900/50 opacity-50 cursor-not-allowed'
+                        : provider === p.id
+                          ? 'border-sky-500 bg-sky-500/10'
+                          : 'border-slate-800 bg-slate-900 hover:border-slate-700',
+                    )}
+                  >
+                    <div className="font-medium text-sm">{p.name}</div>
+                    <div className="text-xs text-slate-400 mt-1">
+                      {disabled ? 'Not available on cloud hosting' : p.desc}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -1076,6 +1098,32 @@ export default function SetupPage() {
                 </ul>
               </Card>
             </div>
+          ) : selectedProvider?.needsKey && isCloud ? (
+            <div className="space-y-3">
+              <Card>
+                <p className="text-sm text-slate-300 font-medium mb-3">Set your API key in your hosting dashboard</p>
+                <ol className="text-sm text-slate-400 space-y-2 list-decimal list-inside">
+                  <li>Go to your service&apos;s <span className="text-white">Environment</span> settings</li>
+                  <li>Add <code className="bg-slate-800 px-1.5 py-0.5 rounded text-sky-400 text-xs">
+                    {provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY'}
+                  </code> with your key</li>
+                  <li>The service will restart automatically with the key applied</li>
+                </ol>
+                {selectedProvider.keyUrl && (
+                  <a
+                    href={selectedProvider.keyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block mt-3 text-xs text-sky-400 hover:text-sky-300"
+                  >
+                    Get your {selectedProvider.name} key &rarr;
+                  </a>
+                )}
+              </Card>
+              <p className="text-xs text-slate-500">
+                After setting the environment variable, this page will detect it automatically.
+              </p>
+            </div>
           ) : selectedProvider?.needsKey ? (
             <div>
               <div className="flex items-center justify-between mb-1">
@@ -1113,6 +1161,7 @@ export default function SetupPage() {
             onNext={() => setStep(3)}
             nextDisabled={
               selectedProvider?.isCloud ? !cloudToken :
+              (isCloud && !!selectedProvider?.needsKey) ? true :
               (!!selectedProvider?.needsKey && !apiKey)
             }
           />
@@ -1122,6 +1171,14 @@ export default function SetupPage() {
       {/* ── Step 3: Company Type ─────────────────────────────────────── */}
       {step === 3 && (
         <div className="space-y-4">
+          {keyFromEnv && (
+            <div className="bg-green-500/10 border border-green-500/20 rounded-lg px-4 py-3 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
+              <span className="text-green-400 text-sm">
+                Connected to {selectedProvider?.name ?? provider} via environment variable
+              </span>
+            </div>
+          )}
           <h2 className="text-lg font-semibold">What brings you to ABF?</h2>
           <div className="space-y-3">
             {companyTypeOptions.map((opt) => {
