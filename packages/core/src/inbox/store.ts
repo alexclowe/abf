@@ -50,10 +50,12 @@ export class InMemoryInbox implements IInbox {
 		const pending = agentItems.filter((i) => !i.consumed);
 		const sorted = this.sortByPriority(pending);
 
-		// Mark as consumed
+		// Mark as consumed and remove from backing array to free memory
 		for (const item of sorted) {
 			item.consumed = true;
 		}
+		// Keep only unconsumed items (removes all drained items)
+		this.items.set(agentId, agentItems.filter((i) => !i.consumed));
 
 		return sorted;
 	}

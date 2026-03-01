@@ -7,7 +7,7 @@
  */
 
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir, hostname, userInfo } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -65,6 +65,20 @@ export class FilesystemCredentialVault implements ICredentialVault {
 		if (this.loaded) return;
 		this.loaded = true;
 		try {
+			// Check file permissions — warn if more permissive than 0o600
+			try {
+				const stats = statSync(this.vaultPath);
+				const mode = stats.mode & 0o777;
+				if (mode !== 0o600) {
+					console.warn(
+						`[vault] WARNING: ${this.vaultPath} has permissions ${mode.toString(8)}, expected 600. ` +
+						'Other users may be able to read your credentials. Run: chmod 600 ' + this.vaultPath,
+					);
+				}
+			} catch {
+				// File doesn't exist yet — will be created on first save
+			}
+
 			const raw = readFileSync(this.vaultPath, 'utf8');
 			const decrypted = decrypt(raw.trim(), this.key);
 			this.data = JSON.parse(decrypted) as VaultData;

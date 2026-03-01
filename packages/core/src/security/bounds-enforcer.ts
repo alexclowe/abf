@@ -20,11 +20,28 @@ export type BoundsCheckResult =
 	| { readonly allowed: false; readonly reason: string }
 	| { readonly allowed: 'requires_approval'; readonly action: string };
 
+/**
+ * Check if an action matches a bounds entry, supporting colon-delimited sub-actions.
+ * e.g. action "database-write:delete" matches entry "database-write" (tool-level)
+ *      action "database-write:delete" matches entry "database-write:delete" (exact)
+ *      action "database-write" does NOT match entry "database-write:delete" (sub-action specific)
+ */
+function matchesAction(action: string, entry: string): boolean {
+	if (action === entry) return true;
+	// If the entry has no sub-action, it matches all sub-actions of that tool
+	if (!entry.includes(':') && action.startsWith(`${entry}:`)) return true;
+	return false;
+}
+
+function matchesAnyAction(action: string, list: readonly string[]): boolean {
+	return list.some((entry) => matchesAction(action, entry));
+}
+
 export function checkBounds(input: BoundsCheckInput): Result<BoundsCheckResult, ABFError> {
 	const { action, bounds, currentSessionCost } = input;
 
 	// 1. Check forbidden actions (highest priority)
-	if (bounds.forbiddenActions.includes(action)) {
+	if (matchesAnyAction(action, bounds.forbiddenActions)) {
 		return Ok({
 			allowed: false,
 			reason: `Action "${action}" is explicitly forbidden`,
@@ -43,7 +60,7 @@ export function checkBounds(input: BoundsCheckInput): Result<BoundsCheckResult, 
 	}
 
 	// 3. Check requires approval
-	if (bounds.requiresApproval.includes(action)) {
+	if (matchesAnyAction(action, bounds.requiresApproval)) {
 		return Ok({
 			allowed: 'requires_approval',
 			action,
@@ -51,7 +68,7 @@ export function checkBounds(input: BoundsCheckInput): Result<BoundsCheckResult, 
 	}
 
 	// 4. Check allowed actions (if non-empty, only listed actions are allowed)
-	if (bounds.allowedActions.length > 0 && !bounds.allowedActions.includes(action)) {
+	if (bounds.allowedActions.length > 0 && !matchesAnyAction(action, bounds.allowedActions)) {
 		return Ok({
 			allowed: false,
 			reason: `Action "${action}" is not in the allowed actions list`,

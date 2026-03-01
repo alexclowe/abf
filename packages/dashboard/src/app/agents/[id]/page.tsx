@@ -165,7 +165,7 @@ export default function AgentDetailPage() {
             </div>
 
             <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-slate-400 mb-2">Behavioral Bounds</h3>
+              <h3 className="text-sm font-medium text-slate-400 mb-2">Permissions</h3>
               <dl className="space-y-1 text-sm">
                 <div>
                   <dt className="text-slate-500">Allowed</dt>
