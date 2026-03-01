@@ -74,16 +74,23 @@ export class Runtime implements IRuntime {
 
 		if (!result.ok) return result;
 
+		const { agents, warnings } = result.value;
+
+		// Log warnings for agents that failed validation (partial success)
+		for (const warning of warnings) {
+			console.warn(`[runtime] Agent skipped: ${warning}`);
+		}
+
 		const agentsMap = this.components.agentsMap as Map<string, AgentConfig>;
 
-		for (const agent of result.value) {
+		for (const agent of agents) {
 			agentsMap.set(agent.id, agent);
 			// Register with scheduler (for cron triggers) and dispatcher (for state tracking)
 			this.components.scheduler.registerAgent(agent);
 			this.components.dispatcher.registerAgent(agent);
 		}
 
-		return Ok(result.value);
+		return Ok(agents);
 	}
 
 	async loadTools(): Promise<void> {

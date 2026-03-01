@@ -25,6 +25,13 @@ const cronTriggerSchema = z.object({
 	task: z.string(),
 });
 
+// LLMs often generate `type: schedule` instead of `type: cron` — accept it as an alias
+const scheduleTriggerSchema = z.object({
+	type: z.literal('schedule'),
+	schedule: z.string(),
+	task: z.string(),
+});
+
 const eventTriggerSchema = z.object({
 	type: z.literal('event'),
 	event: z.string(),
@@ -66,6 +73,7 @@ const proactiveTriggerSchema = z.object({
 
 const triggerSchema = z.discriminatedUnion('type', [
 	cronTriggerSchema,
+	scheduleTriggerSchema,
 	eventTriggerSchema,
 	messageTriggerSchema,
 	webhookTriggerSchema,
@@ -167,7 +175,13 @@ export function transformAgentYaml(parsed: z.output<typeof agentYamlSchema>): Ag
 		team: parsed.team as TeamId | undefined,
 		reportsTo: parsed.reports_to as AgentId | undefined,
 		tools: mergedTools,
-		triggers: parsed.triggers as unknown as readonly TriggerConfig[],
+		triggers: parsed.triggers.map((t) => {
+			// Normalize 'schedule' alias → 'cron' so runtime only sees canonical types
+			if (t.type === 'schedule') {
+				return { ...t, type: 'cron' as const } as unknown as TriggerConfig;
+			}
+			return t as unknown as TriggerConfig;
+		}),
 		escalationRules: parsed.escalation_rules.map((r) => ({
 			condition: r.condition,
 			target: r.target as 'human' | AgentId,

@@ -7,9 +7,10 @@
  */
 
 import type { IProviderRegistry } from '../types/provider.js';
-import type { ChatMessage, ChatRequest } from '../types/provider.js';
+import type { ChatMessage, ChatRequest, ResponseFormat } from '../types/provider.js';
 import type { CompanyPlan } from './types.js';
 import { ANALYZER_SYSTEM_PROMPT, REANALYZE_SYSTEM_PROMPT } from './prompts.js';
+import { COMPANY_PLAN_JSON_SCHEMA } from './schema.js';
 
 // ─── Options ────────────────────────────────────────────────────────
 
@@ -49,6 +50,41 @@ async function collectChatResponse(
 		}
 	}
 	return response;
+}
+
+/**
+ * Check whether a provider + model supports structured output (JSON Schema mode).
+ * Returns true for OpenAI models that advertise supportsStructuredOutput.
+ */
+async function supportsStructuredOutput(
+	provider: import('../types/provider.js').IProvider,
+	model: string,
+): Promise<boolean> {
+	try {
+		const models = await provider.models();
+		const modelInfo = models.find((m) => m.id === model);
+		return modelInfo?.supportsStructuredOutput === true;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Build a ResponseFormat for the CompanyPlan JSON Schema, if the provider supports it.
+ */
+async function buildResponseFormat(
+	provider: import('../types/provider.js').IProvider,
+	model: string,
+): Promise<ResponseFormat | undefined> {
+	const supported = await supportsStructuredOutput(provider, model);
+	if (!supported) return undefined;
+
+	return {
+		type: 'json_schema',
+		name: 'company_plan',
+		schema: COMPANY_PLAN_JSON_SCHEMA,
+		strict: true,
+	};
 }
 
 /**
@@ -156,6 +192,9 @@ export async function analyzeSeedDoc(
 		throw new Error(`Provider "${providerId}" not found in registry.`);
 	}
 
+	// Check if provider supports structured output — eliminates JSON parse failures
+	const responseFormat = await buildResponseFormat(provider, model);
+
 	// Build the initial conversation
 	const messages: ChatMessage[] = [
 		{ role: 'system', content: ANALYZER_SYSTEM_PROMPT },
@@ -170,6 +209,7 @@ export async function analyzeSeedDoc(
 		messages,
 		temperature: 0.3,
 		maxTokens: 16384,
+		responseFormat,
 	};
 
 	let response = await collectChatResponse(provider.chat(request));
@@ -252,6 +292,9 @@ export async function reanalyzeSeedDoc(
 		throw new Error(`Provider "${providerId}" not found in registry.`);
 	}
 
+	// Check if provider supports structured output
+	const responseFormat = await buildResponseFormat(provider, model);
+
 	const userContent = [
 		`Provider: ${providerId}`,
 		`Model: ${model}`,
@@ -279,6 +322,7 @@ export async function reanalyzeSeedDoc(
 		messages,
 		temperature: 0.3,
 		maxTokens: 16384,
+		responseFormat,
 	};
 
 	let response = await collectChatResponse(provider.chat(request));

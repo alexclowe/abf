@@ -35,13 +35,23 @@ export async function statusCommand(options: StatusOptions = {}): Promise<void> 
 
 		// Agents
 		const agentsResult = await loadAgentConfigs(config.agentsDir);
-		const agents = agentsResult.ok ? agentsResult.value : [];
+		const agents = agentsResult.ok ? agentsResult.value.agents : [];
+		const agentWarnings = agentsResult.ok ? agentsResult.value.warnings : [];
 
 		if (agents.length > 0) {
 			const names = agents.map((a) => a.name).join(chalk.dim(' · '));
 			console.log(`  ${chalk.green('\u2713')}  ${agents.length} agent${agents.length === 1 ? '' : 's'} ready   ${chalk.dim(names)}`);
-		} else {
-			console.log(`  ${chalk.red('\u2717')}  No agents loaded`);
+		}
+		if (agentWarnings.length > 0) {
+			console.log(`  ${chalk.yellow('!')}  ${agentWarnings.length} agent${agentWarnings.length === 1 ? '' : 's'} failed to load:`);
+			for (const warning of agentWarnings) {
+				// Show just the filename and first issue line, not the full error
+				const firstLine = warning.split('\n')[0] ?? warning;
+				console.log(chalk.dim(`     ${firstLine}`));
+			}
+		}
+		if (agents.length === 0 && agentWarnings.length === 0) {
+			console.log(`  ${chalk.red('\u2717')}  No agents found`);
 			console.log(chalk.dim('     Add agent YAML files to the agents/ directory'));
 		}
 
@@ -92,10 +102,10 @@ async function verboseStatus(config: import('@abf/core').AbfConfig): Promise<voi
 
 	// Agents
 	const agentsResult = await loadAgentConfigs(config.agentsDir);
-	if (!agentsResult.ok || agentsResult.value.length === 0) {
-		console.log(chalk.dim('  No agents found.'));
-	} else {
-		const agents = agentsResult.value;
+	const agents = agentsResult.ok ? agentsResult.value.agents : [];
+	const agentWarnings = agentsResult.ok ? agentsResult.value.warnings : [];
+
+	if (agents.length > 0) {
 		console.log(chalk.bold('  Agents:'));
 		for (const agent of agents) {
 			const triggers = agent.triggers.map((t) => t.type).join(', ') || 'none';
@@ -105,6 +115,16 @@ async function verboseStatus(config: import('@abf/core').AbfConfig): Promise<voi
 			);
 		}
 		console.log();
+	}
+	if (agentWarnings.length > 0) {
+		console.log(chalk.bold(chalk.yellow('  Agent Errors:')));
+		for (const warning of agentWarnings) {
+			console.log(chalk.yellow(`    ${warning}`));
+		}
+		console.log();
+	}
+	if (agents.length === 0 && agentWarnings.length === 0) {
+		console.log(chalk.dim('  No agents found.'));
 	}
 
 	// Provider status

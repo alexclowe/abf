@@ -32,6 +32,7 @@ export {
 	loadWorkflowConfig,
 	loadWorkflowConfigs,
 } from './config/index.js';
+export type { AgentLoadResult } from './config/index.js';
 
 // ─── Runtime ──────────────────────────────────────────────────────────
 export {

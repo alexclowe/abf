@@ -113,6 +113,18 @@ export class OpenAICompatProvider implements IProvider {
 		});
 
 		try {
+			// Build response_format for structured output (JSON Schema mode)
+			const responseFormat = request.responseFormat
+				? {
+						type: 'json_schema' as const,
+						json_schema: {
+							name: request.responseFormat.name,
+							schema: request.responseFormat.schema,
+							strict: request.responseFormat.strict ?? true,
+						},
+					}
+				: undefined;
+
 			const body: Record<string, unknown> = {
 				model: request.model,
 				messages,
@@ -120,6 +132,7 @@ export class OpenAICompatProvider implements IProvider {
 				...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
 				...(request.maxTokens !== undefined ? { max_tokens: request.maxTokens } : {}),
 				...(tools ? { tools } : {}),
+				...(responseFormat ? { response_format: responseFormat } : {}),
 			};
 
 			const resp = await fetch(`${this.config.baseUrl}/chat/completions`, {

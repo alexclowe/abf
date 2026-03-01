@@ -740,10 +740,15 @@ export function registerSetupRoutes(app: Hono, deps: SetupDeps): void {
 				return c.json({ error: `Failed to load agents: ${loadResult.error.message}` }, 500);
 			}
 
+			const { agents: loadedAgents, warnings } = loadResult.value;
+			if (warnings.length > 0) {
+				console.warn(`[setup] ${warnings.length} agent(s) skipped due to validation errors`);
+			}
+
 			const agentsMap = deps.agentsMap as Map<string, AgentConfig>;
 			const newAgents: AgentConfig[] = [];
 
-			for (const agent of loadResult.value) {
+			for (const agent of loadedAgents) {
 				if (!agentsMap.has(agent.id)) {
 					agentsMap.set(agent.id, agent);
 					deps.scheduler.registerAgent(agent);

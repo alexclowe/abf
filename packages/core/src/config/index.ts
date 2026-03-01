@@ -8,3 +8,4 @@ export {
 	loadWorkflowConfig,
 	loadWorkflowConfigs,
 } from './loader.js';
+export type { AgentLoadResult } from './loader.js';

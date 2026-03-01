@@ -108,31 +108,37 @@ export async function loadAgentConfig(filePath: string): Promise<Result<AgentCon
 	return Ok(transformAgentYaml(result.data));
 }
 
+/**
+ * Result of loading agent configs — may include both valid agents and warnings
+ * for agents that failed validation (partial success).
+ */
+export interface AgentLoadResult {
+	readonly agents: readonly AgentConfig[];
+	readonly warnings: readonly string[];
+}
+
 export async function loadAgentConfigs(
 	agentsDir: string,
-): Promise<Result<readonly AgentConfig[], ConfigError>> {
+): Promise<Result<AgentLoadResult, ConfigError>> {
 	const dir = resolve(agentsDir);
 	let files: string[];
 	try {
 		const entries = await readdir(dir);
 		files = entries.filter((f) => f.endsWith('.agent.yaml'));
 	} catch {
-		return Ok([]); // No agents dir = no agents
+		return Ok({ agents: [], warnings: [] }); // No agents dir = no agents
 	}
 
-	// Load all agent configs in parallel
+	// Load all agent configs in parallel — partial success (valid agents load, invalid get warnings)
 	const results = await Promise.all(files.map((file) => loadAgentConfig(join(dir, file))));
 	const configs: AgentConfig[] = [];
-	const errors: string[] = [];
+	const warnings: string[] = [];
 	for (const result of results) {
-		if (!result.ok) errors.push(result.error.message);
+		if (!result.ok) warnings.push(result.error.message);
 		else configs.push(result.value);
 	}
-	if (errors.length > 0) {
-		return Err(new ConfigError('CONFIG_INVALID', errors.join('\n')));
-	}
 
-	return Ok(configs);
+	return Ok({ agents: configs, warnings });
 }
 
 // ─── Team Loading ─────────────────────────────────────────────────────
