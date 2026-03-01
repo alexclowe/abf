@@ -1,36 +1,73 @@
 /**
- * @deprecated Use OpenAICompatProvider with the 'openrouter' preset instead.
- * This standalone class is superseded by the generic OpenAI-compatible provider
- * (openai-compat.ts) which handles OpenRouter and all other compatible APIs.
- * Kept for reference — will be removed in a future release.
+ * OpenAI-Compatible provider — single parameterized class for any provider
+ * that exposes /v1/chat/completions with SSE streaming (Moonshot, DeepSeek,
+ * Groq, Together, OpenRouter, and any custom endpoint).
  *
- * Original: OpenRouter provider — OpenAI-compatible API with OAuth PKCE support.
- * Users sign up at OpenRouter and get an API key via OAuth flow.
- * Supports all major models (Claude, GPT, Gemini, Llama, etc.) through one API.
+ * Adapted from openrouter.ts — same SSE parsing, tool call accumulation,
+ * and error handling, but config-driven instead of hard-coded.
  */
 
 import type { ICredentialVault } from '../../credentials/vault.js';
 import type { ProviderId, USDCents } from '../../types/common.js';
 import { ProviderError } from '../../types/errors.js';
-import type { ChatChunk, ChatRequest, ChatToolDefinition, IProvider, ModelInfo } from '../../types/provider.js';
+import type {
+	ChatChunk,
+	ChatRequest,
+	ChatToolDefinition,
+	IProvider,
+	ModelInfo,
+	ProviderAuthType,
+} from '../../types/provider.js';
 
-const OPENROUTER_API_BASE = 'https://openrouter.ai/api/v1';
+// ─── Config ──────────────────────────────────────────────────────────
 
-export class OpenRouterProvider implements IProvider {
-	readonly id = 'openrouter' as ProviderId;
-	readonly name = 'OpenRouter';
-	readonly slug = 'openrouter';
-	readonly authType = 'oauth' as const;
+export interface OpenAICompatConfig {
+	/** Unique provider identifier (e.g. 'moonshot') */
+	readonly id: string;
+	/** Human-readable name (e.g. 'Moonshot AI') */
+	readonly name: string;
+	/** Slug for agent YAML `provider:` field and vault lookup */
+	readonly slug: string;
+	/** Base URL without trailing slash (e.g. 'https://api.moonshot.cn/v1') */
+	readonly baseUrl: string;
+	/** Authentication type */
+	readonly authType: ProviderAuthType;
+	/** Environment variable name for API key fallback */
+	readonly envVar?: string | undefined;
+	/** Default model when none specified */
+	readonly defaultModel?: string | undefined;
+	/** Static model list — returned from models() if provided, skips API call */
+	readonly models?: readonly ModelInfo[] | undefined;
+	/** Extra HTTP headers (e.g. HTTP-Referer for OpenRouter) */
+	readonly headers?: Readonly<Record<string, string>> | undefined;
+}
 
-	constructor(private readonly vault: ICredentialVault) {}
+// ─── Provider ────────────────────────────────────────────────────────
+
+export class OpenAICompatProvider implements IProvider {
+	readonly id: ProviderId;
+	readonly name: string;
+	readonly slug: string;
+	readonly authType: ProviderAuthType;
+
+	constructor(
+		private readonly config: OpenAICompatConfig,
+		private readonly vault: ICredentialVault,
+	) {
+		this.id = config.id as ProviderId;
+		this.name = config.name;
+		this.slug = config.slug;
+		this.authType = config.authType;
+	}
 
 	private async getApiKey(): Promise<string> {
-		const fromVault = await this.vault.get('openrouter', 'api_key');
-		const key = fromVault ?? process.env['OPENROUTER_API_KEY'];
+		const fromVault = await this.vault.get(this.slug, 'api_key');
+		const fromEnv = this.config.envVar ? process.env[this.config.envVar] : undefined;
+		const key = fromVault ?? fromEnv;
 		if (!key) {
 			throw new ProviderError(
 				'PROVIDER_AUTH_FAILED',
-				'OpenRouter API key not found. Connect via the dashboard or set OPENROUTER_API_KEY.',
+				`${this.name} API key not found. Run "abf auth ${this.slug}" or set ${this.config.envVar ?? `${this.slug.toUpperCase()}_API_KEY`}.`,
 			);
 		}
 		return key;
@@ -45,8 +82,10 @@ export class OpenRouterProvider implements IProvider {
 			return;
 		}
 
-		// Build OpenAI-compatible tool definitions — parameters is already a valid JSON Schema
-		const tools: Array<{ type: 'function'; function: { name: string; description: string; parameters: unknown } }> | undefined =
+		// Build OpenAI-compatible tool definitions
+		const tools:
+			| Array<{ type: 'function'; function: { name: string; description: string; parameters: unknown } }>
+			| undefined =
 			request.tools && request.tools.length > 0
 				? request.tools.map((t: ChatToolDefinition) => ({
 						type: 'function' as const,
@@ -83,25 +122,26 @@ export class OpenRouterProvider implements IProvider {
 				...(tools ? { tools } : {}),
 			};
 
-			const resp = await fetch(`${OPENROUTER_API_BASE}/chat/completions`, {
+			const resp = await fetch(`${this.config.baseUrl}/chat/completions`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					'Authorization': `Bearer ${apiKey}`,
-					'HTTP-Referer': 'https://github.com/alexclowe/abf',
 					'X-Title': 'ABF - Agentic Business Framework',
+					...(this.config.headers ?? {}),
 				},
 				body: JSON.stringify(body),
+				...(request.signal ? { signal: request.signal } : {}),
 			});
 
 			if (!resp.ok) {
 				const errText = await resp.text().catch(() => resp.statusText);
 				if (resp.status === 401) {
-					yield { type: 'error', error: `Authentication failed: ${errText}` };
+					yield { type: 'error', error: `${this.name} authentication failed: ${errText}` };
 				} else if (resp.status === 429) {
-					yield { type: 'error', error: `Rate limited: ${errText}` };
+					yield { type: 'error', error: `${this.name} rate limited: ${errText}` };
 				} else {
-					yield { type: 'error', error: `OpenRouter error (${resp.status}): ${errText}` };
+					yield { type: 'error', error: `${this.name} error (${resp.status}): ${errText}` };
 				}
 				return;
 			}
@@ -157,7 +197,11 @@ export class OpenRouterProvider implements IProvider {
 						if (choice?.delta?.tool_calls) {
 							for (const tc of choice.delta.tool_calls) {
 								if (!toolCallBuffers.has(tc.index)) {
-									toolCallBuffers.set(tc.index, { id: tc.id ?? '', name: tc.function?.name ?? '', arguments: '' });
+									toolCallBuffers.set(tc.index, {
+										id: tc.id ?? '',
+										name: tc.function?.name ?? '',
+										arguments: '',
+									});
 								}
 								const buf = toolCallBuffers.get(tc.index)!;
 								if (tc.id) buf.id = tc.id;
@@ -202,65 +246,85 @@ export class OpenRouterProvider implements IProvider {
 
 			yield { type: 'done' };
 		} catch (e) {
-			yield { type: 'error', error: `OpenRouter error: ${e instanceof Error ? e.message : String(e)}` };
+			if (e instanceof DOMException && e.name === 'AbortError') {
+				yield { type: 'error', error: `${this.name} request aborted` };
+			} else {
+				yield { type: 'error', error: `${this.name} error: ${e instanceof Error ? e.message : String(e)}` };
+			}
 		}
 	}
 
 	async models(): Promise<readonly ModelInfo[]> {
+		// Return static list if provided in config
+		if (this.config.models && this.config.models.length > 0) {
+			return this.config.models;
+		}
+
+		// Otherwise fetch from /v1/models endpoint
 		try {
 			const apiKey = await this.getApiKey();
-			const resp = await fetch(`${OPENROUTER_API_BASE}/models`, {
+			const resp = await fetch(`${this.config.baseUrl}/models`, {
 				headers: {
 					'Authorization': `Bearer ${apiKey}`,
-					'HTTP-Referer': 'https://github.com/alexclowe/abf',
+					...(this.config.headers ?? {}),
 				},
 				signal: AbortSignal.timeout(10_000),
 			});
 
 			if (!resp.ok) {
 				await resp.text().catch(() => '');
-				return this.defaultModels();
+				return this.fallbackModels();
 			}
 
 			const data = (await resp.json()) as {
 				data?: Array<{
 					id: string;
-					name: string;
+					name?: string;
 					context_length?: number;
 					top_provider?: { max_completion_tokens?: number };
 					pricing?: { prompt?: string; completion?: string };
 				}>;
 			};
 
-			if (!Array.isArray(data.data)) return this.defaultModels();
+			if (!Array.isArray(data.data)) return this.fallbackModels();
 
 			return data.data.slice(0, 50).map((m) => ({
 				id: m.id,
-				name: m.name,
+				name: m.name ?? m.id,
 				contextWindow: m.context_length ?? 128_000,
 				maxOutputTokens: m.top_provider?.max_completion_tokens ?? 4096,
 				supportsTools: true,
 				supportsStreaming: true,
-				costPerInputToken: m.pricing?.prompt ? Number(m.pricing.prompt) : 0.000001,
-				costPerOutputToken: m.pricing?.completion ? Number(m.pricing.completion) : 0.000002,
+				costPerInputToken: m.pricing?.prompt ? Number(m.pricing.prompt) : undefined,
+				costPerOutputToken: m.pricing?.completion ? Number(m.pricing.completion) : undefined,
 			}));
 		} catch {
-			return this.defaultModels();
+			return this.fallbackModels();
 		}
 	}
 
-	private defaultModels(): readonly ModelInfo[] {
-		return [
-			{ id: 'anthropic/claude-sonnet-4-5', name: 'Claude Sonnet 4.5', contextWindow: 200_000, supportsTools: true, supportsStreaming: true, costPerInputToken: 0.000003, costPerOutputToken: 0.000015 },
-			{ id: 'openai/gpt-4o', name: 'GPT-4o', contextWindow: 128_000, supportsTools: true, supportsStreaming: true, costPerInputToken: 0.0000025, costPerOutputToken: 0.00001 },
-			{ id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', contextWindow: 1_000_000, supportsTools: true, supportsStreaming: true, costPerInputToken: 0.0000001, costPerOutputToken: 0.0000004 },
-			{ id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', contextWindow: 131_072, supportsTools: true, supportsStreaming: true, costPerInputToken: 0.0000003, costPerOutputToken: 0.0000004 },
-		];
+	private fallbackModels(): readonly ModelInfo[] {
+		if (this.config.defaultModel) {
+			return [
+				{
+					id: this.config.defaultModel,
+					name: this.config.defaultModel,
+					contextWindow: 128_000,
+					supportsTools: true,
+					supportsStreaming: true,
+				},
+			];
+		}
+		return [];
 	}
 
 	estimateCost(model: string, tokens: number): USDCents {
-		// Default conservative estimate — OpenRouter has pass-through pricing
-		const rate = model.includes('claude') ? 0.000015 : model.includes('gpt-4o') ? 0.00001 : 0.000002;
-		return Math.round(tokens * rate * 100) as USDCents;
+		// Check static model list for pricing
+		const modelInfo = this.config.models?.find((m) => m.id === model);
+		if (modelInfo?.costPerInputToken) {
+			return Math.round(tokens * modelInfo.costPerInputToken * 100) as USDCents;
+		}
+		// Default conservative estimate
+		return Math.round(tokens * 0.000002 * 100) as USDCents;
 	}
 }

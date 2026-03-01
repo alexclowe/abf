@@ -71,6 +71,16 @@ export interface CloudConfig {
 	readonly endpoint?: string | undefined;
 }
 
+// ─── Custom Provider Config ──────────────────────────────────────────
+
+export interface CustomProviderConfig {
+	readonly id: string;
+	readonly name: string;
+	readonly baseUrl: string;
+	readonly envVar?: string | undefined;
+	readonly defaultModel?: string | undefined;
+}
+
 // ─── ABF Config (top-level) ───────────────────────────────────────────
 
 export interface AbfConfig {
@@ -95,6 +105,7 @@ export interface AbfConfig {
 	readonly knowledgeDir: string;
 	readonly outputsDir: string;
 	readonly cloud?: CloudConfig | undefined;
+	readonly providers?: readonly CustomProviderConfig[] | undefined;
 	readonly memoryWindowSize?: number | undefined;
 	readonly memorySummarizationThreshold?: number | undefined;
 	readonly memorySummarizationEnabled?: boolean | undefined;
