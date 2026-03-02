@@ -73,6 +73,19 @@ export class OpenAIProvider implements IProvider {
 				};
 			}
 
+			// Assistant message with tool_calls (multi-turn tool use)
+			if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+				return {
+					role: 'assistant' as const,
+					content: typeof m.content === 'string' && m.content ? m.content : null,
+					tool_calls: m.toolCalls.map((tc) => ({
+						id: tc.id,
+						type: 'function' as const,
+						function: { name: tc.name, arguments: tc.arguments },
+					})),
+				};
+			}
+
 			// Handle multimodal ContentPart[] content (images + text)
 			if (Array.isArray(m.content) && m.content.length > 0 && typeof m.content[0] === 'object' && 'type' in m.content[0]) {
 				const parts = m.content as readonly ContentPart[];

@@ -17,6 +17,9 @@ const MAX_ENTRIES = 1000;
 export class InMemoryApprovalStore implements IApprovalStore {
 	private readonly store = new Map<string, ApprovalRequest>();
 
+	/** Optional callback fired when a new approval request is created (for notifications). */
+	onCreated?: ((request: ApprovalRequest) => void) | undefined;
+
 	create(
 		request: Omit<ApprovalRequest, 'id' | 'status' | 'resolvedAt' | 'resolvedBy'>,
 	): string {
@@ -33,6 +36,8 @@ export class InMemoryApprovalStore implements IApprovalStore {
 			const first = this.store.keys().next().value;
 			if (first !== undefined) this.store.delete(first);
 		}
+
+		this.onCreated?.(entry);
 
 		return id;
 	}

@@ -11,8 +11,8 @@
  *   Custom: any slug — prompts for API key, stores under that slug
  */
 
-import { createInterface } from 'node:readline';
 import chalk from 'chalk';
+import { promptHidden, promptVisible } from '../utils/prompt.js';
 
 // ─── Core providers (SDK-based, special handling) ────────────────────
 
@@ -87,45 +87,10 @@ function isPreset(slug: string): boolean {
 	return slug in PRESET_META;
 }
 
-// ─── Prompt helper ───────────────────────────────────────────────────
+// ─── Prompt helper (delegated to shared utility) ─────────────────────
 
 function prompt(question: string, hidden = true): Promise<string> {
-	return new Promise((resolve) => {
-		const rl = createInterface({ input: process.stdin, output: process.stdout });
-
-		if (hidden && process.stdin.isTTY) {
-			// Suppress echo for API keys
-			process.stdout.write(question);
-			process.stdin.setRawMode(true);
-			let input = '';
-			process.stdin.on('data', function handler(char: Buffer) {
-				const c = char.toString();
-				if (c === '\r' || c === '\n') {
-					process.stdin.setRawMode(false);
-					process.stdin.removeListener('data', handler);
-					process.stdout.write('\n');
-					rl.close();
-					resolve(input);
-				} else if (c === '\u0003') {
-					// Ctrl+C
-					process.stdin.setRawMode(false);
-					process.stdout.write('\n');
-					process.exit(1);
-				} else if (c === '\u007f' || c === '\b') {
-					// Backspace
-					input = input.slice(0, -1);
-				} else {
-					input += c;
-					process.stdout.write('*');
-				}
-			});
-		} else {
-			rl.question(question, (answer) => {
-				rl.close();
-				resolve(answer.trim());
-			});
-		}
-	});
+	return hidden ? promptHidden(question) : promptVisible(question);
 }
 
 // ─── Main command ────────────────────────────────────────────────────

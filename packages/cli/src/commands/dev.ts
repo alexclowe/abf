@@ -331,18 +331,77 @@ export async function devCommand(options: DevOptions): Promise<void> {
 			});
 		}
 
-		spinner.text = 'Assembling runtime...';
-		const runtime = await createRuntime(patchedConfig, projectRoot, { dashboardPort });
+		// Check if vault needs a password (no keychain + no env var)
+		let masterPassword: string | undefined;
+		if (!bootstrapMode) {
+			const { createKeychain } = await import('@abf/core');
+			const keychain = createKeychain();
+			const keychainAvailable = await keychain.isAvailable();
 
-		spinner.text = 'Loading agents...';
+			if (!keychainAvailable && !process.env['ABF_VAULT_PASSWORD']) {
+				// Check existing vault header to decide what to prompt
+				const { existsSync } = await import('node:fs');
+				const { readFile: readFs } = await import('node:fs/promises');
+				const { homedir } = await import('node:os');
+				const vaultPath = join(homedir(), '.abf', 'credentials.enc');
+
+				let vaultBackend: string | null = null;
+				if (existsSync(vaultPath)) {
+					try {
+						const content = await readFs(vaultPath, 'utf-8');
+						const firstLine = content.trim().split('\n')[0] ?? '';
+						if (firstLine.startsWith('{')) {
+							const header = JSON.parse(firstLine) as { backend?: string };
+							vaultBackend = header.backend ?? null;
+						}
+					} catch {
+						// Can't read header — will prompt for password
+					}
+				}
+
+				if (vaultBackend === 'keychain') {
+					// Vault was created with keychain that's no longer available.
+					// A password won't help — vault will reset. Warn and continue.
+					spinner.stop();
+					console.log();
+					console.log(chalk.yellow('  Vault keychain unavailable'));
+					console.log(chalk.dim('  Your credentials were stored with OS keychain, which is not available.'));
+					console.log(chalk.dim('  Stored credentials will be reset. Re-add them with: abf auth <provider>'));
+					console.log(chalk.dim('  To use a password instead, set ABF_VAULT_PASSWORD env var.'));
+					console.log();
+					spinner.start();
+				} else {
+					// Scrypt vault or new vault — prompt for password
+					spinner.stop();
+					console.log();
+					console.log(chalk.yellow('  Vault password required'));
+					console.log(chalk.dim('  Your credentials are encrypted with a password.'));
+					console.log(chalk.dim('  Set ABF_VAULT_PASSWORD env var to skip this prompt.'));
+					console.log();
+					const { promptHidden } = await import('../utils/prompt.js');
+					masterPassword = await promptHidden('  Vault password: ');
+					if (!masterPassword) {
+						console.error(chalk.red('  Password cannot be empty.'));
+						process.exit(1);
+					}
+					spinner.start();
+				}
+			}
+		}
+
+		// Stop spinner during runtime creation and agent loading — both
+		// produce console output that would interleave with the spinner.
+		spinner.stop();
+		const runtime = await createRuntime(patchedConfig, projectRoot, { dashboardPort, masterPassword });
+
 		const agentsResult = await runtime.loadAgents();
 		if (!agentsResult.ok) {
-			spinner.warn(chalk.yellow(`Agent loading warning: ${agentsResult.error.message}`));
+			console.log(chalk.yellow(`  Warning: ${agentsResult.error.message}`));
 		}
 
 		const agentCount = agentsResult.ok ? agentsResult.value.length : 0;
 
-		spinner.text = 'Starting runtime...';
+		spinner.start('Starting runtime...');
 		await runtime.start();
 
 		if (bootstrapMode) {

@@ -38,7 +38,7 @@ describe('Bounds Enforcer', () => {
 		}
 	});
 
-	it('blocks actions not in allowed list', () => {
+	it('escalates actions not in allowed list for human approval', () => {
 		const result = checkBounds({
 			action: 'access_credentials',
 			bounds,
@@ -46,7 +46,12 @@ describe('Bounds Enforcer', () => {
 		});
 
 		expect(result.ok).toBe(true);
-		if (result.ok) expect(result.value.allowed).toBe(false);
+		if (result.ok) {
+			expect(result.value.allowed).toBe('requires_approval');
+			if (result.value.allowed === 'requires_approval') {
+				expect(result.value.reason).toContain('not in the allowed actions list');
+			}
+		}
 	});
 
 	it('flags actions requiring approval', () => {

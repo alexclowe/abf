@@ -18,7 +18,7 @@ export interface BoundsCheckInput {
 export type BoundsCheckResult =
 	| { readonly allowed: true }
 	| { readonly allowed: false; readonly reason: string }
-	| { readonly allowed: 'requires_approval'; readonly action: string };
+	| { readonly allowed: 'requires_approval'; readonly action: string; readonly reason?: string };
 
 /**
  * Check if an action matches a bounds entry, supporting colon-delimited sub-actions.
@@ -67,10 +67,11 @@ export function checkBounds(input: BoundsCheckInput): Result<BoundsCheckResult, 
 		});
 	}
 
-	// 4. Check allowed actions (if non-empty, only listed actions are allowed)
+	// 4. Check allowed actions (if non-empty, unlisted actions escalate to human for approval)
 	if (bounds.allowedActions.length > 0 && !matchesAnyAction(action, bounds.allowedActions)) {
 		return Ok({
-			allowed: false,
+			allowed: 'requires_approval',
+			action,
 			reason: `Action "${action}" is not in the allowed actions list`,
 		});
 	}

@@ -18,6 +18,7 @@ export default function LogsPage() {
 	const [agentFilter, setAgentFilter] = useState('');
 	const [severityFilter, setSeverityFilter] = useState('');
 	const [expandedRow, setExpandedRow] = useState<number | null>(null);
+	const { data: agents } = useSWR('agents', () => api.agents.list(), { revalidateOnFocus: false });
 	const { data: entries, error } = useSWR(
 		['audit', agentFilter],
 		() => api.audit.query({ agentId: agentFilter || undefined, limit: 100 }),
@@ -56,12 +57,18 @@ export default function LogsPage() {
 							</button>
 						))}
 					</div>
-					<input
+					<select
 						value={agentFilter}
 						onChange={(e) => setAgentFilter(e.target.value)}
-						placeholder="Filter by agent ID..."
 						className="bg-slate-800 border border-slate-700 rounded-md px-3 py-1.5 text-sm w-48 focus:outline-none focus:border-sky-500"
-					/>
+					>
+						<option value="">All agents</option>
+						{agents?.map((a) => (
+							<option key={a.config.id} value={a.config.id}>
+								{a.config.displayName}
+							</option>
+						))}
+					</select>
 				</div>
 			</div>
 

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
-import { Save, ChevronDown, ChevronRight } from 'lucide-react';
+import { Save, ChevronDown, ChevronRight, Bell, CheckCircle2 } from 'lucide-react';
 
 interface ConfigState {
   name: string;
@@ -16,6 +16,17 @@ interface ConfigState {
   gateway_port: number;
   max_concurrent_sessions: number;
   session_timeout_ms: number;
+  // Notification preferences (non-secret, stored in config)
+  notify_on_approval: boolean;
+  notify_on_alert: boolean;
+  notify_channel: string;
+}
+
+/** Notification credential state (secrets, stored in vault via separate API) */
+interface NotifyCredState {
+  credential: string;         // Slack/Discord webhook URL
+  telegram_bot_token: string;
+  telegram_chat_id: string;
 }
 
 function extractConfig(raw: Record<string, unknown>): ConfigState {
@@ -23,6 +34,7 @@ function extractConfig(raw: Record<string, unknown>): ConfigState {
   const bus = (raw.bus ?? raw.message_bus ?? {}) as Record<string, unknown>;
   const gateway = (raw.gateway ?? {}) as Record<string, unknown>;
   const runtime = (raw.runtime ?? {}) as Record<string, unknown>;
+  const notifications = (raw.notifications ?? {}) as Record<string, unknown>;
 
   return {
     name: (raw.name as string) ?? '',
@@ -35,6 +47,9 @@ function extractConfig(raw: Record<string, unknown>): ConfigState {
     gateway_port: (gateway.port as number) ?? 3000,
     max_concurrent_sessions: (runtime.maxConcurrentSessions as number) ?? (runtime.max_concurrent_sessions as number) ?? 5,
     session_timeout_ms: (runtime.sessionTimeoutMs as number) ?? (runtime.session_timeout_ms as number) ?? 300000,
+    notify_on_approval: (notifications.onApproval as boolean) ?? false,
+    notify_on_alert: (notifications.onAlert as boolean) ?? false,
+    notify_channel: (notifications.channel as string) ?? 'none',
   };
 }
 
@@ -44,20 +59,40 @@ export default function SettingsPage() {
   });
 
   const [config, setConfig] = useState<ConfigState | null>(null);
+  const [notifyCred, setNotifyCred] = useState<NotifyCredState>({ credential: '', telegram_bot_token: '', telegram_chat_id: '' });
+  const [notifyConfigured, setNotifyConfigured] = useState(false);
+  const [notifyMasked, setNotifyMasked] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
+  const loadNotifyConfig = useCallback(async () => {
+    try {
+      const nc = await api.notifications.getConfig();
+      setNotifyConfigured(nc.configured);
+      setNotifyMasked(nc.maskedCredential);
+    } catch {
+      // Not fatal — notification config may not exist yet
+    }
+  }, []);
+
   useEffect(() => {
     if (rawConfig && !config) {
       setConfig(extractConfig(rawConfig));
+      void loadNotifyConfig();
     }
-  }, [rawConfig, config]);
+  }, [rawConfig, config, loadNotifyConfig]);
 
-  function update(field: keyof ConfigState, value: string | number) {
+  function update(field: keyof ConfigState, value: string | number | boolean) {
     if (!config) return;
     setConfig({ ...config, [field]: value });
+    // Reset configured status when channel changes
+    if (field === 'notify_channel') {
+      setNotifyConfigured(false);
+      setNotifyMasked('');
+      setNotifyCred({ credential: '', telegram_bot_token: '', telegram_chat_id: '' });
+    }
   }
 
   async function handleSave() {
@@ -66,6 +101,7 @@ export default function SettingsPage() {
     setActionError(null);
     setActionSuccess(null);
     try {
+      // Save general config (no secrets in config body)
       const body = {
         ...rawConfig,
         name: config.name,
@@ -85,10 +121,42 @@ export default function SettingsPage() {
           maxConcurrentSessions: config.max_concurrent_sessions,
           sessionTimeoutMs: config.session_timeout_ms,
         },
+        notifications: {
+          onApproval: config.notify_on_approval,
+          onAlert: config.notify_on_alert,
+          channel: config.notify_channel,
+        },
       };
       await api.config.update(body);
+
+      // Save notification secrets via vault-backed API (only if credentials provided)
+      const hasCredential = config.notify_channel === 'telegram'
+        ? notifyCred.telegram_bot_token || notifyCred.telegram_chat_id
+        : notifyCred.credential;
+
+      if (hasCredential && config.notify_channel !== 'none') {
+        await api.notifications.updateConfig({
+          onApproval: config.notify_on_approval,
+          onAlert: config.notify_on_alert,
+          channel: config.notify_channel,
+          ...(config.notify_channel === 'telegram'
+            ? { telegramBotToken: notifyCred.telegram_bot_token || undefined, telegramChatId: notifyCred.telegram_chat_id || undefined }
+            : { credential: notifyCred.credential || undefined }),
+        });
+      } else {
+        // Still update preferences even without new credentials
+        await api.notifications.updateConfig({
+          onApproval: config.notify_on_approval,
+          onAlert: config.notify_on_alert,
+          channel: config.notify_channel,
+        });
+      }
+
       setActionSuccess('Settings saved. Some changes may require a restart.');
       mutate();
+      await loadNotifyConfig();
+      // Clear credential fields after save (they're now in vault)
+      setNotifyCred({ credential: '', telegram_bot_token: '', telegram_chat_id: '' });
       setTimeout(() => setActionSuccess(null), 5000);
     } catch (e) {
       setActionError(`Failed to save: ${e instanceof Error ? e.message : String(e)}`);
@@ -158,6 +226,141 @@ export default function SettingsPage() {
             className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-500 cursor-not-allowed"
           />
         </div>
+      </div>
+
+      {/* Notifications */}
+      <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-4">
+        <div className="flex items-center gap-2 mb-1">
+          <Bell size={16} className="text-amber-400" />
+          <h2 className="text-sm font-medium text-slate-400">Operator Notifications</h2>
+        </div>
+        <p className="text-xs text-slate-500">
+          Get notified when agents need your attention. Reduces the time agents spend blocked waiting for approvals or alert resolution.
+        </p>
+
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={config.notify_on_approval}
+              onChange={(e) => update('notify_on_approval', e.target.checked)}
+              className="rounded border-slate-600 bg-slate-800 text-sky-500 focus:ring-sky-500 focus:ring-offset-0"
+            />
+            <span className="text-sm text-slate-300">Notify on pending approvals</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={config.notify_on_alert}
+              onChange={(e) => update('notify_on_alert', e.target.checked)}
+              className="rounded border-slate-600 bg-slate-800 text-sky-500 focus:ring-sky-500 focus:ring-offset-0"
+            />
+            <span className="text-sm text-slate-300">Notify on alerts</span>
+          </label>
+        </div>
+
+        {(config.notify_on_approval || config.notify_on_alert) && (
+          <div className="space-y-3 pt-2 border-t border-slate-800">
+            <div>
+              <label className="text-sm text-slate-400 block mb-1">Notification Channel</label>
+              <div className="flex items-center gap-2">
+                <select
+                  value={config.notify_channel}
+                  onChange={(e) => update('notify_channel', e.target.value)}
+                  className="bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+                >
+                  <option value="none">Select a channel...</option>
+                  <option value="slack">Slack</option>
+                  <option value="discord">Discord</option>
+                  <option value="telegram">Telegram</option>
+                </select>
+                {notifyConfigured && (
+                  <span className="flex items-center gap-1 text-xs text-green-400">
+                    <CheckCircle2 size={14} />
+                    Connected
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {notifyConfigured && notifyMasked && (
+              <p className="text-xs text-slate-500">
+                Current: <span className="font-mono text-slate-400">{notifyMasked}</span>
+              </p>
+            )}
+
+            {config.notify_channel === 'slack' && (
+              <div>
+                <label className="text-sm text-slate-400 block mb-1">
+                  Slack Webhook URL {notifyConfigured && <span className="text-slate-500">(leave blank to keep current)</span>}
+                </label>
+                <input
+                  type="password"
+                  value={notifyCred.credential}
+                  onChange={(e) => setNotifyCred({ ...notifyCred, credential: e.target.value })}
+                  placeholder={notifyConfigured ? 'Leave blank to keep current webhook' : 'https://hooks.slack.com/services/...'}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Create an incoming webhook in your Slack workspace settings. Stored encrypted in vault.
+                </p>
+              </div>
+            )}
+
+            {config.notify_channel === 'discord' && (
+              <div>
+                <label className="text-sm text-slate-400 block mb-1">
+                  Discord Webhook URL {notifyConfigured && <span className="text-slate-500">(leave blank to keep current)</span>}
+                </label>
+                <input
+                  type="password"
+                  value={notifyCred.credential}
+                  onChange={(e) => setNotifyCred({ ...notifyCred, credential: e.target.value })}
+                  placeholder={notifyConfigured ? 'Leave blank to keep current webhook' : 'https://discord.com/api/webhooks/...'}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Stored encrypted in vault.
+                </p>
+              </div>
+            )}
+
+            {config.notify_channel === 'telegram' && (
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm text-slate-400 block mb-1">
+                    Bot Token {notifyConfigured && <span className="text-slate-500">(leave blank to keep current)</span>}
+                  </label>
+                  <input
+                    type="password"
+                    value={notifyCred.telegram_bot_token}
+                    onChange={(e) => setNotifyCred({ ...notifyCred, telegram_bot_token: e.target.value })}
+                    placeholder={notifyConfigured ? 'Leave blank to keep current token' : '123456:ABC-DEF1234...'}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Create a bot via @BotFather on Telegram. Stored encrypted in vault.
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm text-slate-400 block mb-1">Chat ID</label>
+                  <input
+                    value={notifyCred.telegram_chat_id}
+                    onChange={(e) => setNotifyCred({ ...notifyCred, telegram_chat_id: e.target.value })}
+                    placeholder={notifyConfigured ? 'Leave blank to keep current' : '123456789'}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            {config.notify_channel === 'none' && (
+              <p className="text-xs text-amber-400/70">
+                Choose a channel above to receive notifications when agents need your attention.
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Advanced Toggle */}
