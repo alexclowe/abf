@@ -3,8 +3,11 @@
  * Used by the chat endpoint to maintain context across messages.
  *
  * Limits: 100 conversations max, 50 messages each. LRU eviction.
+ * Optionally persists to disk via `logs/conversations.json` with 2s debounced saves.
  */
 
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import type { ChatMessage } from '../types/provider.js';
 
 export interface ConversationEntry {
@@ -15,9 +18,13 @@ export interface ConversationEntry {
 
 const MAX_CONVERSATIONS = 100;
 const MAX_MESSAGES_PER_CONVERSATION = 50;
+const SAVE_DEBOUNCE_MS = 2000;
 
 export class InMemoryConversationStore {
 	private readonly store = new Map<string, ConversationEntry>();
+	private saveTimer: ReturnType<typeof setTimeout> | undefined;
+
+	constructor(private readonly filePath?: string) {}
 
 	get(conversationId: string): ConversationEntry | undefined {
 		const entry = this.store.get(conversationId);
@@ -49,6 +56,7 @@ export class InMemoryConversationStore {
 
 		entry = { agentId, messages: [], lastAccessed: Date.now() };
 		this.store.set(conversationId, entry);
+		this.scheduleSave();
 		return entry;
 	}
 
@@ -69,13 +77,52 @@ export class InMemoryConversationStore {
 				break;
 			}
 		}
+
+		this.scheduleSave();
 	}
 
 	delete(conversationId: string): boolean {
-		return this.store.delete(conversationId);
+		const deleted = this.store.delete(conversationId);
+		if (deleted) this.scheduleSave();
+		return deleted;
 	}
 
 	size(): number {
 		return this.store.size;
+	}
+
+	/** Load persisted conversations from disk. */
+	async load(): Promise<void> {
+		if (!this.filePath) return;
+		try {
+			const raw = await readFile(this.filePath, 'utf-8');
+			const entries = JSON.parse(raw) as [string, ConversationEntry][];
+			for (const [key, entry] of entries) {
+				this.store.set(key, entry);
+			}
+		} catch {
+			// File doesn't exist or is corrupt — start fresh
+		}
+	}
+
+	/** Persist all conversations to disk. */
+	async save(): Promise<void> {
+		if (!this.filePath) return;
+		try {
+			await mkdir(dirname(this.filePath), { recursive: true });
+			await writeFile(this.filePath, JSON.stringify([...this.store.entries()]), 'utf-8');
+		} catch {
+			// Non-fatal — log silently, data still in memory
+		}
+	}
+
+	/** Schedule a debounced save — collapses rapid mutations into one disk write. */
+	private scheduleSave(): void {
+		if (!this.filePath) return;
+		if (this.saveTimer !== undefined) clearTimeout(this.saveTimer);
+		this.saveTimer = setTimeout(() => {
+			this.saveTimer = undefined;
+			void this.save();
+		}, SAVE_DEBOUNCE_MS);
 	}
 }

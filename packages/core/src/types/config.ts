@@ -110,4 +110,13 @@ export interface AbfConfig {
 	readonly memorySummarizationThreshold?: number | undefined;
 	readonly memorySummarizationEnabled?: boolean | undefined;
 	readonly channels?: readonly import('../messaging/interfaces.js').ChannelRoute[] | undefined;
+	/**
+	 * Mail security configuration.
+	 * `allowedSenders` is a list of glob patterns for accepted external senders.
+	 * Agent-to-agent and operator mail always bypass the allowlist.
+	 * Examples: ["*@company.com", "support@partner.io", "operator"]
+	 */
+	readonly mail?: {
+		readonly allowedSenders?: readonly string[] | undefined;
+	} | undefined;
 }

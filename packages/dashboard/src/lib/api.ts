@@ -130,8 +130,10 @@ export const api = {
       return get<import('./types').ApprovalItem[]>(`/api/approvals?${qs}`);
     },
     get: (id: string) => get<import('./types').ApprovalItem>(`/api/approvals/${id}`),
-    approve: (id: string) => post<{ approved: boolean }>(`/api/approvals/${id}/approve`),
+    approve: (id: string, permanent?: boolean) =>
+      post<{ approved: boolean; persisted?: boolean }>(`/api/approvals/${id}/approve`, permanent ? { permanent: true } : undefined),
     reject: (id: string) => post<{ rejected: boolean }>(`/api/approvals/${id}/reject`),
+    answer: (id: string, answer: string) => post<{ answered: boolean }>(`/api/approvals/${id}/answer`, { answer }),
   },
 
   providers: {
@@ -243,6 +245,56 @@ export const api = {
     get: () => get<Record<string, unknown>>('/api/config'),
     update: (body: Record<string, unknown>) =>
       put<{ success: boolean }>('/api/config', body),
+  },
+
+  notifications: {
+    getConfig: () => get<{
+      onApproval: boolean;
+      onAlert: boolean;
+      channel: string;
+      configured: boolean;
+      maskedCredential: string;
+    }>('/api/notifications/config'),
+    updateConfig: (body: {
+      onApproval?: boolean;
+      onAlert?: boolean;
+      channel?: string;
+      credential?: string;
+      telegramBotToken?: string;
+      telegramChatId?: string;
+    }) => put<{ success: boolean }>('/api/notifications/config', body),
+  },
+
+  alerts: {
+    list: () => get<EscalationItem[]>('/api/alerts'),
+    resolve: (id: string) => post<{ resolved: boolean }>(`/api/alerts/${id}/resolve`),
+  },
+
+  mail: {
+    list: (agent?: string, limit?: number) => {
+      const qs = new URLSearchParams();
+      if (agent) qs.set('agent', agent);
+      if (limit) qs.set('limit', String(limit));
+      return get<import('./types').MailMessage[]>(`/api/mail?${qs}`);
+    },
+    inbox: (agentName: string, opts?: { unread?: boolean; limit?: number }) => {
+      const qs = new URLSearchParams();
+      if (opts?.unread) qs.set('unread', 'true');
+      if (opts?.limit) qs.set('limit', String(opts.limit));
+      return get<import('./types').MailMessage[]>(`/api/mail/${agentName}?${qs}`);
+    },
+    sent: (agentName: string, limit?: number) => {
+      const qs = limit ? `?limit=${limit}` : '';
+      return get<import('./types').MailMessage[]>(`/api/mail/${agentName}/sent${qs}`);
+    },
+    get: (messageId: string) =>
+      get<import('./types').MailMessage>(`/api/mail/message/${messageId}`),
+    thread: (threadId: string) =>
+      get<import('./types').MailMessage[]>(`/api/mail/thread/${threadId}`),
+    send: (agentName: string, body: { subject: string; body: string; from?: string }) =>
+      post<import('./types').MailMessage>(`/api/mail/${agentName}`, body),
+    markAllRead: (agentName: string) =>
+      post<{ markedRead: number }>(`/api/mail/${agentName}/read`),
   },
 
   workflows: {

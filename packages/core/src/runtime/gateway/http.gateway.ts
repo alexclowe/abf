@@ -19,9 +19,11 @@ import type { IAuditStore } from '../../types/security.js';
 import { createActivationId, toISOTimestamp } from '../../util/id.js';
 import type { IApprovalStore } from '../../types/approval.js';
 import type { ICredentialVault } from '../../credentials/vault.js';
-import type { IGateway, IDispatcher, IScheduler } from '../interfaces.js';
+import type { IGateway, IDispatcher, IScheduler, ISessionManager } from '../interfaces.js';
 import { registerAuthRoutes } from './auth.routes.js';
+import { registerChatRoutes } from './chat.routes.js';
 import { registerCrudRoutes } from './crud.routes.js';
+import { registerMailRoutes } from './mail.routes.js';
 import { registerSeedRoutes } from './seed.routes.js';
 import { registerEventRoutes } from './events.routes.js';
 import { registerPlanRoutes } from './plans.routes.js';
@@ -58,10 +60,64 @@ export interface GatewayDeps {
 	readonly sessionEventBus?: import('../session-events.js').SessionEventBus | undefined;
 	readonly billingLedger?: import('../../billing/types.js').IBillingLedger | undefined;
 	readonly pluginRegistry?: import('./plugin-registry.js').PluginRegistry | undefined;
+	readonly sessionManager?: ISessionManager | undefined;
+	readonly conversationStore?: import('../conversation-store.js').InMemoryConversationStore | undefined;
+	readonly mailboxStore?: import('../../mailbox/types.js').IMailboxStore | undefined;
+	/** Glob patterns for allowed external mail senders (from config.mail.allowedSenders). */
+	readonly mailAllowedSenders?: readonly string[] | undefined;
 }
 
 /** @deprecated Use GatewayDeps instead. Kept for backwards compatibility. */
 export type GatewayHandlers = GatewayDeps;
+
+/**
+ * Add a tool to an agent's allowed_actions in YAML and reload.
+ * Used when an operator permanently approves an unlisted tool action.
+ */
+async function addToolToAllowedActions(
+	projectRoot: string,
+	agentId: string,
+	toolName: string,
+	agentsMap: Map<string, AgentConfig>,
+	scheduler?: IScheduler,
+): Promise<boolean> {
+	const { readFile, writeFile } = await import('node:fs/promises');
+	const { join } = await import('node:path');
+	const { parse: parseYaml, stringify } = await import('yaml');
+	const { loadAgentConfig } = await import('../../config/loader.js');
+	const { sanitizeFilename } = await import('./auth-utils.js');
+
+	const agent = agentsMap.get(agentId);
+	if (!agent) return false;
+
+	const safeName = sanitizeFilename(agent.name);
+	const filePath = join(projectRoot, 'agents', `${safeName}.agent.yaml`);
+	const raw = await readFile(filePath, 'utf-8');
+	const yaml = parseYaml(raw) as Record<string, unknown>;
+
+	const bounds = (yaml['behavioral_bounds'] ?? {}) as Record<string, unknown>;
+	const allowed = (Array.isArray(bounds['allowed_actions']) ? bounds['allowed_actions'] : []) as string[];
+
+	if (allowed.includes(toolName)) return true; // already there
+
+	allowed.push(toolName);
+	bounds['allowed_actions'] = allowed;
+	yaml['behavioral_bounds'] = bounds;
+
+	await writeFile(filePath, stringify(yaml), 'utf-8');
+
+	// Reload into runtime
+	const loadResult = await loadAgentConfig(filePath);
+	if (loadResult.ok) {
+		agentsMap.set(loadResult.value.id, loadResult.value);
+		if (scheduler) {
+			scheduler.unregisterAgent(loadResult.value.id);
+			scheduler.registerAgent(loadResult.value);
+		}
+	}
+
+	return true;
+}
 
 export class HttpGateway implements IGateway {
 	private server: ServerType | null = null;
@@ -214,6 +270,20 @@ export class HttpGateway implements IGateway {
 		// -- OAuth Routes ---------------------------------------------------------
 		if (deps.vault) {
 			registerOAuthRoutes(app, { vault: deps.vault, dashboardPort: deps.dashboardPort });
+		}
+
+		// -- Chat routes (streaming agent chat) -----------------------------------
+		if (deps.sessionManager && deps.conversationStore) {
+			registerChatRoutes(app, { ...deps, sessionManager: deps.sessionManager, conversationStore: deps.conversationStore });
+		}
+
+		// -- Mail routes (virtual agent mailbox) ----------------------------------
+		if (deps.mailboxStore) {
+			registerMailRoutes(app, {
+				mailboxStore: deps.mailboxStore,
+				agentsMap: deps.agentsMap as ReadonlyMap<string, AgentConfig>,
+				allowedSenders: deps.mailAllowedSenders,
+			});
 		}
 
 		// -- SSE Events -----------------------------------------------------------
@@ -484,6 +554,17 @@ export class HttpGateway implements IGateway {
 			return c.json({ resolved: true });
 		});
 
+		// -- Alerts (alias for escalations — Sidebar fetches /api/alerts) ------
+		app.get('/api/alerts', (c) => {
+			return c.json(deps.dispatcher.getEscalations());
+		});
+
+		app.post('/api/alerts/:id/resolve', (c) => {
+			const found = deps.dispatcher.resolveEscalation(c.req.param('id'));
+			if (!found) return c.json({ error: 'Alert not found' }, 404);
+			return c.json({ resolved: true });
+		});
+
 		// -- KPIs -----------------------------------------------------------------
 		app.get('/api/kpis', (c) => {
 			const { agentId, metric, limit } = c.req.query();
@@ -496,6 +577,123 @@ export class HttpGateway implements IGateway {
 			const limitN = limit ? Number(limit) : 200;
 			return c.json([...reports].slice(-limitN));
 		});
+
+		// -- Notification Config (vault-backed secrets) ---------------------------
+		if (deps.vault) {
+			const notifyVault = deps.vault;
+
+			app.get('/api/notifications/config', async (c) => {
+				// Read preferences from config file
+				const { readFile: fsRead } = await import('node:fs/promises');
+				const { join: pathJoin } = await import('node:path');
+				const { parse: parseYaml } = await import('yaml');
+
+				let onApproval = false;
+				let onAlert = false;
+				let channel = 'none';
+
+				try {
+					const configPath = pathJoin(deps.projectRoot, 'abf.config.yaml');
+					const raw = await fsRead(configPath, 'utf-8');
+					const parsed = parseYaml(raw) as Record<string, unknown>;
+					const notifications = (parsed?.['notifications'] ?? {}) as Record<string, unknown>;
+					onApproval = Boolean(notifications['onApproval']);
+					onAlert = Boolean(notifications['onAlert']);
+					channel = (notifications['channel'] as string) ?? 'none';
+				} catch {
+					// No config or parse error — return defaults
+				}
+
+				// Check vault for credentials and build masked preview
+				let configured = false;
+				let maskedCredential = '';
+
+				if (channel === 'slack') {
+					const url = await notifyVault.get('notifications', 'slack');
+					if (url) {
+						configured = true;
+						maskedCredential = url.length > 20
+							? `${url.slice(0, 16)}...${url.slice(-4)}`
+							: '****';
+					}
+				} else if (channel === 'discord') {
+					const url = await notifyVault.get('notifications', 'discord');
+					if (url) {
+						configured = true;
+						maskedCredential = url.length > 20
+							? `${url.slice(0, 16)}...${url.slice(-4)}`
+							: '****';
+					}
+				} else if (channel === 'telegram') {
+					const token = await notifyVault.get('notifications', 'telegram_token');
+					const chatId = await notifyVault.get('notifications', 'telegram_chat_id');
+					if (token && chatId) {
+						configured = true;
+						maskedCredential = `Bot ...${token.slice(-4)} / Chat ${chatId}`;
+					}
+				}
+
+				return c.json({ onApproval, onAlert, channel, configured, maskedCredential });
+			});
+
+			app.put('/api/notifications/config', async (c) => {
+				const body = await c.req.json<{
+					onApproval?: boolean;
+					onAlert?: boolean;
+					channel?: string;
+					credential?: string;
+					telegramBotToken?: string;
+					telegramChatId?: string;
+				}>();
+
+				// Store preferences in config file (non-secret fields only)
+				const { readFile: fsRead, writeFile: fsWrite } = await import('node:fs/promises');
+				const { join: pathJoin } = await import('node:path');
+				const { parse: parseYaml, stringify } = await import('yaml');
+				const configPath = pathJoin(deps.projectRoot, 'abf.config.yaml');
+
+				try {
+					let parsed: Record<string, unknown> = {};
+					try {
+						const raw = await fsRead(configPath, 'utf-8');
+						parsed = parseYaml(raw) as Record<string, unknown>;
+					} catch { /* new config */ }
+
+					parsed['notifications'] = {
+						onApproval: body.onApproval ?? false,
+						onAlert: body.onAlert ?? false,
+						channel: body.channel ?? 'none',
+					};
+
+					// Back up then write
+					try { await fsWrite(`${configPath}.bak`, stringify(parsed), 'utf-8'); } catch {}
+					await fsWrite(configPath, stringify(parsed), 'utf-8');
+				} catch (e) {
+					return c.json({ error: `Failed to save config: ${e instanceof Error ? e.message : String(e)}` }, 500);
+				}
+
+				// Store secrets in vault
+				const channel = body.channel ?? 'none';
+				try {
+					if (channel === 'slack' && body.credential) {
+						await notifyVault.set('notifications', 'slack', body.credential);
+					} else if (channel === 'discord' && body.credential) {
+						await notifyVault.set('notifications', 'discord', body.credential);
+					} else if (channel === 'telegram') {
+						if (body.telegramBotToken) {
+							await notifyVault.set('notifications', 'telegram_token', body.telegramBotToken);
+						}
+						if (body.telegramChatId) {
+							await notifyVault.set('notifications', 'telegram_chat_id', body.telegramChatId);
+						}
+					}
+				} catch (e) {
+					return c.json({ error: `Failed to store credential: ${e instanceof Error ? e.message : String(e)}` }, 500);
+				}
+
+				return c.json({ success: true });
+			});
+		}
 
 		// -- Approvals ------------------------------------------------------------
 		if (deps.approvalStore) {
@@ -517,10 +715,32 @@ export class HttpGateway implements IGateway {
 				return c.json(item);
 			});
 
-			app.post('/api/approvals/:id/approve', (c) => {
-				const found = store.approve(c.req.param('id'), 'operator');
+			app.post('/api/approvals/:id/approve', async (c) => {
+				const id = c.req.param('id');
+				const body = await c.req.json<{ permanent?: boolean }>().catch(() => ({}) as { permanent?: boolean });
+				const item = store.get(id);
+				if (!item) return c.json({ error: 'Approval not found' }, 404);
+
+				const found = store.approve(id, 'operator');
 				if (!found) return c.json({ error: 'Approval not found or already resolved' }, 404);
-				return c.json({ approved: true });
+
+				// If permanent approval for an unlisted action, add tool to agent's allowed_actions YAML
+				let persisted = false;
+				if (body.permanent && item.escalationReason === 'unlisted_action') {
+					try {
+						persisted = await addToolToAllowedActions(
+							deps.projectRoot,
+							item.agentId,
+							item.toolName,
+							deps.agentsMap as Map<string, AgentConfig>,
+							deps.scheduler,
+						);
+					} catch {
+						// Non-fatal — approval still went through, just couldn't persist
+					}
+				}
+
+				return c.json({ approved: true, persisted });
 			});
 
 			app.post('/api/approvals/:id/reject', (c) => {
@@ -590,6 +810,7 @@ export class HttpGateway implements IGateway {
 			{ href: '/message-templates', label: 'Templates', icon: 'Mail' },
 			{ href: '/approvals', label: 'Approvals', icon: 'ShieldCheck' },
 			{ href: '/escalations', label: 'Escalations', icon: 'AlertTriangle' },
+			{ href: '/mail', label: 'Mail', icon: 'Inbox' },
 			{ href: '/channels', label: 'Channels', icon: 'MessageSquare' },
 			{ href: '/metrics', label: 'Metrics', icon: 'BarChart3' },
 			{ href: '/kpis', label: 'KPIs', icon: 'TrendingUp' },

@@ -34,6 +34,7 @@ import { InProcessBus } from './bus/in-process.bus.js';
 import { RedisBus } from './bus/redis.bus.js';
 import { Dispatcher } from './dispatcher.js';
 import { HttpGateway } from './gateway/http.gateway.js';
+import { InMemoryConversationStore } from './conversation-store.js';
 import { WorkflowRunner } from './workflow-runner.js';
 import type { IMemoryStore } from '../types/memory.js';
 import type { IBus } from '../types/message.js';
@@ -44,6 +45,7 @@ import { SessionManager } from './session-manager.js';
 
 export interface CreateRuntimeOptions {
 	dashboardPort?: number | undefined;
+	masterPassword?: string | undefined;
 }
 
 export async function createRuntime(
@@ -52,7 +54,9 @@ export async function createRuntime(
 	options?: CreateRuntimeOptions,
 ): Promise<Runtime> {
 	// 1. Credential vault (v2 — OS Keychain or scrypt)
-	const vault = await createVault();
+	const vault = await createVault(
+		options?.masterPassword ? { masterPassword: options.masterPassword } : undefined,
+	);
 
 	// 2. Shared agents map (single source of truth for both dispatcher + session manager)
 	const agentsMap = new Map<string, AgentConfig>();
@@ -148,6 +152,11 @@ export async function createRuntime(
 	// Task plan store (R6)
 	const taskPlanStore = new InMemoryTaskPlanStore();
 
+	// Virtual agent mailbox (inter-agent communication)
+	const { FilesystemMailboxStore } = await import('../mailbox/store.js');
+	const mailboxStore = new FilesystemMailboxStore(join(projectRoot, 'mail'));
+	await mailboxStore.load();
+
 	// Detect cloud deployment (ABF Cloud or known cloud platforms)
 	const isCloud = Boolean(
 		process.env['ABF_CLOUD'] || process.env['RENDER'] ||
@@ -168,6 +177,8 @@ export async function createRuntime(
 		taskPlanStore,
 		isCloud,
 		cloudEndpoint,
+		mailboxStore,
+		agentsMap,
 	};
 
 	// Register built-in tools
@@ -262,6 +273,7 @@ export async function createRuntime(
 		compactor,
 		taskPlanStore,
 		sessionEventBus,
+		mailboxStore,
 	});
 
 	// 10. Dispatcher — receives shared agentsMap
@@ -270,6 +282,32 @@ export async function createRuntime(
 		config.runtime.maxConcurrentSessions,
 		agentsMap,
 	);
+
+	// Operator notifications — fire when approvals/escalations are created
+	const { OperatorNotifier } = await import('../messaging/operator-notifier.js');
+	const operatorNotifier = new OperatorNotifier(projectRoot, vault);
+
+	approvalStore.onCreated = (request) => {
+		void operatorNotifier.notify({
+			type: 'approval_required',
+			agentId: request.agentId,
+			sessionId: request.sessionId,
+			message: `${request.agentId} wants to use ${request.toolName}`,
+			severity: 'warn',
+			timestamp: request.createdAt,
+		});
+	};
+
+	dispatcher.onEscalationCreated = (escalation) => {
+		void operatorNotifier.notify({
+			type: 'escalation',
+			agentId: escalation.agentId,
+			sessionId: escalation.sessionId,
+			message: escalation.message,
+			severity: 'error',
+			timestamp: escalation.timestamp,
+		});
+	};
 
 	// Register sessions-spawn tool (needs dispatcher + agentsMap, deferred until now — R1)
 	const { createSessionsSpawnTool } = await import('../tools/builtin/sessions-spawn.js');
@@ -325,6 +363,12 @@ export async function createRuntime(
 	const { PluginRegistry } = await import('./gateway/plugin-registry.js');
 	const pluginRegistry = new PluginRegistry();
 
+	// Conversation store for multi-turn chat (persists to disk)
+	const conversationStore = new InMemoryConversationStore(
+		join(projectRoot, 'logs', 'conversations.json'),
+	);
+	await conversationStore.load();
+
 	// 13. Gateway
 	const gateway = new HttpGateway(config.gateway, {
 		agentsMap,
@@ -347,6 +391,10 @@ export async function createRuntime(
 		channelRouter,
 		sessionEventBus,
 		pluginRegistry,
+		sessionManager,
+		conversationStore,
+		mailboxStore,
+		mailAllowedSenders: config.mail?.allowedSenders,
 	});
 
 	const components: RuntimeComponents = {

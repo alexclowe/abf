@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bot, LayoutDashboard, Users, AlertTriangle, ScrollText, Layers, GitBranch, TrendingUp, ShieldCheck, BarChart3, BookOpen, Eye, Mail, Settings, MessageSquare, CreditCard } from 'lucide-react';
+import { Bot, LayoutDashboard, Users, Bell, ScrollText, Layers, GitBranch, TrendingUp, ShieldCheck, BarChart3, BookOpen, Eye, Mail, Inbox, Settings, MessageSquare, CreditCard } from 'lucide-react';
 import clsx from 'clsx';
 import useSWR from 'swr';
 import { getIcon } from '../lib/icon-map';
@@ -30,7 +30,7 @@ const fallbackNav = [
   { href: '/monitors', label: 'Monitors', icon: Eye },
   { href: '/message-templates', label: 'Templates', icon: Mail },
   { href: '/approvals', label: 'Approvals', icon: ShieldCheck },
-  { href: '/escalations', label: 'Escalations', icon: AlertTriangle },
+  { href: '/alerts', label: 'Alerts', icon: Bell },
   { href: '/channels', label: 'Channels', icon: MessageSquare },
   { href: '/metrics', label: 'Metrics', icon: BarChart3 },
   { href: '/kpis', label: 'KPIs', icon: TrendingUp },
@@ -47,8 +47,9 @@ const fallbackNavGroups: NavGroup[] = [
     { href: '/workflows', label: 'Workflows', icon: GitBranch },
   ]},
   { label: 'Operations', items: [
+    { href: '/mail', label: 'Mail', icon: Inbox },
     { href: '/approvals', label: 'Approvals', icon: ShieldCheck },
-    { href: '/escalations', label: 'Escalations', icon: AlertTriangle },
+    { href: '/alerts', label: 'Alerts', icon: Bell },
     { href: '/channels', label: 'Channels', icon: MessageSquare },
     { href: '/message-templates', label: 'Templates', icon: Mail },
   ]},
@@ -65,8 +66,11 @@ const fallbackNavGroups: NavGroup[] = [
   ]},
 ];
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-const fetcher = (url: string) => fetch(url).then(r => r.ok ? r.json() : null);
+const API_BASE = process.env.NEXT_PUBLIC_ABF_API_URL ?? '';
+const apiKey = process.env.NEXT_PUBLIC_ABF_API_KEY;
+const fetcher = (url: string) => fetch(url, {
+  headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+}).then(r => r.ok ? r.json() : null);
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
@@ -85,7 +89,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     refreshInterval: 30_000,
     revalidateOnFocus: false,
   });
-  const { data: escalations } = useSWR(`${API_BASE}/api/escalations`, fetcher, {
+  const { data: escalations } = useSWR(`${API_BASE}/api/alerts`, fetcher, {
     refreshInterval: 30_000,
     revalidateOnFocus: false,
   });
@@ -164,7 +168,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               {group.items.map(({ href, label, icon: Icon }) => {
                 const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
                 const badgeCount = href === '/approvals' ? pendingApprovals
-                  : href === '/escalations' ? openEscalations
+                  : href === '/alerts' ? openEscalations
                   : 0;
                 return (
                   <Link
@@ -178,7 +182,15 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                         : 'text-slate-400 hover:text-white hover:bg-slate-800',
                     )}
                   >
-                    <Icon size={16} />
+                    <div className="relative">
+                      <Icon size={16} />
+                      {badgeCount > 0 && (
+                        <span className="absolute -top-1 -right-1.5 flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                        </span>
+                      )}
+                    </div>
                     {label}
                     {badgeCount > 0 && (
                       <span className="ml-auto text-xs bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full font-medium min-w-[1.25rem] text-center">
