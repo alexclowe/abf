@@ -6,10 +6,9 @@ import { api } from '@/lib/api';
 import { useEventStream } from '@/lib/use-event-stream';
 import { AgentStatusBadge } from '@/components/AgentStatusBadge';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
-import { Bot, Play, DollarSign, Hammer, ArrowRight, Users } from 'lucide-react';
+import { Bot, Play, DollarSign, Users } from 'lucide-react';
 import type { OnboardingData } from '@/components/OnboardingChecklist';
 import { getOnboardingState, updateOnboardingState } from '@/lib/onboarding';
-import Link from 'next/link';
 
 function parseSeedFrontmatter(content: string): { name?: string; description?: string; industry?: string; stage?: string } | null {
   const match = content.match(/^---\n([\s\S]*?)\n---/);
@@ -22,7 +21,7 @@ function parseSeedFrontmatter(content: string): { name?: string; description?: s
   return { name: pairs['company_name'], description: pairs['company_description'], industry: pairs['industry'], stage: pairs['stage'] };
 }
 
-function parseBuildPlanSummary(content: string): { goal: string; phases: number; steps: number } | null {
+function parseBuildPlanSummary(content: string): { goal: string; phases: number; steps: number; firstPhaseName: string | null } | null {
   const lines = content.split('\n');
   // Goal: first non-heading, non-empty line after the first heading
   let goal = '';
@@ -31,11 +30,14 @@ function parseBuildPlanSummary(content: string): { goal: string; phases: number;
     if (line.startsWith('#')) { pastHeading = true; continue; }
     if (pastHeading && line.trim()) { goal = line.trim(); break; }
   }
-  // Count phases (## Phase N or ## N.) and steps (- [ ] or numbered list items under phases)
-  const phases = lines.filter(l => /^##\s/.test(l)).length;
-  const steps = lines.filter(l => /^\s*[-*]\s\[.\]/.test(l) || /^\s*\d+\.\s/.test(l)).length;
+  // Parse phase headings (format: "## Phase: {name}")
+  const phaseHeadings = lines
+    .filter(l => /^##\s/.test(l))
+    .map(l => l.replace(/^##\s+/, '').replace(/^Phase:\s*/i, '').trim());
+  const phases = phaseHeadings.length;
+  const steps = lines.filter(l => /^###\s/.test(l)).length;
   if (!goal && phases === 0) return null;
-  return { goal: goal || 'Build plan', phases, steps };
+  return { goal: goal || 'Build plan', phases, steps, firstPhaseName: phaseHeadings[0] ?? null };
 }
 
 export default function OverviewPage() {
@@ -89,7 +91,7 @@ export default function OverviewPage() {
       hasBuildPlan: !!buildPlanFile,
       buildPlanReviewed: onboardingState.build_plan_reviewed,
       firstTaskSent: onboardingState.first_task_sent,
-      companyName: seedMeta?.name,
+      companyName: typeof projectConfig?.name === 'string' ? projectConfig.name : seedMeta?.name,
     };
   }, [authStatus, agents, knowledgeFiles, isSeed, buildPlanFile, onboardingState, seedMeta]);
 
@@ -123,6 +125,28 @@ export default function OverviewPage() {
 
   const [taskInputs, setTaskInputs] = useState<Record<string, string>>({});
   const [activeInput, setActiveInput] = useState<string | null>(null);
+  const [startingPhase, setStartingPhase] = useState(false);
+
+  // Find the builder agent (always named 'builder' by the seed pipeline)
+  const builderAgent = useMemo(
+    () => agents?.find(a => a.config.name === 'builder' || a.config.role === 'Build Orchestrator'),
+    [agents],
+  );
+
+  async function handleStartPhase1() {
+    if (!builderAgent || !buildPlanSummary?.firstPhaseName) return;
+    setStartingPhase(true);
+    try {
+      const task = `Begin Phase 1: ${buildPlanSummary.firstPhaseName}. Read the build plan from knowledge/build-plan.md and start executing the steps in Phase 1.`;
+      await api.agents.run(builderAgent.config.id, task);
+      if (!onboardingState.first_task_sent) {
+        await updateOnboardingState({ first_task_sent: true });
+        void mutateConfig();
+      }
+    } finally {
+      setStartingPhase(false);
+    }
+  }
 
   function handleRunClick(agentId: string) {
     if (activeInput === agentId) {
@@ -147,7 +171,7 @@ export default function OverviewPage() {
       {/* Company header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{seedMeta?.name || 'Your Team'}</h1>
+          <h1 className="text-2xl font-bold">{(typeof projectConfig?.name === 'string' && projectConfig.name) || seedMeta?.name || 'Your Team'}</h1>
           {seedMeta?.description && (
             <p className="text-slate-400 text-sm mt-1">{seedMeta.description}</p>
           )}
@@ -161,31 +185,13 @@ export default function OverviewPage() {
       </div>
 
       {/* Onboarding Checklist */}
-      <OnboardingChecklist data={onboardingData} dismissed={onboardingState.dismissed} onDismiss={handleDismissChecklist} />
-
-      {/* Build Plan card */}
-      {isSeed && buildPlanSummary && (
-        <Link
-          href="/knowledge?file=build-plan.md"
-          className="block bg-slate-900 border border-slate-800 rounded-lg p-4 hover:border-slate-700 transition-colors"
-        >
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 p-2 bg-amber-500/10 rounded-md">
-              <Hammer size={16} className="text-amber-400" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-medium text-white">Build Plan</h3>
-              <p className="text-xs text-slate-400 mt-0.5 truncate">{buildPlanSummary.goal}</p>
-              <p className="text-xs text-slate-500 mt-1">
-                {buildPlanSummary.phases} phase{buildPlanSummary.phases !== 1 ? 's' : ''}{buildPlanSummary.steps > 0 ? `, ${buildPlanSummary.steps} step${buildPlanSummary.steps !== 1 ? 's' : ''}` : ''}
-              </p>
-            </div>
-            <div className="flex items-center gap-1 text-xs text-sky-400 flex-shrink-0 mt-1">
-              View Plan <ArrowRight size={12} />
-            </div>
-          </div>
-        </Link>
-      )}
+      <OnboardingChecklist
+        data={onboardingData}
+        dismissed={onboardingState.dismissed}
+        onDismiss={handleDismissChecklist}
+        onStartPhase1={builderAgent ? handleStartPhase1 : undefined}
+        startingPhase={startingPhase}
+      />
 
       {/* Agent cards — grouped by team */}
       {agents && agents.length > 0 && agentsByTeam ? (
