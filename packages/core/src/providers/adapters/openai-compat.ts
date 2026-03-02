@@ -106,6 +106,18 @@ export class OpenAICompatProvider implements IProvider {
 					content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
 				};
 			}
+			// Assistant message with tool_calls (multi-turn tool use)
+			if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+				return {
+					role: 'assistant' as const,
+					content: typeof m.content === 'string' && m.content ? m.content : null,
+					tool_calls: m.toolCalls.map((tc) => ({
+						id: tc.id,
+						type: 'function' as const,
+						function: { name: tc.name, arguments: tc.arguments },
+					})),
+				};
+			}
 			return {
 				role: m.role as 'system' | 'user' | 'assistant',
 				content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),

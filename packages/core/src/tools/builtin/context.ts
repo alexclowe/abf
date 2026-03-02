@@ -27,4 +27,8 @@ export interface BuiltinToolContext {
 	readonly isCloud: boolean;
 	/** ABF Cloud proxy endpoint (e.g. 'https://api.abf.cloud/v1'). Set when isCloud or cloud config present. */
 	readonly cloudEndpoint?: string | undefined;
+	/** Virtual mailbox store for inter-agent communication. */
+	readonly mailboxStore?: import('../../mailbox/types.js').IMailboxStore | undefined;
+	/** Shared agents map for recipient validation (agent-email tool). */
+	readonly agentsMap?: ReadonlyMap<string, import('../../types/agent.js').AgentConfig> | undefined;
 }

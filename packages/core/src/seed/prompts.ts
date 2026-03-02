@@ -166,7 +166,7 @@ Return ONLY valid JSON matching this schema (no markdown, no explanation, just J
       "team": string (lowercase team name),
       "reportsTo": string | null (agent name or null for team leads),
       "tools": string[] (archetype defaults plus any extras needed),
-      "triggers": [{ "type": string, "schedule"?: string, "interval"?: number, "task": string, "from"?: string }],
+      "triggers": [{ "type": string, "schedule"?: string, "interval"?: number, "task": string, "from"?: string, "path"?: string (required for webhook triggers, e.g. "/webhook/stripe") }],
       "kpis": [{ "metric": string, "target": string, "review": "daily" | "weekly" | "monthly" }],
       "behavioralBounds": {
         "allowedActions": string[],

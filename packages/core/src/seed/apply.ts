@@ -70,6 +70,7 @@ interface YamlTrigger {
 	schedule?: string;
 	interval?: number;
 	from?: string;
+	path?: string;
 }
 
 /** Shape for a YAML workflow step entry (snake_case keys). */
@@ -86,6 +87,11 @@ function triggerToYaml(t: AgentPlan['triggers'][number]): YamlTrigger {
 	if (t.schedule) trigger.schedule = t.schedule;
 	if (t.interval) trigger.interval = t.interval;
 	if (t.from) trigger.from = t.from;
+	if (t.path) trigger.path = t.path;
+	// Default path for webhook triggers when LLM omits it
+	if (t.type === 'webhook' && !trigger.path) {
+		trigger.path = `/webhook/${t.task.replace(/[^a-z0-9_-]/gi, '-').toLowerCase()}`;
+	}
 	return trigger;
 }
 

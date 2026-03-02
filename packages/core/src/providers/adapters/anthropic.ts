@@ -82,6 +82,23 @@ export class AnthropicProvider implements IProvider {
 					};
 				}
 
+				// Assistant message with tool_calls (multi-turn tool use)
+				if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+					const blocks: Anthropic.ContentBlockParam[] = [];
+					if (typeof m.content === 'string' && m.content) {
+						blocks.push({ type: 'text' as const, text: m.content });
+					}
+					for (const tc of m.toolCalls) {
+						blocks.push({
+							type: 'tool_use' as const,
+							id: tc.id,
+							name: tc.name,
+							input: JSON.parse(tc.arguments) as Record<string, unknown>,
+						});
+					}
+					return { role: 'assistant' as const, content: blocks };
+				}
+
 				// Handle multimodal ContentPart[] content (images + text)
 				if (Array.isArray(m.content) && m.content.length > 0 && typeof m.content[0] === 'object' && 'type' in m.content[0]) {
 					const parts = m.content as readonly ContentPart[];

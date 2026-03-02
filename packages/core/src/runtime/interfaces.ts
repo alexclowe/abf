@@ -49,6 +49,8 @@ export interface IDispatcher {
 	/** Dispatch and wait for the session to complete, returning the result. */
 	dispatchAndWait(activation: Activation, timeoutMs?: number): Promise<Result<SessionResult, ABFError>>;
 	registerAgent(agent: AgentConfig): void;
+	/** Record a session executed externally (e.g. streaming chat) for bookkeeping. */
+	recordExternalSession(agentId: AgentId, result: SessionResult): void;
 	getActiveSessions(): readonly WorkSession[];
 	getAgentState(agentId: AgentId): AgentState | undefined;
 	getSessionResult(sessionId: SessionId): SessionResult | undefined;

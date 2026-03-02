@@ -61,7 +61,9 @@ function makeMockDispatcher() {
 function makeMockApprovalStore() {
 	return {
 		create: vi.fn().mockReturnValue('approval-1'),
-		get: vi.fn(),
+		get: vi.fn().mockReturnValue(
+			{ id: 'approval-1', agentId: 'test-agent', status: 'pending', toolName: 'send-email' },
+		),
 		list: vi.fn().mockReturnValue([
 			{ id: 'approval-1', agentId: 'test-agent', status: 'pending', toolName: 'send-email' },
 		]),

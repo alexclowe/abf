@@ -2,11 +2,16 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import useSWR from 'swr';
+import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useEventStream } from '@/lib/use-event-stream';
+import { AgentAvatar } from '@/components/AgentAvatar';
 import { AgentStatusBadge } from '@/components/AgentStatusBadge';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
-import { Bot, Play, DollarSign, Users } from 'lucide-react';
+import { OrgChart } from '@/components/OrgChart';
+import { ActionFeed } from '@/components/ActionFeed';
+import { buildOrgTree } from '@/lib/org-tree';
+import { Bot, DollarSign, MessageCircle } from 'lucide-react';
 import type { OnboardingData } from '@/components/OnboardingChecklist';
 import { getOnboardingState, updateOnboardingState } from '@/lib/onboarding';
 
@@ -23,14 +28,12 @@ function parseSeedFrontmatter(content: string): { name?: string; description?: s
 
 function parseBuildPlanSummary(content: string): { goal: string; phases: number; steps: number; firstPhaseName: string | null } | null {
   const lines = content.split('\n');
-  // Goal: first non-heading, non-empty line after the first heading
   let goal = '';
   let pastHeading = false;
   for (const line of lines) {
     if (line.startsWith('#')) { pastHeading = true; continue; }
     if (pastHeading && line.trim()) { goal = line.trim(); break; }
   }
-  // Parse phase headings (format: "## Phase: {name}")
   const phaseHeadings = lines
     .filter(l => /^##\s/.test(l))
     .map(l => l.replace(/^##\s+/, '').replace(/^Phase:\s*/i, '').trim());
@@ -43,12 +46,10 @@ function parseBuildPlanSummary(content: string): { goal: string; phases: number;
 export default function OverviewPage() {
   const { data: stream } = useEventStream();
 
-  // Check if SSE snapshot has the data shapes this page needs
   const sseHasAgents = !!stream?.agents?.[0]?.config;
   const sseHasStatus = stream?.status?.activeSessions !== undefined;
   const sseHasSessions = !!stream?.sessions;
 
-  // SWR polls only when SSE doesn't provide usable data for that field
   const { data: swrStatus } = useSWR(!sseHasStatus ? 'status' : null, () => api.status(), { refreshInterval: 10_000, dedupingInterval: 5_000 });
   const { data: swrAgents } = useSWR(!sseHasAgents ? 'agents' : null, () => api.agents.list(), { refreshInterval: 10_000, dedupingInterval: 5_000 });
   const { data: swrSessions } = useSWR(!sseHasSessions ? 'sessions' : null, () => api.sessions.active(), { refreshInterval: 10_000, dedupingInterval: 5_000 });
@@ -57,20 +58,17 @@ export default function OverviewPage() {
   const agents = (sseHasAgents ? stream!.agents : swrAgents) as { config: Record<string, any>; state?: Record<string, any> | null }[] | undefined;
   const sessions = sseHasSessions ? stream!.sessions : swrSessions;
 
-  // Data for onboarding checklist + seed detection
   const { data: authStatus } = useSWR('auth-status', () => api.auth.status(), { revalidateOnFocus: false });
   const { data: knowledgeFiles } = useSWR('knowledge', () => api.knowledge.list(), { revalidateOnFocus: false });
   const { data: teams } = useSWR('teams', () => api.teams.list(), { revalidateOnFocus: false });
   const { data: projectConfig, mutate: mutateConfig } = useSWR('config', () => api.config.get(), { revalidateOnFocus: false });
 
-  // Seed detection: check for seed.md and build-plan.md in knowledge files
   const seedFile = useMemo(() => knowledgeFiles?.find(f => f.filename === 'seed.md'), [knowledgeFiles]);
   const buildPlanFile = useMemo(() => knowledgeFiles?.find(f => f.filename === 'build-plan.md'), [knowledgeFiles]);
   const seedMeta = useMemo(() => seedFile ? parseSeedFrontmatter(seedFile.content) : null, [seedFile]);
   const buildPlanSummary = useMemo(() => buildPlanFile ? parseBuildPlanSummary(buildPlanFile.content) : null, [buildPlanFile]);
   const isSeed = !!seedFile;
 
-  // Onboarding state from project config (server-side, works across browsers/devices)
   const onboardingState = useMemo(() => getOnboardingState(projectConfig), [projectConfig]);
 
   const handleDismissChecklist = useCallback(async () => {
@@ -95,39 +93,8 @@ export default function OverviewPage() {
     };
   }, [authStatus, agents, knowledgeFiles, isSeed, buildPlanFile, onboardingState, seedMeta]);
 
-  // Group agents by team
-  const agentsByTeam = useMemo(() => {
-    if (!agents) return null;
-    const teamMap = new Map<string, typeof agents>();
-    for (const a of agents) {
-      const teamKey = a.config.team || '';
-      if (!teamMap.has(teamKey)) teamMap.set(teamKey, []);
-      teamMap.get(teamKey)!.push(a);
-    }
-    // Sort: named teams first (in teams order), then unassigned
-    const sortedGroups: { key: string; displayName: string; agents: typeof agents }[] = [];
-    if (teams) {
-      for (const t of teams) {
-        const teamAgents = teamMap.get(t.name) ?? teamMap.get(t.id);
-        if (teamAgents) {
-          sortedGroups.push({ key: t.name, displayName: t.displayName || t.name, agents: teamAgents });
-          teamMap.delete(t.name);
-          teamMap.delete(t.id);
-        }
-      }
-    }
-    // Remaining groups (teams not in team definitions, or unassigned)
-    for (const [key, teamAgents] of teamMap) {
-      sortedGroups.push({ key, displayName: key || 'Unassigned', agents: teamAgents });
-    }
-    return sortedGroups;
-  }, [agents, teams]);
-
-  const [taskInputs, setTaskInputs] = useState<Record<string, string>>({});
-  const [activeInput, setActiveInput] = useState<string | null>(null);
   const [startingPhase, setStartingPhase] = useState(false);
 
-  // Find the builder agent (always named 'builder' by the seed pipeline)
   const builderAgent = useMemo(
     () => agents?.find(a => a.config.name === 'builder' || a.config.role === 'Build Orchestrator'),
     [agents],
@@ -148,23 +115,24 @@ export default function OverviewPage() {
     }
   }
 
-  function handleRunClick(agentId: string) {
-    if (activeInput === agentId) {
-      // Submit the task
-      const task = taskInputs[agentId];
-      if (task?.trim()) {
-        void api.agents.run(agentId, task.trim());
-        setActiveInput(null);
-        setTaskInputs((prev) => ({ ...prev, [agentId]: '' }));
-        // Mark first task sent for onboarding (only writes once)
-        if (!onboardingState.first_task_sent) {
-          void updateOnboardingState({ first_task_sent: true }).then(() => mutateConfig());
-        }
-      }
-    } else {
-      setActiveInput(agentId);
-    }
-  }
+  // Build org tree from agents + teams
+  const orgTree = useMemo(() => {
+    if (!agents || agents.length === 0) return null;
+    return buildOrgTree(agents as any[], teams ?? []);
+  }, [agents, teams]);
+
+  // Agents with errors for the action feed
+  const agentErrors = useMemo(() => {
+    if (!agents) return [];
+    return agents
+      .filter((a) => (a.state?.errorCount ?? 0) > 0)
+      .map((a) => ({
+        id: a.config.id,
+        name: a.config.name,
+        displayName: a.config.displayName,
+        errorCount: a.state?.errorCount as number,
+      }));
+  }, [agents]);
 
   return (
     <div className="p-6 space-y-6">
@@ -193,144 +161,43 @@ export default function OverviewPage() {
         startingPhase={startingPhase}
       />
 
-      {/* Agent cards — grouped by team */}
-      {agents && agents.length > 0 && agentsByTeam ? (
-        <div className="space-y-0 border border-slate-800 rounded-lg overflow-hidden">
-          {agentsByTeam.map((group, gi) => (
-            <div key={group.key}>
-              {/* Team header — only show when there are multiple groups */}
-              {agentsByTeam.length > 1 && (
-                <div className={`bg-slate-900/50 px-4 py-2 flex items-center gap-2 ${gi > 0 ? 'border-t border-slate-800' : ''}`}>
-                  <Users size={12} className="text-slate-500" />
-                  <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">{group.displayName}</span>
-                  <span className="text-xs text-slate-600">{group.agents.length}</span>
-                </div>
-              )}
-              {group.agents.map((a, i) => (
-                <div
-                  key={a.config.id}
-                  className={`bg-slate-900 p-4 ${i < group.agents.length - 1 || gi < agentsByTeam.length - 1 ? 'border-b border-slate-800' : ''}`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium">{a.config.displayName}</span>
-                        <span className="text-slate-500">&middot;</span>
-                        <span className="text-sm text-slate-400">{a.config.role}</span>
-                        <AgentStatusBadge status={a.state?.status ?? 'idle'} />
-                      </div>
-                      <p className="text-sm text-slate-500">{a.config.description}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRunClick(a.config.id)}
-                      className="ml-4 flex-shrink-0 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-1.5"
-                    >
-                      <Play size={12} />
-                      Run
-                    </button>
-                  </div>
-                  {activeInput === a.config.id && (
-                    <div className="mt-3 flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="What should this agent do?"
-                        value={taskInputs[a.config.id] ?? ''}
-                        onChange={(e) =>
-                          setTaskInputs((prev) => ({ ...prev, [a.config.id]: e.target.value }))
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleRunClick(a.config.id);
-                          if (e.key === 'Escape') setActiveInput(null);
-                        }}
-                        autoFocus
-                        className="flex-1 bg-slate-800 border border-slate-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-sky-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleRunClick(a.config.id)}
-                        disabled={!taskInputs[a.config.id]?.trim()}
-                        className="px-3 py-1.5 bg-green-600 hover:bg-green-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-md text-sm font-medium transition-colors"
-                      >
-                        Send
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setActiveInput(null)}
-                        className="px-2 py-1.5 text-slate-400 hover:text-white text-sm transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      ) : agents && agents.length > 0 ? (
-        /* Flat list fallback when teams haven't loaded yet */
-        <div className="space-y-0 border border-slate-800 rounded-lg overflow-hidden">
-          {agents.map((a, i) => (
-            <div
-              key={a.config.id}
-              className={`bg-slate-900 p-4 ${i < agents.length - 1 ? 'border-b border-slate-800' : ''}`}
-            >
-              <div className="flex items-start justify-between">
+      {/* Action feed — errors, pending approvals, escalations */}
+      <ActionFeed agentErrors={agentErrors} />
+
+      {/* Org Chart / Agent List */}
+      {agents && agents.length > 0 ? (
+        <>
+          {/* Desktop: Org chart */}
+          <div className="hidden md:block">
+            {orgTree && <OrgChart root={orgTree} />}
+          </div>
+          {/* Mobile: Simple list with avatars */}
+          <div className="md:hidden space-y-0 border border-slate-800 rounded-lg overflow-hidden">
+            {agents.map((a, i) => (
+              <Link
+                key={a.config.id}
+                href={`/agents/${a.config.id}`}
+                className={`flex items-center gap-3 bg-slate-900 p-3 hover:bg-slate-800/50 transition-colors ${i < agents.length - 1 ? 'border-b border-slate-800' : ''}`}
+              >
+                <AgentAvatar name={a.config.name} size={32} />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium">{a.config.displayName}</span>
-                    <span className="text-slate-500">&middot;</span>
-                    <span className="text-sm text-slate-400">{a.config.role}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm truncate">{a.config.displayName}</span>
                     <AgentStatusBadge status={a.state?.status ?? 'idle'} />
                   </div>
-                  <p className="text-sm text-slate-500">{a.config.description}</p>
+                  <p className="text-xs text-slate-500 truncate">{a.config.role}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleRunClick(a.config.id)}
-                  className="ml-4 flex-shrink-0 px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-1.5"
+                <Link
+                  href={`/agents/${a.config.id}/chat`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="p-1.5 rounded-md hover:bg-slate-700 transition-colors text-slate-400 hover:text-sky-400"
                 >
-                  <Play size={12} />
-                  Run
-                </button>
-              </div>
-              {activeInput === a.config.id && (
-                <div className="mt-3 flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="What should this agent do?"
-                    value={taskInputs[a.config.id] ?? ''}
-                    onChange={(e) =>
-                      setTaskInputs((prev) => ({ ...prev, [a.config.id]: e.target.value }))
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleRunClick(a.config.id);
-                      if (e.key === 'Escape') setActiveInput(null);
-                    }}
-                    autoFocus
-                    className="flex-1 bg-slate-800 border border-slate-700 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-sky-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleRunClick(a.config.id)}
-                    disabled={!taskInputs[a.config.id]?.trim()}
-                    className="px-3 py-1.5 bg-green-600 hover:bg-green-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-md text-sm font-medium transition-colors"
-                  >
-                    Send
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveInput(null)}
-                    className="px-2 py-1.5 text-slate-400 hover:text-white text-sm transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+                  <MessageCircle size={14} />
+                </Link>
+              </Link>
+            ))}
+          </div>
+        </>
       ) : (
         <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center">
           <Bot size={32} className="mx-auto text-slate-600 mb-3" />

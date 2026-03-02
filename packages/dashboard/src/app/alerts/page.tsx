@@ -4,9 +4,9 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
 import { useEventStream } from '@/lib/use-event-stream';
-import { AlertTriangle } from 'lucide-react';
+import { Bell } from 'lucide-react';
 
-export default function EscalationsPage() {
+export default function AlertsPage() {
   const { data: stream } = useEventStream();
   const { data: swrEscalations, error, mutate } = useSWR(
     !stream ? 'escalations' : null,
@@ -31,11 +31,11 @@ export default function EscalationsPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold">Escalations</h1>
+      <h1 className="text-2xl font-bold">Alerts</h1>
 
       {error && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-red-400 text-sm">
-          Failed to load escalations: {error.message}
+          Failed to load alerts: {error.message}
         </div>
       )}
 
@@ -48,7 +48,7 @@ export default function EscalationsPage() {
 
       {open.length === 0 && resolved.length === 0 && (
         <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center">
-          <p className="text-slate-400">No escalations.</p>
+          <p className="text-slate-400">No alerts.</p>
         </div>
       )}
 
@@ -63,7 +63,7 @@ export default function EscalationsPage() {
               >
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <AlertTriangle size={14} className="text-yellow-400" />
+                    <Bell size={14} className="text-yellow-400" />
                     <span className="font-medium text-sm">{esc.type}</span>
                     <span className="text-xs text-slate-500">from {esc.agentId}</span>
                   </div>

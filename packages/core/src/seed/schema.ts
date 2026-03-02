@@ -59,13 +59,14 @@ export const COMPANY_PLAN_JSON_SCHEMA: Record<string, unknown> = {
 						items: {
 							type: 'object',
 							additionalProperties: false,
-							required: ['type', 'task', 'schedule', 'interval', 'from'],
+							required: ['type', 'task', 'schedule', 'interval', 'from', 'path'],
 							properties: {
 								type: { type: 'string', enum: ['cron', 'manual', 'message', 'webhook', 'event', 'heartbeat'] },
 								task: { type: 'string' },
 								schedule: { anyOf: [{ type: 'string' }, { type: 'null' }] },
 								interval: { anyOf: [{ type: 'number' }, { type: 'null' }] },
 								from: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+								path: { anyOf: [{ type: 'string' }, { type: 'null' }] },
 							},
 						},
 					},

@@ -165,6 +165,8 @@ export interface ApprovalItem {
   status: 'pending' | 'approved' | 'rejected';
   resolvedAt?: string;
   resolvedBy?: string;
+  /** Why this approval was created. 'unlisted_action' = tool not in allowedActions. */
+  escalationReason?: 'requires_approval' | 'unlisted_action';
 }
 
 // ── Inbox ───────────────────────────────────────────────────────────
@@ -495,4 +497,19 @@ export interface ArchetypeInfo {
   tools: string[];
   allowedActions: string[];
   forbiddenActions: string[];
+}
+
+// ── Mail ────────────────────────────────────────────────────────────
+
+export interface MailMessage {
+  id: string;
+  from: string;
+  to: string;
+  subject: string;
+  body: string;
+  timestamp: string;
+  threadId: string;
+  inReplyTo?: string;
+  source: 'agent' | 'human' | 'email';
+  read: boolean;
 }

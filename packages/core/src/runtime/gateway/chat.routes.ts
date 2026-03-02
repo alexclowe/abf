@@ -280,12 +280,28 @@ export function registerChatRoutes(app: Hono, deps: ChatRoutesDeps): void {
 						});
 
 					} else if (event.type === 'tool_result' && event.toolName) {
-						const tcId = toolCallIds.get(event.toolName) ?? `tc-${toolCallCounter++}`;
-						write({
-							type: 'tool-output-available',
-							toolCallId: tcId,
-							output: event.toolOutput ?? null,
-						});
+						const tcId = toolCallIds.get(event.toolName);
+						if (tcId) {
+							// Normal tool result — matching tool_use was already emitted
+							write({
+								type: 'tool-output-available',
+								toolCallId: tcId,
+								output: event.toolOutput ?? null,
+							});
+						} else {
+							// Blocked/queued tool — no tool_use was emitted (e.g. bounds check).
+							// Surface as text so the user sees the status message.
+							const blockId = nanoid();
+							if (textBlockId) {
+								write({ type: 'text-end', id: textBlockId });
+							}
+							textBlockId = blockId;
+							write({ type: 'text-start', id: blockId });
+							const output = typeof event.toolOutput === 'string'
+								? event.toolOutput
+								: JSON.stringify(event.toolOutput ?? '');
+							write({ type: 'text-delta', id: blockId, delta: output });
+						}
 
 					} else if (event.type === 'error' && event.error) {
 						// Close any open text block before error
@@ -307,6 +323,12 @@ export function registerChatRoutes(app: Hono, deps: ChatRoutesDeps): void {
 					onChunk,
 					conversationHistory,
 				);
+
+				// Register completed session with dispatcher for bookkeeping
+				// (session counting, escalation tracking, KPI accumulation)
+				if (result.ok) {
+					deps.dispatcher.recordExternalSession(activation.agentId, result.value);
+				}
 
 				// Close any open text block
 				if (textBlockId) {

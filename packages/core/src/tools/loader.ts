@@ -38,6 +38,7 @@ import { createAppGenerateTool } from './builtin/app-generate.js';
 import { createAppDeployTool } from './builtin/app-deploy.js';
 import { createBackendProvisionTool } from './builtin/backend-provision.js';
 import { createCodeGenerateTool } from './builtin/code-generate.js';
+import { createAgentEmailTool } from './builtin/agent-email.js';
 import { CustomTool, isCustomToolModule } from './custom-tool.js';
 import type { CustomToolContext } from './custom-tool.js';
 
@@ -135,6 +136,10 @@ export function createBuiltinTools(ctx: BuiltinToolContext): readonly ITool[] {
 	if (ctx.approvalStore) {
 		tools.push(createAskHumanTool(ctx.approvalStore));
 	}
+
+	// Inter-agent email tool
+	const agentEmail = createAgentEmailTool(ctx);
+	if (agentEmail) tools.push(agentEmail);
 
 	return tools;
 }

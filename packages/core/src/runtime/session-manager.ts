@@ -140,6 +140,7 @@ export interface SessionManagerDeps {
 	readonly compactor?: import('../memory/compactor.js').MemoryCompactor | undefined;
 	readonly taskPlanStore?: import('../types/task-plan.js').ITaskPlanStore | undefined;
 	readonly sessionEventBus?: import('./session-events.js').SessionEventBus | undefined;
+	readonly mailboxStore?: import('../mailbox/types.js').IMailboxStore | undefined;
 }
 
 export class SessionManager implements ISessionManager {
@@ -333,8 +334,32 @@ export class SessionManager implements ISessionManager {
 		const memory = memoryResult.value;
 		const mergedKnowledge = { ...memory.knowledge, ...knowledgeFiles };
 
+		// Drain unread mail for streaming sessions too
+		let unreadMail: readonly import('../mailbox/types.js').MailMessage[] = [];
+		if (this.deps.mailboxStore) {
+			unreadMail = this.deps.mailboxStore.listInbox(agent.name, { unreadOnly: true, limit: 10 });
+			for (const msg of unreadMail) {
+				this.deps.mailboxStore.markRead(msg.id);
+			}
+			// Audit-log any injection detections in external mail
+			for (const msg of unreadMail) {
+				if (msg.source !== 'agent') {
+					const analysis = processInput(msg.body, msg.source === 'email' ? 'email' : 'api');
+					if (analysis.injectionDetected) {
+						void this.deps.auditStore.log({
+							timestamp: toISOTimestamp(),
+							eventType: 'injection_detected',
+							agentId: activation.agentId,
+							details: { source: `mail:${msg.source}`, from: msg.from, patterns: analysis.patterns, threatLevel: analysis.threatLevel },
+							severity: 'warn',
+						});
+					}
+				}
+			}
+		}
+
 		// Step 2: Build prompt — system message with charter + context
-		const messages: ChatMessage[] = this.buildPrompt(agent, memory, activation, mergedKnowledge);
+		const messages: ChatMessage[] = this.buildPrompt(agent, memory, activation, mergedKnowledge, undefined, undefined, unreadMail);
 
 		// Inject conversation history before the final user message
 		if (conversationHistory && conversationHistory.length > 0) {
@@ -433,20 +458,28 @@ export class SessionManager implements ISessionManager {
 				break;
 			}
 
+			// Push assistant message with tool_calls (providers require tool results
+			// to be preceded by an assistant message declaring the tool calls)
+			messages.push({
+				role: 'assistant',
+				content: responseText || '',
+				toolCalls: pendingToolCalls.map((tc) => ({ id: tc.id, name: tc.name, arguments: tc.arguments })),
+			});
+
 			// Execute tool calls with streaming events
 			for (const tc of pendingToolCalls) {
 				const tool = this.deps.toolRegistry.get(tc.name as import('../types/common.js').ToolId);
 				if (!tool) continue;
 
+				const parsedArgs = JSON.parse(tc.arguments) as Record<string, unknown>;
+
 				// Behavioral bounds enforcement (R3)
-				const boundsMsg = await this.checkAndEnforceBounds(tc.name, agent, sessionId, totalCost);
+				const boundsMsg = await this.checkAndEnforceBounds(tc.name, agent, sessionId, totalCost, parsedArgs);
 				if (boundsMsg) {
 					emitChunk({ type: 'tool_result', toolName: tc.name, toolOutput: boundsMsg });
 					messages.push({ role: 'tool', content: boundsMsg, toolCallId: tc.id });
 					continue;
 				}
-
-				const parsedArgs = JSON.parse(tc.arguments) as Record<string, unknown>;
 
 				emitChunk({
 					type: 'tool_use',
@@ -492,13 +525,35 @@ export class SessionManager implements ISessionManager {
 			}
 		}
 
+		// Step 6: Write memory + outputs (matching runSession behavior)
+		const lastMessage = messages[messages.length - 1];
+		if (lastMessage && lastMessage.role === 'assistant' && typeof lastMessage.content === 'string') {
+			await this.deps.memoryStore.append(
+				activation.agentId,
+				'history',
+				`Chat: ${activation.trigger.task}\n\n${lastMessage.content}`,
+			);
+
+			// Write to outputs/ for cross-agent sharing
+			if (this.deps.outputsManager) {
+				await this.deps.outputsManager.write(
+					agent.name,
+					`# Chat: ${activation.trigger.task}\n\n${lastMessage.content}`,
+				);
+			}
+
+			// Fire-and-forget compaction check
+			if (this.deps.compactor) {
+				void this.deps.compactor.compactIfNeeded(activation.agentId);
+			}
+		}
+
 		// Step 8: Report
 		totalCost = ((totalCost as number) +
 			provider.estimateCost(agent.model, totalUsage.totalTokens)) as USDCents;
 
-		const lastMsg = messages[messages.length - 1];
-		const outputText = lastMsg && lastMsg.role === 'assistant' && typeof lastMsg.content === 'string'
-			? lastMsg.content
+		const outputText = lastMessage && lastMessage.role === 'assistant' && typeof lastMessage.content === 'string'
+			? lastMessage.content
 			: undefined;
 
 		// Emit session end for streaming sessions (R12)
@@ -554,6 +609,31 @@ export class SessionManager implements ISessionManager {
 		// Drain inbox items
 		const inboxItems = this.deps.inbox ? this.deps.inbox.drain(activation.agentId) : [];
 
+		// Drain unread mail
+		let unreadMail: readonly import('../mailbox/types.js').MailMessage[] = [];
+		if (this.deps.mailboxStore) {
+			unreadMail = this.deps.mailboxStore.listInbox(agent.name, { unreadOnly: true, limit: 10 });
+			for (const msg of unreadMail) {
+				this.deps.mailboxStore.markRead(msg.id);
+			}
+			// Audit-log any injection detections in external mail
+			for (const msg of unreadMail) {
+				if (msg.source !== 'agent') {
+					const analysis = processInput(msg.body, msg.source === 'email' ? 'email' : 'api');
+					if (analysis.injectionDetected) {
+						void this.deps.auditStore.log({
+							timestamp: toISOTimestamp(),
+							eventType: 'injection_detected',
+							agentId: activation.agentId,
+							sessionId,
+							details: { source: `mail:${msg.source}`, from: msg.from, patterns: analysis.patterns, threatLevel: analysis.threatLevel },
+							severity: 'warn',
+						});
+					}
+				}
+			}
+		}
+
 		// Log session start
 		await this.deps.auditStore.log({
 			timestamp: startedAt,
@@ -568,7 +648,7 @@ export class SessionManager implements ISessionManager {
 		this.deps.sessionEventBus?.emitSessionStart(activation.agentId, sessionId);
 
 		// Step 2: Build prompt
-		const messages: ChatMessage[] = this.buildPrompt(agent, memory, activation, mergedKnowledge, teammateOutputs, inboxItems);
+		const messages: ChatMessage[] = this.buildPrompt(agent, memory, activation, mergedKnowledge, teammateOutputs, inboxItems, unreadMail);
 
 		// Step 3: Execute LLM call
 		const provider = this.deps.providerRegistry.getBySlug(agent.provider);
@@ -637,19 +717,28 @@ export class SessionManager implements ISessionManager {
 				break;
 			}
 
+			// Push assistant message with tool_calls (providers require tool results
+			// to be preceded by an assistant message declaring the tool calls)
+			messages.push({
+				role: 'assistant',
+				content: responseText || '',
+				toolCalls: pendingToolCalls.map((tc) => ({ id: tc.id, name: tc.name, arguments: tc.arguments })),
+			});
+
 			// Execute tool calls
 			for (const tc of pendingToolCalls) {
 				const tool = this.deps.toolRegistry.get(tc.name as import('../types/common.js').ToolId);
 				if (!tool) continue;
 
+				const parsedArgs = JSON.parse(tc.arguments) as Record<string, unknown>;
+
 				// Behavioral bounds enforcement (R3)
-				const boundsMsg = await this.checkAndEnforceBounds(tc.name, agent, sessionId, totalCost);
+				const boundsMsg = await this.checkAndEnforceBounds(tc.name, agent, sessionId, totalCost, parsedArgs);
 				if (boundsMsg) {
 					messages.push({ role: 'tool', content: boundsMsg, toolCallId: tc.id });
 					continue;
 				}
 
-				const parsedArgs = JSON.parse(tc.arguments) as Record<string, unknown>;
 				const call: ToolCall = {
 					toolId: tc.name as import('../types/common.js').ToolId,
 					arguments: parsedArgs,
@@ -861,6 +950,7 @@ export class SessionManager implements ISessionManager {
 		agent: AgentConfig,
 		sessionId: SessionId,
 		totalCost: USDCents,
+		toolArgs?: Record<string, unknown>,
 	): Promise<string | null> {
 		const result = checkBounds({
 			action: toolName,
@@ -896,22 +986,25 @@ export class SessionManager implements ISessionManager {
 		}
 
 		if (check.allowed === 'requires_approval') {
+			const isUnlisted = !!check.reason; // reason is set when tool wasn't in allowedActions
 			if (this.deps.approvalStore) {
 				this.deps.approvalStore.create({
 					agentId: agent.id,
 					sessionId,
 					toolId: toolName as import('../types/common.js').ToolId,
 					toolName,
-					arguments: {},
+					arguments: toolArgs ?? {},
 					createdAt: toISOTimestamp(),
+					escalationReason: isUnlisted ? 'unlisted_action' : 'requires_approval',
 				});
 			}
+			const auditReason = check.reason ?? 'requires_approval';
 			await this.deps.auditStore.log({
 				timestamp: toISOTimestamp(),
 				eventType: 'bounds_check',
 				agentId: agent.id,
 				sessionId,
-				details: { tool: toolName, reason: 'requires_approval', queued: true },
+				details: { tool: toolName, reason: auditReason, queued: true },
 				severity: 'info',
 			});
 			return `[QUEUED] Tool "${toolName}" requires approval. It has been queued for human review.`;
@@ -978,6 +1071,7 @@ export class SessionManager implements ISessionManager {
 		knowledge?: Readonly<Record<string, string>>,
 		teammateOutputs?: readonly import('../memory/outputs.js').OutputEntry[],
 		inboxItems?: readonly import('../types/inbox.js').InboxItem[],
+		unreadMail?: readonly import('../mailbox/types.js').MailMessage[],
 	): ChatMessage[] {
 		// Build knowledge base section (truncate each entry to ~2000 chars)
 		const knowledgeEntries = Object.entries(knowledge ?? {});
@@ -1029,6 +1123,21 @@ export class SessionManager implements ISessionManager {
 							(item) =>
 								`- [${item.priority.toUpperCase()}] ${item.subject}${item.from ? ` (from: ${item.from})` : ''}\n  ${item.body.length > 500 ? `${item.body.slice(0, 500)}…` : item.body}`,
 						),
+					].join('\n')
+				: '',
+			unreadMail && unreadMail.length > 0
+				? [
+						`Unread Mail (${unreadMail.length} messages):`,
+						...unreadMail.map((msg) => {
+							const isTrusted = msg.source === 'agent';
+							const prefix = isTrusted ? '' : '[EXTERNAL] ';
+							// Sanitize non-agent mail through the input pipeline (prompt injection defense)
+							const rawBody = msg.body.length > 500 ? `${msg.body.slice(0, 500)}…` : msg.body;
+							const safeBody = isTrusted
+								? rawBody
+								: processInput(rawBody, msg.source === 'email' ? 'email' : 'api').sanitizedContent;
+							return `- ${prefix}From: ${msg.from} | Subject: ${msg.subject} | Thread: ${msg.threadId}\n  ${safeBody}`;
+						}),
 					].join('\n')
 				: '',
 			memory.pendingMessages > 0 ? `You have ${memory.pendingMessages} pending messages.` : '',

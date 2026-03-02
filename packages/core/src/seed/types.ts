@@ -82,6 +82,7 @@ export interface TriggerPlan {
 	interval?: number;
 	task: string;
 	from?: string;
+	path?: string;
 }
 
 export interface KPIPlan {

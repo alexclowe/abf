@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Check, X, ChevronDown, ChevronUp, Rocket, ArrowRight } from 'lucide-react';
 
@@ -110,6 +110,12 @@ export function OnboardingChecklist({ data, dismissed, onDismiss, onStartPhase1,
   const checklist = seedChecklist ?? DEFAULT_CHECKLIST;
   const completedCount = checklist.filter((item) => item.check(data)).length;
   const allDone = completedCount === checklist.length;
+
+  // Auto-collapse when all steps are completed
+  useEffect(() => {
+    if (allDone) setCollapsed(true);
+  }, [allDone]);
+
   const title = isSeed
     ? allDone ? 'Setup Complete!' : `Quick Start — ${data.companyName || 'Your Company'}`
     : allDone ? 'Setup Complete!' : 'Getting Started';

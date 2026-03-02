@@ -6,6 +6,7 @@ import Link from 'next/link';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
 import { AgentStatusBadge } from '@/components/AgentStatusBadge';
+import { AgentAvatar } from '@/components/AgentAvatar';
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { MessageSquare } from 'lucide-react';
 
@@ -14,7 +15,7 @@ type Tab = 'overview' | 'memory' | 'sessions';
 export default function AgentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: agent, error } = useSWR(id ? `agent-${id}` : null, () => api.agents.get(id), {
-    refreshInterval: 3000,
+    refreshInterval: 10_000,
   });
   const [tab, setTab] = useState<Tab>('overview');
   const [showRun, setShowRun] = useState(false);
@@ -56,12 +57,15 @@ export default function AgentDetailPage() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">{config.displayName}</h1>
-            <AgentStatusBadge status={state?.status ?? 'idle'} />
+        <div className="flex items-center gap-4">
+          <AgentAvatar name={config.name} size={48} />
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold">{config.displayName}</h1>
+              <AgentStatusBadge status={state?.status ?? 'idle'} />
+            </div>
+            <p className="text-slate-400 mt-1">{config.role} — {config.description}</p>
           </div>
-          <p className="text-slate-400 mt-1">{config.role} — {config.description}</p>
         </div>
         <div className="flex items-center gap-2">
           <Link

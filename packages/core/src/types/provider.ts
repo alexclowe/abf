@@ -30,6 +30,8 @@ export interface ChatMessage {
 	readonly content: string | readonly ContentPart[] | readonly TaggedContent[];
 	readonly name?: string | undefined;
 	readonly toolCallId?: string | undefined;
+	/** Tool calls made by the assistant — required for multi-turn tool use with OpenAI/Anthropic. */
+	readonly toolCalls?: readonly { id: string; name: string; arguments: string }[] | undefined;
 }
 
 export interface ToolCallRequest {

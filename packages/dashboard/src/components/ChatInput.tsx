@@ -63,7 +63,9 @@ export function ChatInput({ onSend, isLoading, onStop, agentId }: ChatInputProps
       headers: API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {},
     })
       .then((r) => r.json())
-      .then((data: AgentOption[]) => setAgents(data))
+      .then((data: Array<{ config: { id: string; name: string; displayName: string; role: string } }>) =>
+        setAgents(data.map((a) => ({ id: a.config.id, name: a.config.name, displayName: a.config.displayName, role: a.config.role }))),
+      )
       .catch(() => {});
   }, []);
 

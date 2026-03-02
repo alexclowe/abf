@@ -23,6 +23,8 @@ export interface ApprovalRequest {
 	readonly question?: string | undefined;
 	/** The human's answer (for inquiry type, set when answered). */
 	answer?: string | undefined;
+	/** Why this approval was created. 'unlisted_action' = tool not in allowedActions. */
+	readonly escalationReason?: 'requires_approval' | 'unlisted_action' | undefined;
 }
 
 export interface IApprovalStore {

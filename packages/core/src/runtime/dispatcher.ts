@@ -25,6 +25,9 @@ export class Dispatcher implements IDispatcher {
 	/** Waiters for dispatchAndWait — resolved when sessions complete. */
 	private readonly completionWaiters = new Map<string, (result: SessionResult) => void>();
 
+	/** Optional callback fired when an escalation is created (for notifications). */
+	onEscalationCreated?: ((escalation: EscalationItem) => void) | undefined;
+
 	constructor(
 		private readonly sessionManager: ISessionManager,
 		maxConcurrentSessions: number,
@@ -182,6 +185,60 @@ export class Dispatcher implements IDispatcher {
 		return all;
 	}
 
+	/**
+	 * Record a session that was executed externally (e.g. streaming chat).
+	 * Performs all bookkeeping from onSessionComplete WITHOUT heartbeat rescheduling,
+	 * since chat sessions are human-initiated and should not trigger automated re-runs.
+	 */
+	recordExternalSession(agentId: AgentId, result: SessionResult): void {
+		const current = this.agentStates.get(agentId);
+		if (!current) return;
+
+		// Store completed session result (keep last 100)
+		this.completedSessions.set(result.sessionId, result);
+		if (this.completedSessions.size > 100) {
+			const firstKey = this.completedSessions.keys().next().value;
+			if (firstKey !== undefined) this.completedSessions.delete(firstKey);
+		}
+
+		// Collect escalations from session result
+		for (const esc of result.escalations) {
+			const item: EscalationItem = {
+				id: `esc_${nanoid(16)}`,
+				agentId: esc.agentId,
+				sessionId: esc.sessionId,
+				type: esc.type,
+				message: esc.message,
+				target: esc.target,
+				timestamp: esc.timestamp,
+				resolved: false,
+			};
+			this.escalationsList.push(item);
+			this.onEscalationCreated?.(item);
+		}
+		if (this.escalationsList.length > 1000) {
+			this.escalationsList.splice(0, this.escalationsList.length - 1000);
+		}
+
+		// Accumulate KPI reports
+		if (result.kpiReports.length > 0) {
+			const existing = this.kpiHistory.get(result.agentId) ?? [];
+			existing.push(...result.kpiReports);
+			if (existing.length > 500) existing.splice(0, existing.length - 500);
+			this.kpiHistory.set(result.agentId, existing);
+		}
+
+		this.agentStates.set(agentId, {
+			...current,
+			status: 'idle',
+			lastActive: toISOTimestamp(),
+			currentSessionCost: 0 as USDCents,
+			totalCost: ((current.totalCost as number) + (result.cost as number)) as USDCents,
+			sessionsCompleted: current.sessionsCompleted + 1,
+			errorCount: result.status === 'failed' ? current.errorCount + 1 : current.errorCount,
+		});
+	}
+
 	private async executeSession(activation: Activation, sessionId: SessionId): Promise<void> {
 		const result = await this.sessionManager.execute(activation);
 
@@ -214,7 +271,7 @@ export class Dispatcher implements IDispatcher {
 
 		// Collect escalations from session result
 		for (const esc of result.escalations) {
-			this.escalationsList.push({
+			const item: EscalationItem = {
 				id: `esc_${nanoid(16)}`,
 				agentId: esc.agentId,
 				sessionId: esc.sessionId,
@@ -223,7 +280,9 @@ export class Dispatcher implements IDispatcher {
 				target: esc.target,
 				timestamp: esc.timestamp,
 				resolved: false,
-			});
+			};
+			this.escalationsList.push(item);
+			this.onEscalationCreated?.(item);
 		}
 		if (this.escalationsList.length > 1000) {
 			this.escalationsList.splice(0, this.escalationsList.length - 1000);
