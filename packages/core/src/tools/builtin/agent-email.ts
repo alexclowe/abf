@@ -61,7 +61,7 @@ export function createAgentEmailTool(ctx: BuiltinToolContext): ITool | null {
 
 	return {
 		definition,
-		execute: async (args, callContext) => {
+		execute: async (args: Readonly<Record<string, unknown>>) => {
 			const to = args['to'] as string;
 			const subject = args['subject'] as string;
 			const body = args['body'] as string;
@@ -87,7 +87,7 @@ export function createAgentEmailTool(ctx: BuiltinToolContext): ITool | null {
 			}
 
 			// Rate limit
-			const senderKey = callContext?.agentId ?? 'unknown';
+			const senderKey = typeof args['_agentId'] === 'string' ? args['_agentId'] : 'unknown';
 			const count = sessionEmailCounts.get(senderKey) ?? 0;
 			if (count >= MAX_EMAILS_PER_SESSION) {
 				return Ok({
@@ -116,7 +116,7 @@ export function createAgentEmailTool(ctx: BuiltinToolContext): ITool | null {
 				subject,
 				body,
 				threadId,
-				inReplyTo,
+				...(inReplyTo ? { inReplyTo } : {}),
 				source: 'agent',
 			});
 

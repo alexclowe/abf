@@ -29,7 +29,7 @@ export function registerMailRoutes(app: Hono, deps: MailRoutesDeps): void {
 		const agent = c.req.query('agent');
 		const limitStr = c.req.query('limit');
 		const limit = limitStr ? Number(limitStr) : 100;
-		return c.json(mailboxStore.listAll({ agentName: agent, limit }));
+		return c.json(mailboxStore.listAll({ ...(agent ? { agentName: agent } : {}), limit }));
 	});
 
 	// GET /api/mail/message/:id — get specific message by ID
