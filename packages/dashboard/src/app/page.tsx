@@ -6,10 +6,9 @@ import { api } from '@/lib/api';
 import { useEventStream } from '@/lib/use-event-stream';
 import { AgentStatusBadge } from '@/components/AgentStatusBadge';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
-import { Bot, Play, DollarSign, Hammer, ArrowRight, Users, Rocket } from 'lucide-react';
+import { Bot, Play, DollarSign, Users } from 'lucide-react';
 import type { OnboardingData } from '@/components/OnboardingChecklist';
 import { getOnboardingState, updateOnboardingState } from '@/lib/onboarding';
-import Link from 'next/link';
 
 function parseSeedFrontmatter(content: string): { name?: string; description?: string; industry?: string; stage?: string } | null {
   const match = content.match(/^---\n([\s\S]*?)\n---/);
@@ -92,7 +91,7 @@ export default function OverviewPage() {
       hasBuildPlan: !!buildPlanFile,
       buildPlanReviewed: onboardingState.build_plan_reviewed,
       firstTaskSent: onboardingState.first_task_sent,
-      companyName: seedMeta?.name,
+      companyName: typeof projectConfig?.name === 'string' ? projectConfig.name : seedMeta?.name,
     };
   }, [authStatus, agents, knowledgeFiles, isSeed, buildPlanFile, onboardingState, seedMeta]);
 
@@ -172,7 +171,7 @@ export default function OverviewPage() {
       {/* Company header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{seedMeta?.name || 'Your Team'}</h1>
+          <h1 className="text-2xl font-bold">{(typeof projectConfig?.name === 'string' && projectConfig.name) || seedMeta?.name || 'Your Team'}</h1>
           {seedMeta?.description && (
             <p className="text-slate-400 text-sm mt-1">{seedMeta.description}</p>
           )}
@@ -186,49 +185,13 @@ export default function OverviewPage() {
       </div>
 
       {/* Onboarding Checklist */}
-      <OnboardingChecklist data={onboardingData} dismissed={onboardingState.dismissed} onDismiss={handleDismissChecklist} />
-
-      {/* Build Plan card */}
-      {isSeed && buildPlanSummary && (
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 p-2 bg-amber-500/10 rounded-md">
-              <Hammer size={16} className="text-amber-400" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-medium text-white">Build Plan</h3>
-              <p className="text-xs text-slate-400 mt-0.5 truncate">{buildPlanSummary.goal}</p>
-              <p className="text-xs text-slate-500 mt-1">
-                {buildPlanSummary.phases} phase{buildPlanSummary.phases !== 1 ? 's' : ''}{buildPlanSummary.steps > 0 ? `, ${buildPlanSummary.steps} step${buildPlanSummary.steps !== 1 ? 's' : ''}` : ''}
-              </p>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0 mt-1">
-              {builderAgent && buildPlanSummary.firstPhaseName && !onboardingState.first_task_sent && (
-                <button
-                  type="button"
-                  onClick={handleStartPhase1}
-                  disabled={startingPhase}
-                  className="px-3 py-1.5 bg-green-600 hover:bg-green-500 disabled:opacity-60 text-white rounded-md text-xs font-medium transition-colors flex items-center gap-1.5"
-                >
-                  <Rocket size={12} />
-                  {startingPhase ? 'Starting...' : `Start Phase 1`}
-                </button>
-              )}
-              {onboardingState.first_task_sent && (
-                <span className="text-xs text-green-400 flex items-center gap-1">
-                  Phase 1 started
-                </span>
-              )}
-              <Link
-                href="/knowledge?file=build-plan.md"
-                className="flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300 transition-colors"
-              >
-                View Plan <ArrowRight size={12} />
-              </Link>
-            </div>
-          </div>
-        </div>
-      )}
+      <OnboardingChecklist
+        data={onboardingData}
+        dismissed={onboardingState.dismissed}
+        onDismiss={handleDismissChecklist}
+        onStartPhase1={builderAgent ? handleStartPhase1 : undefined}
+        startingPhase={startingPhase}
+      />
 
       {/* Agent cards — grouped by team */}
       {agents && agents.length > 0 && agentsByTeam ? (

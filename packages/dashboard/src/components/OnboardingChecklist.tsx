@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Check, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, X, ChevronDown, ChevronUp, Rocket, ArrowRight } from 'lucide-react';
 
 interface ChecklistItem {
   id: string;
@@ -29,6 +29,9 @@ interface OnboardingChecklistProps {
   data: OnboardingData;
   dismissed?: boolean;
   onDismiss?: () => void;
+  /** Called when user clicks "Start Phase 1" — dispatches to builder agent */
+  onStartPhase1?: () => void;
+  startingPhase?: boolean;
 }
 
 const DEFAULT_CHECKLIST: ChecklistItem[] = [
@@ -87,13 +90,13 @@ const SEED_CHECKLIST: ChecklistItem[] = [
   {
     id: 'first-task',
     label: 'Start Phase 1',
-    description: 'Hit "Start Phase 1" on the build plan card below to kick things off.',
+    description: 'Kick off the first phase of your build plan.',
     href: '/',
     check: (d) => d.firstTaskSent === true,
   },
 ];
 
-export function OnboardingChecklist({ data, dismissed, onDismiss }: OnboardingChecklistProps) {
+export function OnboardingChecklist({ data, dismissed, onDismiss, onStartPhase1, startingPhase }: OnboardingChecklistProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   if (dismissed) return null;
@@ -158,6 +161,43 @@ export function OnboardingChecklist({ data, dismissed, onDismiss }: OnboardingCh
         <div className="border-t border-slate-800">
           {checklist.map((item) => {
             const done = item.check(data);
+            const isPhase1 = item.id === 'first-task' && isSeed;
+
+            // "Start Phase 1" row: inline actions instead of a link
+            if (isPhase1 && !done) {
+              return (
+                <div
+                  key={item.id}
+                  className="flex items-center gap-3 px-4 py-3 border-b border-slate-800 last:border-b-0"
+                >
+                  <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 bg-slate-800 border border-slate-700" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white">{item.label}</p>
+                    <p className="text-xs text-slate-500 truncate">{item.description}</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {onStartPhase1 && (
+                      <button
+                        type="button"
+                        onClick={onStartPhase1}
+                        disabled={startingPhase}
+                        className="px-3 py-1.5 bg-green-600 hover:bg-green-500 disabled:opacity-60 text-white rounded-md text-xs font-medium transition-colors flex items-center gap-1.5"
+                      >
+                        <Rocket size={12} />
+                        {startingPhase ? 'Starting...' : 'Start Phase 1'}
+                      </button>
+                    )}
+                    <Link
+                      href="/knowledge?file=build-plan.md"
+                      className="flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300 transition-colors"
+                    >
+                      View Plan <ArrowRight size={12} />
+                    </Link>
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <Link
                 key={item.id}
