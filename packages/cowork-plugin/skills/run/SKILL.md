@@ -1,46 +1,57 @@
 ---
 name: run
-description: Run an ABF agent session manually. Triggers a specific agent to execute a task. Use when the user wants to test an agent, run it on demand, or trigger a specific task.
+description: Run a specific agent with a task. Launches the agent directly using claude --agent or delegates to it in the current session. Use when the user wants to trigger a specific agent.
 argument-hint: "<agent-name> [task description]"
 disable-model-invocation: true
 ---
 
-# Run ABF Agent
+# Run Agent
 
-Manually trigger an agent session in the ABF runtime.
+Trigger a specific agent to execute a task.
 
 ## Steps
 
 1. **Parse arguments**: Extract agent name and optional task from `$ARGUMENTS`.
 
-2. **Verify the agent exists** by checking for `agents/<name>.agent.yaml`.
+2. **Verify the agent exists** — Check for `.claude/agents/<name>.md`.
 
-3. **Check if ABF runtime is running** by checking if port 3000 (or the configured gateway port) is active:
+3. **Two options for running**:
 
-```bash
-curl -s http://localhost:3000/api/agents 2>/dev/null
+### Option A: Delegate within current session
+
+If already in a Claude session, delegate to the agent:
+
+```
+Use the <agent-name> agent to <task description>
 ```
 
-4. **If runtime is running**, trigger via the API:
+Claude will automatically invoke the sub-agent.
+
+### Option B: Run directly via CLI
+
+For standalone execution or automation:
 
 ```bash
-curl -X POST http://localhost:3000/api/agents/<agent-name>/run \
-  -H "Content-Type: application/json" \
-  -d '{"task": "<task description or default from manual trigger>"}'
+claude --agent <agent-name> --message "<task description>"
 ```
 
-5. **If runtime is NOT running**, tell the user to start it first:
-   - Run `/abf:dev` to start the development server
-   - Or run `npx abf dev` in a terminal
-
-6. **Show the response** — session ID, status, and any output.
-
-## Alternative: Push to Inbox
-
-If the user wants to queue a task rather than run immediately:
+For headless (no interactive prompts):
 
 ```bash
-curl -X POST http://localhost:3000/api/agents/<agent-name>/inbox \
-  -H "Content-Type: application/json" \
-  -d '{"task": "<task>", "priority": "normal", "source": "manual"}'
+claude --agent <agent-name> --message "<task description>" --headless
+```
+
+4. **Show the user** both options and recommend Option A for interactive use, Option B for automation/testing.
+
+## Examples
+
+```bash
+# Interactive
+claude --agent scout --message "Research competitor pricing for Q1 2026"
+
+# Headless (for cron/CI)
+claude --agent atlas --message "Generate weekly performance report" --headless
+
+# With output capture
+claude --agent writer --message "Draft blog post about our product launch" --headless > output.md
 ```

@@ -1,14 +1,14 @@
 ---
 name: seed
-description: Analyze a business plan, idea document, or seed text and design a complete AI agent team to run the business. Use when the user has a business document, plan, pitch deck text, or business idea they want to turn into an ABF agent team.
+description: Analyze a business plan or idea and generate a complete team of Cowork sub-agents to help run the business. Use when the user has a business document, plan, pitch deck, or business idea they want to turn into an AI-powered team.
 argument-hint: "[paste text or file path]"
 context: fork
 agent: business-architect
 ---
 
-# Seed-to-Company Analysis
+# Seed-to-Team: Design a Business Agent Team
 
-You have been given a business document or idea to analyze. Your job is to design a complete ABF agent team to operate this business.
+You've been given a business document or idea. Your job is to design a complete team of Claude Cowork sub-agents that a solo founder can use to operate this business.
 
 ## Input
 
@@ -16,127 +16,152 @@ The user's business document or idea:
 
 $ARGUMENTS
 
-## Analysis Process
+## What You're Building
 
-1. **Extract company info**: name, description, mission, target customer, revenue model, industry, stage (idea/pre-launch/launched/growing/established)
+You are NOT generating config files for a separate runtime. You are generating **Cowork sub-agent markdown files** — each one becomes a specialist that Claude delegates work to natively. No server, no dashboard, no deployment. The founder talks to Claude, and Claude delegates to the right agent.
 
-2. **Design the agent team** (typically 4-8 agents). For each agent, define:
-   - `name` (snake_case, e.g., `content-writer`)
-   - `display_name` (human-readable)
-   - `role` (job title)
-   - `role_archetype` (one of: researcher, writer, orchestrator, analyst, customer-support, developer, marketer, finance, monitor, generalist)
-   - `description` (what this agent does)
-   - `charter` (detailed identity prompt — who they are, responsibilities, working style)
-   - `provider` and `model` (default: anthropic / claude-sonnet-4-6)
-   - `temperature` (0.1-0.7 depending on role)
-   - `tools` (from ABF built-in tools — see reference below)
-   - `triggers` (cron, manual, message, webhook, heartbeat)
-   - `behavioral_bounds` (allowed/forbidden actions, cost limits, approval requirements)
-   - `kpis` (metrics to track)
+## Architecture
 
-3. **Always include a Company Architect agent** — meta-agent that reviews the seed doc weekly and evaluates agent coverage vs business needs.
+### The Orchestrator Pattern
 
-4. **Structure teams** — Group agents into 1-3 teams. Every team needs an orchestrator.
+Every team needs a **main agent** (the orchestrator). This is the agent the founder runs with `claude --agent`. It:
+- Understands the full business context
+- Decides which specialist to delegate to
+- Can run multiple specialists in parallel
+- Synthesizes results back to the founder
+- Uses `Agent(specialist1, specialist2, ...)` to control which sub-agents it can spawn
 
-5. **Identify knowledge files** — What company knowledge should be documented (company overview, brand voice, product details, processes).
+### Specialists
 
-6. **Identify tool gaps** — Capabilities mentioned in the doc that don't map to built-in ABF tools.
+Each specialist is a Cowork sub-agent with:
+- A focused system prompt (their "charter")
+- Specific tool access (least privilege)
+- A model choice (Haiku for routine, Sonnet for analysis, Opus for strategy)
+- Persistent memory (`memory: project`) to learn over time
 
-7. **Suggest workflows** — Multi-agent coordination patterns (e.g., content pipeline, customer onboarding).
+## Design Process
 
-## Output Format
+1. **Extract company info**: name, description, mission, target customer, revenue model, industry, stage
 
-After analysis, generate the actual YAML files:
+2. **Design the agent team** (typically 4-8 agents). For each:
+   - Pick a role and archetype
+   - Write a rich system prompt (20-40 lines)
+   - Select tools (Cowork native: Read, Write, Edit, Bash, Glob, Grep, WebSearch, WebFetch + any MCP servers)
+   - Choose model (haiku for routine monitoring, sonnet for most work, opus for strategic planning)
+   - Enable memory if the agent should learn over time
 
-1. One `*.agent.yaml` file per agent in `agents/`
-2. One `*.team.yaml` file per team in `teams/`
-3. Knowledge markdown files in `knowledge/`
-4. A summary of tool gaps (if any) in `knowledge/tool-gaps.md`
-5. Workflow YAML files in `workflows/` (if applicable)
+3. **Always include a Company Architect agent** — reviews the business weekly for coverage gaps
 
-## Available ABF Tools
+4. **Design the orchestrator** — coordinates all agents via `Agent(member1, member2, ...)`
 
-- web-search, web-fetch, browse — Web access
-- knowledge-search — Search company knowledge base and agent memory
-- send-message — Inter-agent and external messaging (Slack, Discord, dashboard)
-- email-send — Send emails via Resend or SMTP
-- database-query (SELECT only), database-write (INSERT/UPDATE/DELETE) — Business database
-- file-read, file-write — Project filesystem access
-- data-transform — JSON/CSV transformation
-- image-render — HTML/CSS to PNG/JPEG
-- social-publish — Social media via Buffer
-- stripe-billing — Stripe payments
-- github-ci — GitHub repos and CI/CD
-- calendar — Events and scheduling
-- privacy-ops — GDPR/CCPA compliance
-- plan-task — Task decomposition
-- ask-human — Request human input inline
-- app-generate — Generate UI with v0
-- app-deploy — Deploy to Vercel
-- backend-provision — Provision Supabase backends
-- code-generate — Generate code via Claude Code headless
-- reschedule — Self-reschedule for future activation
+5. **Create knowledge files** — company overview, brand voice, processes
 
-## Role Archetypes (provide default tools and temperature)
+6. **Create an automation guide** — how to run agents on schedules using `claude --agent` + cron
 
-- researcher: temp 0.3, tools [web-search, knowledge-search]
-- writer: temp 0.7, tools [knowledge-search, image-render]
-- orchestrator: temp 0.2, tools [send-message, knowledge-search]
-- analyst: temp 0.2, tools [database-query, knowledge-search]
-- customer-support: temp 0.4, tools [send-message, knowledge-search, database-query, email-send, privacy-ops]
-- developer: temp 0.3, tools [knowledge-search, github-ci, app-generate, app-deploy, backend-provision, code-generate]
-- marketer: temp 0.6, tools [web-search, knowledge-search, send-message, email-send, image-render, social-publish]
-- finance: temp 0.1, tools [database-query, knowledge-search, stripe-billing, privacy-ops]
-- monitor: temp 0.1, tools [web-search, knowledge-search, send-message]
-- generalist: temp 0.4, tools [knowledge-search]
+## Output: File Generation
 
-## Agent YAML Format
+Generate these files in the project:
 
-```yaml
-name: scout
-display_name: Research & Analytics
-role: Market Researcher
-description: Monitors market trends and competitor activity.
-role_archetype: researcher
-provider: anthropic
-model: claude-sonnet-4-6
-temperature: 0.3
-team: product
-reports_to: atlas
-tools: [web-search, knowledge-search, database-query]
-triggers:
-  - type: cron
-    schedule: '0 */4 * * *'
-    task: market_scan
-  - type: message
-    from: atlas
-    task: on_demand_research
-  - type: manual
-    task: manual_research
-escalation_rules:
-  - condition: api_costs > budget_threshold
-    target: human
-    message: Research budget exceeded
-behavioral_bounds:
-  allowed_actions: [read_data, write_report, search_web]
-  forbidden_actions: [delete_data, modify_billing, send_client_email]
-  max_cost_per_session: "$2.00"
-  requires_approval: [publish_content]
-kpis:
-  - metric: research_reports_produced
-    target: "5 per week"
-    review: weekly
-charter: |
-  # Scout — Market Researcher
-  You are Scout, the market research specialist...
+### 1. Sub-agent files in `.claude/agents/`
+
+Each agent is a markdown file:
+
+```markdown
+---
+name: <kebab-case>
+description: <When Claude should use this agent. Be specific. Include "Use proactively" if appropriate.>
+model: <haiku|sonnet|opus>
+tools: <comma-separated Cowork tools>
+memory: project
+---
+
+<System prompt / charter — 20-40 lines covering identity, responsibilities, working style, boundaries>
 ```
 
-## Team YAML Format
+### 2. The orchestrator in `.claude/agents/`
 
-```yaml
-name: product
-display_name: Product Team
-description: Handles product strategy, research, and development.
-orchestrator: atlas
-members: [scout, builder, writer]
+```markdown
+---
+name: atlas
+description: Business orchestrator for <company>. Coordinates all business agents, prioritizes work, synthesizes outputs. Use proactively for any business-related request.
+model: sonnet
+tools: Agent(scout, writer, analyst, ...), Read, Write, Bash, Glob, Grep
+memory: project
+---
+
+# Atlas — Business Orchestrator for <Company>
+
+You are Atlas, the orchestrator for <Company>. ...
+
+## Your Team
+- **Scout** — <role>. Delegate research and monitoring tasks.
+- **Writer** — <role>. Delegate content creation.
+...
+
+## How to Work
+1. Determine which agent(s) should handle the request
+2. Delegate with clear, specific instructions
+3. Run agents in parallel when tasks are independent
+4. Synthesize results into actionable summaries
+5. Update your memory with decisions and learnings
 ```
+
+### 3. Knowledge files in `knowledge/`
+
+- `knowledge/company.md` — Company overview, mission, target customer
+- `knowledge/brand-voice.md` — Tone, style, do's and don'ts
+- Domain-specific knowledge files as needed
+
+### 4. An automation guide at `AGENTS.md`
+
+```markdown
+# Running Your Agent Team
+
+## Interactive (default)
+Talk to Claude in Cowork. It delegates to the right agent automatically.
+
+## Run the orchestrator directly
+claude --agent atlas
+
+## Headless (automated via cron or CI)
+# Daily market research at 9am
+0 9 * * * claude --agent atlas --message "Run the daily market scan" --headless
+
+# Weekly content calendar on Monday 10am
+0 10 * * 1 claude --agent atlas --message "Plan this week's content" --headless
+```
+
+## Available Cowork Tools
+
+- **Read, Write, Edit** — File operations
+- **Bash** — Shell commands (run scripts, call APIs, install packages)
+- **Glob, Grep** — File and content search
+- **WebSearch** — Web search
+- **WebFetch** — Fetch URL content
+- **Agent(names...)** — Delegate to sub-agents (orchestrator only)
+- **NotebookEdit** — Jupyter notebooks
+- MCP servers for external services (Stripe, Slack, databases, email)
+
+## Role Archetypes
+
+| Archetype | Model | Tools | Best For |
+|-----------|-------|-------|----------|
+| researcher | sonnet | Read, Grep, Glob, WebSearch, WebFetch, Bash | Market research, competitor analysis |
+| writer | sonnet | Read, Write, Edit, Glob, WebSearch | Content, copy, emails |
+| orchestrator | sonnet | Agent(...), Read, Write, Bash, Glob, Grep | Team coordination |
+| analyst | sonnet | Read, Bash, Grep, Glob | Data analysis, reporting |
+| customer-support | haiku | Read, Write, Bash, Grep | Tickets, FAQ, responses |
+| developer | sonnet | Read, Write, Edit, Bash, Glob, Grep | Code, deployments, CI/CD |
+| marketer | sonnet | Read, Write, WebSearch, WebFetch, Bash | Campaigns, SEO, growth |
+| finance | sonnet | Read, Bash, Grep | Revenue, costs, billing |
+| monitor | haiku | Read, WebFetch, WebSearch, Bash | Change detection, alerts |
+| generalist | haiku | Read, Write, Bash | Misc tasks |
+
+## After Generating
+
+Show the founder:
+1. What agents were created and their roles
+2. How to start: "Just talk to Claude — it delegates automatically"
+3. How to run the orchestrator: `claude --agent atlas`
+4. How to automate: cron + `claude --agent` headless
+5. Any capability gaps (services needing MCP servers or API keys)

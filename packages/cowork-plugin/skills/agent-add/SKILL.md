@@ -1,87 +1,80 @@
 ---
 name: agent-add
-description: Add a new AI agent to an ABF project. Scaffolds the agent YAML definition with the right archetype, tools, triggers, and charter. Use when the user wants to add a new agent, create a new AI employee, or expand their agent team.
-argument-hint: "[agent-name] [--archetype <type>] [--team <team>]"
+description: Add a new AI agent to the project. Creates a Cowork sub-agent markdown file with the right archetype, tools, model, and system prompt. Use when the user wants to add a new agent or expand their team.
+argument-hint: "[agent-name] [--archetype <type>]"
 ---
 
-# Add Agent to ABF Project
+# Add Agent to Project
 
-Create a new agent definition for an ABF project.
+Create a new Cowork sub-agent for the project.
 
 ## Steps
 
-1. **Parse arguments**: Extract agent name, archetype, and team from `$ARGUMENTS`. If not provided, ask the user.
+1. **Parse arguments**: Extract agent name and archetype from `$ARGUMENTS`. If not provided, ask the user.
 
-2. **Choose an archetype** (provides default tools, temperature, and charter template):
-   - `researcher` — temp 0.3, tools: web-search, knowledge-search
-   - `writer` — temp 0.7, tools: knowledge-search, image-render
-   - `orchestrator` — temp 0.2, tools: send-message, knowledge-search
-   - `analyst` — temp 0.2, tools: database-query, knowledge-search
-   - `customer-support` — temp 0.4, tools: send-message, knowledge-search, database-query, email-send, privacy-ops
-   - `developer` — temp 0.3, tools: knowledge-search, github-ci, app-generate, app-deploy, backend-provision, code-generate
-   - `marketer` — temp 0.6, tools: web-search, knowledge-search, send-message, email-send, image-render, social-publish
-   - `finance` — temp 0.1, tools: database-query, knowledge-search, stripe-billing, privacy-ops
-   - `monitor` — temp 0.1, tools: web-search, knowledge-search, send-message
-   - `generalist` — temp 0.4, tools: knowledge-search
+2. **Choose an archetype** (determines model and tools):
 
-3. **Determine the agent's role** by asking the user what this agent should do, or infer from the archetype and name.
+   | Archetype | Model | Tools |
+   |-----------|-------|-------|
+   | researcher | sonnet | Read, Grep, Glob, WebSearch, WebFetch, Bash |
+   | writer | sonnet | Read, Write, Edit, Glob, WebSearch |
+   | orchestrator | sonnet | Agent(...), Read, Write, Bash, Glob, Grep |
+   | analyst | sonnet | Read, Bash, Grep, Glob |
+   | customer-support | haiku | Read, Write, Bash, Grep |
+   | developer | sonnet | Read, Write, Edit, Bash, Glob, Grep |
+   | marketer | sonnet | Read, Write, WebSearch, WebFetch, Bash |
+   | finance | sonnet | Read, Bash, Grep |
+   | monitor | haiku | Read, WebFetch, WebSearch, Bash |
+   | generalist | haiku | Read, Write, Bash |
 
-4. **Generate the agent YAML file** at `agents/<name>.agent.yaml`:
+3. **Determine the agent's role** — ask the user what this agent should do, or infer from archetype and name.
 
-```yaml
-name: <agent-name>
-display_name: <Human Readable Name>
-role: <Job Title>
-description: <One-line description>
-role_archetype: <archetype>
-provider: anthropic
-model: claude-sonnet-4-6
-temperature: <from archetype or custom>
-team: <team-name>
-reports_to: <orchestrator-name or null>
-tools: <merged archetype defaults + role-specific tools>
-triggers:
-  - type: manual
-    task: <default_task>
-  # Add cron/message/webhook triggers as appropriate
-escalation_rules:
-  - condition: session_cost > budget
-    target: human
-    message: Session cost exceeded budget
-behavioral_bounds:
-  allowed_actions: <from archetype + role-specific>
-  forbidden_actions: <from archetype + role-specific>
-  max_cost_per_session: "$2.00"
-  requires_approval: <actions needing human sign-off>
-kpis:
-  - metric: <relevant metric>
-    target: <target value>
-    review: weekly
-charter: |
-  # <Name> — <Role>
-  You are <Name>, the <role description>...
+4. **Read existing agents** in `.claude/agents/` to understand the current team and avoid overlap.
 
-  ## Core Responsibilities
-  - ...
+5. **Generate the sub-agent file** at `.claude/agents/<name>.md`:
 
-  ## Working Style
-  - ...
+```markdown
+---
+name: <kebab-case>
+description: <When should Claude delegate to this agent? Be specific.>
+model: <haiku|sonnet|opus>
+tools: <comma-separated Cowork tools>
+memory: project
+---
+
+# <Name> — <Role>
+
+You are <Name>, the <role> for this business.
+
+## Core Responsibilities
+- <Specific responsibility>
+- <Specific responsibility>
+- <Specific responsibility>
+
+## Working Style
+- <How they approach work>
+- <Quality standards>
+
+## Knowledge Access
+- Read `knowledge/company.md` for company context
+- Check your memory for past learnings before starting
+- Update your memory after completing significant tasks
+
+## Boundaries
+- <What to escalate to the founder>
+- <What to never do>
 ```
 
-5. **Create memory directory** at `memory/agents/<name>/` with:
-   - `charter.md` — Copy of the charter
-   - `history.md` — Empty (will be appended to by the runtime)
+6. **Update the orchestrator** — read `.claude/agents/atlas.md` (or the orchestrator) and add the new agent to its `tools: Agent(...)` list and team description.
 
-6. **Update team file** if a team was specified — add the agent to the team's `members` list.
+7. **Update `AGENTS.md`** — add the new agent to the team roster.
 
-7. **Report** what was created and suggest next steps.
+8. **Report** what was created.
 
 ## Rules
 
-- Agent name must be kebab-case (e.g., `content-writer`, not `contentWriter`)
-- File must be `agents/<name>.agent.yaml` — this naming convention is required
-- All YAML field names use snake_case
-- The charter should be a detailed identity prompt (at least 10-15 lines)
-- Default provider is `anthropic`, default model is `claude-sonnet-4-6`
-- Always include at least a `manual` trigger so the agent can be run on demand
-- `reports_to` should reference the team's orchestrator agent (or null if standalone)
+- Agent name must be kebab-case (e.g., `content-writer`)
+- File goes in `.claude/agents/<name>.md`
+- System prompt should be at least 15-20 lines
+- Always update the orchestrator's `Agent(...)` list when adding a new agent
+- Choose the cheapest model that can do the job (haiku for routine, sonnet for complex)

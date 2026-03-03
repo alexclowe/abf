@@ -1,71 +1,79 @@
 ---
 name: deploy
-description: Deploy an ABF project to production. Generates Docker or cloud deployment configuration. Use when the user wants to deploy, ship, or host their ABF business.
-argument-hint: "[--target docker|railway|fly]"
+description: Set up automated agent execution for production. Configure cron jobs, CI/CD pipelines, or cloud functions to run agents on a schedule. Use when the user wants to automate their agents.
+argument-hint: "[--target cron|github-actions|fly]"
 disable-model-invocation: true
 ---
 
-# Deploy ABF Project
+# Deploy Agent Automation
 
-Generate deployment configuration for an ABF project.
+Set up automated, scheduled execution of your business agents.
 
 ## Steps
 
-1. **Verify the project** — Check `abf.config.yaml` exists and is valid.
+1. **Verify the project** — Check `.claude/agents/` exists with agent files.
 
-2. **Choose deployment target** from `$ARGUMENTS` or ask the user:
-   - **Docker** (recommended) — `docker compose up`, single container
-   - **Railway** — One-click cloud deploy
-   - **Fly.io** — Edge deployment
+2. **Choose a deployment target** from `$ARGUMENTS` or ask:
+   - **Cron** (simplest) — Local crontab for scheduled tasks
+   - **GitHub Actions** — CI/CD based scheduling
+   - **Fly.io / Railway** — Cloud-hosted automation
 
-3. **For Docker deployment**, generate:
+3. **For Cron** (recommended for solo founders):
 
-   **`Dockerfile`**:
-   ```dockerfile
-   FROM node:20-slim
-   WORKDIR /app
-   COPY package.json pnpm-lock.yaml ./
-   RUN corepack enable && pnpm install --frozen-lockfile --prod
-   COPY . .
-   RUN pnpm build
-   EXPOSE 3000
-   CMD ["node", "node_modules/.bin/abf", "dev"]
-   ```
-
-   **`docker-compose.yaml`**:
-   ```yaml
-   services:
-     abf:
-       build: .
-       ports:
-         - "3000:3000"
-       volumes:
-         - ./memory:/app/memory
-         - ./outputs:/app/outputs
-         - ./logs:/app/logs
-       env_file: .env
-       restart: unless-stopped
-   ```
-
-   **`.env.example`**:
-   ```
-   ANTHROPIC_API_KEY=sk-ant-...
-   # OPENAI_API_KEY=sk-...
-   # OLLAMA_BASE_URL=http://localhost:11434
-   ```
-
-4. **For production**, recommend updating `abf.config.yaml`:
-   - `storage.backend: postgres` with a connection string
-   - `bus.backend: redis` with a Redis URL
-   - `logging.format: json` for structured logging
-   - `security.auditLogging: true`
-
-5. **Warn about**:
-   - API keys must be set as environment variables (never committed)
-   - Memory directory should be persisted (volume mount)
-   - Consider `maxConcurrentSessions` for production load
-
-6. **Show deployment command**:
+   Create `scripts/cron-setup.sh`:
    ```bash
-   docker compose up -d
+   #!/bin/bash
+   PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+   # Write crontab entries
+   (crontab -l 2>/dev/null; cat << EOF
+   # ABF Agent Automation
+   # Daily standup at 9am
+   0 9 * * * cd $PROJECT_DIR && claude --agent atlas --message "Daily standup" --headless >> logs/daily.log 2>&1
+   # Weekly review on Monday 10am
+   0 10 * * 1 cd $PROJECT_DIR && claude --agent atlas --message "Weekly business review" --headless >> logs/weekly.log 2>&1
+   EOF
+   ) | crontab -
    ```
+
+4. **For GitHub Actions**:
+
+   Create `.github/workflows/agents.yml`:
+   ```yaml
+   name: Agent Automation
+   on:
+     schedule:
+       - cron: '0 9 * * *'    # Daily at 9am UTC
+       - cron: '0 10 * * 1'   # Monday at 10am UTC
+     workflow_dispatch:
+       inputs:
+         task:
+           description: 'Task for the orchestrator'
+           required: true
+
+   jobs:
+     run-agent:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v4
+         - name: Install Claude Code
+           run: npm install -g @anthropic-ai/claude-code
+         - name: Run agent
+           env:
+             ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+           run: |
+             if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+               claude --agent atlas --message "${{ inputs.task }}" --headless
+             elif [ "${{ github.event.schedule }}" = "0 9 * * *" ]; then
+               claude --agent atlas --message "Daily standup" --headless
+             else
+               claude --agent atlas --message "Weekly business review" --headless
+             fi
+   ```
+
+5. **Create `logs/` directory** and add to `.gitignore`.
+
+6. **Remind the user**:
+   - Set `ANTHROPIC_API_KEY` as a secret in GitHub or environment variable
+   - Agent memory persists in `.claude/agent-memory/` (commit this for continuity)
+   - Review logs regularly for quality

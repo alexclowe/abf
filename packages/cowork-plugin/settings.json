@@ -1,3 +1,14 @@
 {
-  "agent": "business-architect"
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "WebSearch",
+      "WebFetch",
+      "Agent(business-architect)",
+      "Agent(agent-designer)",
+      "Agent(seed-reviewer)"
+    ]
+  }
 }

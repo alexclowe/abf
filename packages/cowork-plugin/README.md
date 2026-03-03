@@ -1,115 +1,146 @@
 # ABF Plugin for Claude Cowork
 
-Build and run AI-powered companies from Claude. This plugin brings the [Agentic Business Framework (ABF)](https://github.com/alexclowe/abf) into Claude Code and Cowork, letting you design agent teams, analyze business plans, and manage ABF projects without leaving your conversation.
+Turn a business idea into a team of AI agents that run in Claude. No server, no dashboard, no deployment — just Claude as your business operating system.
 
-## What is ABF?
+## What This Does
 
-ABF is a framework where AI agents ARE the employees. Each agent has a role, tools, memory, triggers, and behavioral bounds. Agents are organized into teams with orchestrators, communicate via a message bus, and are defined in YAML files that are git-trackable and human-readable.
+ABF (Agentic Business Framework) designs teams of AI agents that help solo founders run businesses. This plugin makes Cowork the runtime: agents are native Claude sub-agents with persistent memory, the orchestrator delegates work across the team, and automation runs via `claude --agent` + cron.
+
+## How It Works
+
+```
+You: "I'm building a fitness coaching platform for busy professionals"
+
+Claude → business-architect agent → designs your team:
+
+.claude/agents/
+├── atlas.md          # Orchestrator — coordinates everything
+├── scout.md          # Researcher — market analysis, competitors
+├── writer.md         # Content creator — blog posts, emails
+├── analyst.md        # Data analyst — metrics, reporting
+├── coach-ai.md       # Domain expert — coaching methodology
+└── architect.md      # Meta-agent — weekly business review
+
+knowledge/
+├── company.md        # Your business context
+└── brand-voice.md    # How your brand communicates
+```
+
+Then just talk to Claude. It delegates to the right agent automatically.
 
 ## Installation
 
-### From a marketplace
-
-```
-/plugin install abf
-```
-
-### Local development
-
 ```bash
+# Local development
 claude --plugin-dir ./packages/cowork-plugin
+
+# Or install from registry (future)
+/plugin install abf
 ```
 
 ## Skills (Slash Commands)
 
 | Command | Description |
 |---------|-------------|
-| `/abf:init [name]` | Initialize a new ABF project with directory structure and config |
-| `/abf:seed [text]` | Analyze a business plan and design a complete agent team |
-| `/abf:agent-add [name]` | Add a new agent to the project |
-| `/abf:status` | Show project overview — agents, teams, workflows, issues |
-| `/abf:run <agent>` | Trigger an agent session via the runtime API |
-| `/abf:dev` | Start the ABF development server |
-| `/abf:workflow-add [name]` | Create a multi-agent workflow |
-| `/abf:deploy [--target]` | Generate deployment configuration |
+| `/abf:init [name]` | Initialize a new project with an orchestrator agent |
+| `/abf:seed [text]` | Analyze a business plan → generate full agent team |
+| `/abf:agent-add [name]` | Add a new agent to the team |
+| `/abf:status` | Show team roster, knowledge files, issues |
+| `/abf:run <agent>` | Run a specific agent with a task |
+| `/abf:dev` | Show how to use agents (interactive, headless, cron) |
+| `/abf:workflow-add [name]` | Create a multi-agent workflow script |
+| `/abf:deploy [--target]` | Set up automation (cron, GitHub Actions) |
 
 ## Sub-agents
 
-Claude automatically delegates to these specialized agents when appropriate:
+| Agent | Model | Purpose |
+|-------|-------|---------|
+| **business-architect** | Opus | Designs complete agent teams from business docs |
+| **agent-designer** | Sonnet | Fine-tunes individual agent configs |
+| **seed-reviewer** | Sonnet | Reviews business plans for completeness |
 
-| Agent | Purpose |
-|-------|---------|
-| **business-architect** | Designs complete agent teams from business documents. Runs on Opus for maximum capability. |
-| **agent-designer** | Fine-tunes individual agent configs with detailed charters and behavioral bounds. |
-| **seed-reviewer** | Reviews business plans for completeness before analysis. |
-
-## Auto-loaded Knowledge
-
-The **abf-conventions** skill is automatically loaded by Claude when you're working with ABF files. It teaches Claude the YAML schemas, naming conventions, security rules, and common patterns so it produces correct ABF configurations without you having to explain the format.
-
-## Hooks
-
-- **PostToolUse (Write|Edit)**: Validates `*.agent.yaml` files after creation or modification. Checks for required fields, kebab-case naming, valid archetypes, and temperature ranges.
-
-## Example Workflow
+## Example: Full Workflow
 
 ```
-You: /abf:init my-coaching-business
+# 1. Start a project
+/abf:init my-coaching-biz
 
-You: /abf:seed
-     I'm building an AI-powered fitness coaching platform. We offer
-     personalized workout plans, nutrition guidance, and progress tracking.
-     Revenue is $29/month subscription. Target market is busy professionals
-     aged 25-45 who want to stay fit but don't have time for a gym.
+# 2. Feed it your business plan
+/abf:seed
+I'm building an AI-powered fitness coaching platform. We offer
+personalized workout plans, nutrition guidance, and progress tracking.
+$29/month subscription. Target: busy professionals aged 25-45.
 
-Claude: [Uses business-architect agent to design a 6-agent team]
-        Created:
-        - agents/atlas.agent.yaml (Orchestrator)
-        - agents/coach.agent.yaml (Fitness Coach)
-        - agents/nutritionist.agent.yaml (Nutrition Advisor)
-        - agents/writer.agent.yaml (Content Creator)
-        - agents/scout.agent.yaml (Market Researcher)
-        - agents/architect.agent.yaml (Company Architect)
-        - teams/coaching.team.yaml
-        - knowledge/company.md
-        - knowledge/brand-voice.md
-        - knowledge/fitness-methodology.md
+# 3. Claude generates your agent team (6 agents, knowledge files, AGENTS.md)
 
-You: /abf:agent-add sales-rep --archetype marketer --team coaching
+# 4. Start using it — just talk
+"What are our competitors charging?"          → Scout handles it
+"Draft a launch email"                        → Writer handles it
+"What should I focus on this week?"           → Atlas coordinates all agents
 
-You: /abf:dev
+# 5. Automate recurring tasks
+/abf:deploy --target cron
 ```
 
-## Project Structure Created
+## Three Ways to Use Your Agents
+
+### 1. Interactive (Cowork)
+Just talk to Claude. It reads your `.claude/agents/` definitions and delegates automatically.
+
+### 2. Direct (CLI)
+```bash
+claude --agent atlas                              # Interactive with orchestrator
+claude --agent scout --message "Research X"        # Direct to specialist
+```
+
+### 3. Automated (Headless)
+```bash
+# In crontab:
+0 9 * * * claude --agent atlas --message "Daily standup" --headless
+0 10 * * 1 claude --agent atlas --message "Weekly review" --headless
+```
+
+## Agent Memory
+
+Agents with `memory: project` accumulate knowledge over time in `.claude/agent-memory/<name>/`. The more you use them, the better they get at understanding your business.
+
+## Project Structure
 
 ```
-my-coaching-business/
-├── abf.config.yaml          # Global configuration
-├── agents/                   # Agent YAML definitions
-│   ├── atlas.agent.yaml
-│   ├── coach.agent.yaml
-│   └── ...
-├── teams/                    # Team definitions
-│   └── coaching.team.yaml
-├── knowledge/                # Shared knowledge base
+my-business/
+├── .claude/
+│   ├── agents/                 # Your AI team
+│   │   ├── atlas.md            # Orchestrator
+│   │   ├── scout.md            # Researcher
+│   │   ├── writer.md           # Content creator
+│   │   └── ...
+│   └── agent-memory/           # Persistent learnings (auto-managed)
+│       ├── atlas/
+│       ├── scout/
+│       └── ...
+├── knowledge/                  # Shared business context
 │   ├── company.md
 │   └── brand-voice.md
-├── workflows/                # Multi-agent workflows
-├── memory/                   # Agent memory (append-only)
-├── outputs/                  # Session outputs
-├── tools/                    # Custom tools + MCP configs
-├── datastore/                # Business database
-├── monitors/                 # External URL monitors
-├── templates/messages/       # Message templates
-├── logs/                     # Audit trail
-└── interfaces/               # Plugin configs (Slack, email)
+├── data/                       # Reports, outputs, exports
+├── scripts/                    # Workflow scripts
+├── logs/                       # Automation logs
+├── AGENTS.md                   # Team guide + automation setup
+├── CLAUDE.md                   # Project instructions
+└── .gitignore
 ```
 
-## Requirements
+## Why Cowork as the Runtime?
 
-- Claude Code v1.0.33+
-- Node.js 20+ (for running the ABF runtime)
-- An LLM provider API key (Anthropic, OpenAI, or Ollama for local)
+Traditional multi-agent frameworks require you to run a server, manage a scheduler, configure a message bus, and build a dashboard. For a solo founder, that's overhead. Cowork already has:
+
+- **Sub-agents** → Your AI employees
+- **Persistent memory** → Agents learn over time
+- **`Agent()` tool** → Orchestrator delegates to specialists
+- **`claude --agent`** → Headless execution for automation
+- **Background tasks** → Parallel agent execution
+- **Git worktrees** → Isolated agent workspaces
+
+ABF's job is to design the right team and encode the business knowledge. Cowork's job is to run it.
 
 ## License
 

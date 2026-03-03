@@ -1,72 +1,93 @@
 ---
 name: abf-conventions
-description: ABF project conventions and YAML schema reference. Loaded automatically when working with ABF agent definitions, team configs, or workflow files. Use when editing *.agent.yaml, *.team.yaml, or *.workflow.yaml files.
+description: ABF project conventions for Cowork sub-agents. Loaded automatically when working with agent definitions or knowledge files. Use when editing .claude/agents/*.md or knowledge/*.md files.
 user-invocable: false
 ---
 
-# ABF Conventions
+# ABF Conventions for Cowork
 
-When working in an ABF project (identified by the presence of `abf.config.yaml`), follow these conventions.
+When working in a project with business agents (identified by `.claude/agents/` containing agent markdown files), follow these conventions.
 
-## File Naming
+## File Layout
 
-- Agent definitions: `agents/<name>.agent.yaml` — name is kebab-case
-- Team definitions: `teams/<name>.team.yaml`
-- Workflow definitions: `workflows/<name>.workflow.yaml`
-- Monitor definitions: `monitors/<name>.monitor.yaml`
-- Custom tools: `tools/<name>.tool.yaml` (definition) + `tools/<name>.tool.ts` (implementation)
-- MCP servers: `tools/mcp-servers.yaml`
-- Message templates: `templates/messages/<name>.template.yaml`
+- Agent definitions: `.claude/agents/<name>.md` — kebab-case name
 - Knowledge files: `knowledge/<name>.md`
-- Agent memory: `memory/agents/<name>/charter.md` and `memory/agents/<name>/history.md`
+- Agent memory: `.claude/agent-memory/<name>/` (auto-managed by Cowork)
+- Workflow scripts: `scripts/<name>.sh`
+- Business data: `data/`
+- Logs: `logs/`
+- Project context: `CLAUDE.md`
+- Team guide: `AGENTS.md`
 
-## YAML Field Naming
+## Sub-Agent Frontmatter
 
-All YAML files use **snake_case** for field names (e.g., `display_name`, `role_archetype`, `reports_to`, `max_cost_per_session`). The TypeScript runtime converts these to camelCase internally.
+Every agent file must have YAML frontmatter with:
 
-## Agent YAML Required Fields
+**Required:**
+- `name` — kebab-case identifier
+- `description` — When Claude should delegate to this agent (be specific!)
 
-- `name` (string, kebab-case)
-- `display_name` (string)
-- `role` (string)
-- `description` (string)
+**Recommended:**
+- `model` — haiku, sonnet, or opus (default: inherit from parent)
+- `tools` — Comma-separated Cowork tools
+- `memory` — project (for agents that should learn over time)
 
-## Agent YAML Optional Fields with Defaults
+**Optional:**
+- `background` — true to always run in background
+- `isolation` — worktree for isolated git operations
+- `permissionMode` — default, acceptEdits, dontAsk, bypassPermissions
 
-- `provider`: "anthropic"
-- `model`: "claude-sonnet-4-6"
-- `temperature`: from archetype or undefined
-- `role_archetype`: optional (researcher|writer|orchestrator|analyst|customer-support|developer|marketer|finance|monitor|generalist)
-- `team`: optional team name
-- `reports_to`: optional agent name or null
-- `tools`: [] (array of tool IDs)
-- `triggers`: [] (array of trigger objects)
-- `escalation_rules`: []
-- `behavioral_bounds`: { allowed_actions: [], forbidden_actions: [], max_cost_per_session: "$2.00", requires_approval: [] }
-- `kpis`: []
-- `charter`: "" (multi-line string with agent identity prompt)
+## Tool Selection
 
-## Trigger Types
+Give agents only the tools they need:
 
-- `cron`: { type: cron, schedule: "<5-field cron>", task: "<description>" }
-- `message`: { type: message, from: "<agent-name>", task: "<description>" }
-- `webhook`: { type: webhook, path: "/webhooks/<name>", task: "<description>" }
-- `manual`: { type: manual, task: "<description>" }
-- `heartbeat`: { type: heartbeat, interval: <seconds>, task: "<description>" }
-- `event`: { type: event, event: "<event-name>", task: "<description>" }
+| Role | Typical Tools |
+|------|--------------|
+| Read-only research | Read, Glob, Grep, WebSearch, WebFetch |
+| Content creation | Read, Write, Edit, Glob |
+| Operations / API calls | Read, Write, Bash |
+| Orchestrator | Agent(...), Read, Write, Bash, Glob, Grep |
+| Full access | Read, Write, Edit, Bash, Glob, Grep, WebSearch, WebFetch |
 
-## Security Rules
+## Model Selection
 
-- Agents start with zero permissions — only grant what's needed
-- External-facing actions should use `requires_approval`
-- `forbidden_actions` should always include `delete_data` and `modify_billing` unless explicitly needed
-- `max_cost_per_session` defaults to $2.00 — adjust based on agent complexity
-- Tool access is controlled per-agent — agents cannot install tools at runtime
+- **haiku** — Fast, cheap. Good for: monitoring, lookups, FAQ, routine classification
+- **sonnet** — Balanced. Good for: most work — research, writing, analysis, coding
+- **opus** — Most capable, expensive. Good for: strategic planning, complex analysis
+
+## The Orchestrator
+
+Every project should have one orchestrator agent (typically `atlas`). It:
+- Has `Agent(member1, member2, ...)` in its tools to delegate
+- Understands the full business context
+- Decides which specialist handles each request
+- Synthesizes results from multiple agents
+
+## Knowledge Files
+
+- `knowledge/company.md` — Company overview, mission, customers, revenue model
+- `knowledge/brand-voice.md` — Tone, style, do's and don'ts
+- Additional domain-specific files as needed
+- Agents read these for context — keep them current
+
+## Agent Memory
+
+When `memory: project` is set, the agent gets a persistent directory at `.claude/agent-memory/<name>/`. It uses this to store learnings across sessions. Agents should:
+- Read their memory before starting work
+- Update their memory after significant tasks
+- Curate `MEMORY.md` to stay under 200 lines
+
+## Automation
+
+Agents run via `claude --agent <name>` and can be automated with:
+- Cron jobs for scheduled tasks
+- GitHub Actions for CI/CD-based scheduling
+- Shell scripts for multi-agent workflows
 
 ## Common Patterns
 
-- Every team needs an orchestrator agent
-- Every agent should have at least a `manual` trigger
-- The Company Architect agent is auto-generated for seed-based projects
-- Knowledge files are injected into all agent prompts at session start
-- Agent history (`memory/agents/<name>/history.md`) is append-only
+- Every project needs an orchestrator
+- Use `memory: project` for agents that benefit from learning
+- Include "Use proactively" in the description for auto-delegated agents
+- Knowledge files are shared context — all agents can read them
+- Workflow scripts in `scripts/` coordinate multi-agent processes

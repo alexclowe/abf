@@ -1,116 +1,99 @@
 ---
 name: workflow-add
-description: Create a new multi-agent workflow for an ABF project. Workflows coordinate multiple agents through sequential, parallel, or conditional steps. Use when the user wants to create a workflow, coordinate agents, or automate a multi-step process.
-argument-hint: "[workflow-name] [--template <type>]"
+description: Create a reusable multi-agent workflow. Defines a pattern for coordinating agents through a common business process like content pipelines, customer onboarding, or reporting. Use when the user wants to set up a repeatable multi-step process.
+argument-hint: "[workflow-name]"
 ---
 
-# Add Workflow to ABF Project
+# Add Workflow
 
-Create a new workflow definition that coordinates multiple agents.
+Create a documented workflow that coordinates multiple agents for a recurring business process.
 
 ## Steps
 
-1. **Parse arguments**: Extract workflow name and optional template from `$ARGUMENTS`.
+1. **Parse arguments**: Extract workflow name from `$ARGUMENTS`. If not provided, ask the user.
 
-2. **Choose a template** (or start from scratch):
-   - `fan-out-synthesize` — Send task to multiple agents in parallel, then synthesize results
-   - `sequential-pipeline` — Pass output from one agent to the next in sequence
-   - `event-triggered` — React to an event by coordinating multiple agents
+2. **Ask the user** what this workflow should accomplish and which agents should participate.
 
-3. **Ask the user** what this workflow should accomplish and which agents should participate.
+3. **Read existing agents** from `.claude/agents/` to know what's available.
 
-4. **Read existing agents** from `agents/*.agent.yaml` to know what's available.
+4. **Choose a pattern**:
 
-5. **Generate the workflow YAML** at `workflows/<name>.workflow.yaml`:
+### Pattern A: Fan-out & Synthesize
+Send task to multiple agents in parallel, then have the orchestrator synthesize.
 
-```yaml
-name: <workflow-name>
-display_name: <Human Readable Name>
-description: <What this workflow does>
-timeout: 300000  # 5 minutes
-on_failure: escalate  # stop | skip | escalate
+**Example**: Weekly market report
+1. Scout researches competitors (parallel)
+2. Analyst pulls internal metrics (parallel)
+3. Atlas synthesizes findings into a report
 
-steps:
-  - id: step-1
-    agent: <agent-name>
-    task: <What this agent should do>
-    depends_on: []
+### Pattern B: Sequential Pipeline
+Pass output from one agent to the next.
 
-  - id: step-2
-    agent: <agent-name>
-    task: <What this agent should do, can reference step-1 output>
-    depends_on: [step-1]
+**Example**: Content pipeline
+1. Scout researches the topic
+2. Writer drafts the content
+3. Atlas reviews and finalizes
 
-  # Parallel steps have the same depends_on
-  - id: step-3a
-    agent: <agent-name>
-    task: <Parallel task A>
-    depends_on: [step-2]
+### Pattern C: Conditional
+Different agents handle based on the input type.
 
-  - id: step-3b
-    agent: <agent-name>
-    task: <Parallel task B>
-    depends_on: [step-2]
+**Example**: Customer inquiry routing
+1. Atlas analyzes the inquiry
+2. Routes to Support (issues), Sales (questions), or Writer (content requests)
 
-  - id: step-4
-    agent: <agent-name>
-    task: <Synthesize results from step-3a and step-3b>
-    depends_on: [step-3a, step-3b]
+5. **Generate a workflow script** at `scripts/<workflow-name>.sh`:
+
+```bash
+#!/bin/bash
+# Workflow: <name>
+# Pattern: <fan-out|sequential|conditional>
+# Agents: <list>
+
+set -e
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$PROJECT_DIR"
+
+echo "Running workflow: <name>"
+
+# For sequential:
+claude --agent <agent1> --message "<task 1>" --headless
+claude --agent <agent2> --message "<task 2 using previous output>" --headless
+
+# For parallel (use & and wait):
+claude --agent <agent1> --message "<task A>" --headless &
+claude --agent <agent2> --message "<task B>" --headless &
+wait
+
+# Final synthesis:
+claude --agent atlas --message "<synthesize results>" --headless
 ```
 
-6. **Validate** that all referenced agents exist in the project.
+6. **Document the workflow** in `AGENTS.md` — add a workflows section describing:
+   - What the workflow does
+   - Which agents participate
+   - How to trigger it: `bash scripts/<name>.sh` or via cron
 
-7. **Report** what was created and how to trigger the workflow.
+7. **Make it executable**: `chmod +x scripts/<name>.sh`
 
-## Template: fan-out-synthesize
+8. **Optionally add to cron** if it should run on a schedule.
 
-```yaml
-steps:
-  - id: research-1
-    agent: <researcher>
-    task: Research aspect A
-  - id: research-2
-    agent: <researcher>
-    task: Research aspect B
-  - id: synthesize
-    agent: <orchestrator>
-    task: Synthesize findings from research-1 and research-2
-    depends_on: [research-1, research-2]
+## Example Workflows
+
+### Content Pipeline
+```bash
+#!/bin/bash
+# Weekly content pipeline: research → draft → review
+claude --agent scout --message "Research trending topics in our industry this week" --headless > data/research.md
+claude --agent writer --message "Draft a blog post based on data/research.md" --headless > data/draft.md
+claude --agent atlas --message "Review data/draft.md and finalize for publication" --headless > data/final.md
 ```
 
-## Template: sequential-pipeline
-
-```yaml
-steps:
-  - id: research
-    agent: <researcher>
-    task: Gather information
-  - id: draft
-    agent: <writer>
-    task: Write draft based on research
-    depends_on: [research]
-  - id: review
-    agent: <orchestrator>
-    task: Review and finalize
-    depends_on: [draft]
-```
-
-## Template: event-triggered
-
-```yaml
-triggers:
-  - type: webhook
-    path: /webhooks/workflow-name
-steps:
-  - id: analyze
-    agent: <analyst>
-    task: Analyze incoming event data
-  - id: respond
-    agent: <customer-support>
-    task: Respond based on analysis
-    depends_on: [analyze]
-  - id: log
-    agent: <monitor>
-    task: Log event and response
-    depends_on: [respond]
+### Daily Standup
+```bash
+#!/bin/bash
+# Parallel data gathering, then synthesis
+claude --agent scout --message "What happened in our market today?" --headless > data/market.md &
+claude --agent analyst --message "Pull today's key metrics" --headless > data/metrics.md &
+wait
+claude --agent atlas --message "Generate daily standup from data/market.md and data/metrics.md" --headless
 ```
