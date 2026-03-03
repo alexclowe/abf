@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
-import useSWR from 'swr';
+import { useState, useMemo, useCallback, useEffect, Suspense } from 'react';
+import useSWR, { useSWRConfig } from 'swr';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useEventStream } from '@/lib/use-event-stream';
 import { AgentAvatar } from '@/components/AgentAvatar';
@@ -43,7 +44,24 @@ function parseBuildPlanSummary(content: string): { goal: string; phases: number;
   return { goal: goal || 'Build plan', phases, steps, firstPhaseName: phaseHeadings[0] ?? null };
 }
 
+/** Handles ?fresh=1 query param to force-refresh SWR after setup wizard redirect. */
+function FreshDataReloader() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const { mutate } = useSWRConfig();
+
+  useEffect(() => {
+    if (searchParams.get('fresh') === '1') {
+      void mutate(() => true);
+      router.replace('/');
+    }
+  }, [searchParams, mutate, router]);
+
+  return null;
+}
+
 export default function OverviewPage() {
+  const router = useRouter();
   const { data: stream } = useEventStream();
 
   const sseHasAgents = !!stream?.agents?.[0]?.config;
@@ -110,6 +128,7 @@ export default function OverviewPage() {
         await updateOnboardingState({ first_task_sent: true });
         void mutateConfig();
       }
+      router.push(`/agents/${builderAgent.config.id}/chat`);
     } finally {
       setStartingPhase(false);
     }
@@ -136,6 +155,7 @@ export default function OverviewPage() {
 
   return (
     <div className="p-6 space-y-6">
+      <Suspense><FreshDataReloader /></Suspense>
       {/* Company header */}
       <div className="flex items-center justify-between">
         <div>

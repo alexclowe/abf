@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bot, LayoutDashboard, Users, Bell, ScrollText, Layers, GitBranch, TrendingUp, ShieldCheck, BarChart3, BookOpen, Eye, Mail, Inbox, Settings, MessageSquare, CreditCard } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Bot, LayoutDashboard, Users, Bell, ScrollText, Layers, GitBranch, TrendingUp, ShieldCheck, BarChart3, BookOpen, Eye, Mail, Inbox, Settings, ChevronDown, ChevronRight } from 'lucide-react';
 import clsx from 'clsx';
 import useSWR from 'swr';
 import { getIcon } from '../lib/icon-map';
@@ -16,54 +17,41 @@ interface NavItem {
   external?: boolean;
 }
 
-interface NavGroup {
-  label: string;
-  items: typeof fallbackNav;
-}
-
 const fallbackNav = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
   { href: '/agents', label: 'Agents', icon: Bot },
   { href: '/teams', label: 'Teams', icon: Users },
-  { href: '/workflows', label: 'Workflows', icon: GitBranch },
-  { href: '/knowledge', label: 'Knowledge', icon: BookOpen },
-  { href: '/monitors', label: 'Monitors', icon: Eye },
-  { href: '/message-templates', label: 'Templates', icon: Mail },
+  { href: '/mail', label: 'Mail', icon: Inbox },
   { href: '/approvals', label: 'Approvals', icon: ShieldCheck },
   { href: '/alerts', label: 'Alerts', icon: Bell },
-  { href: '/channels', label: 'Channels', icon: MessageSquare },
+  { href: '/knowledge', label: 'Knowledge', icon: BookOpen },
+  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/workflows', label: 'Workflows', icon: GitBranch },
+  { href: '/monitors', label: 'Monitors', icon: Eye },
+  { href: '/message-templates', label: 'Templates', icon: Mail },
   { href: '/metrics', label: 'Metrics', icon: BarChart3 },
   { href: '/kpis', label: 'KPIs', icon: TrendingUp },
-  { href: '/billing', label: 'Billing', icon: CreditCard },
-  { href: '/settings', label: 'Settings', icon: Settings },
   { href: '/logs', label: 'Logs', icon: ScrollText },
 ];
 
-const fallbackNavGroups: NavGroup[] = [
-  { label: 'Core', items: [
-    { href: '/', label: 'Overview', icon: LayoutDashboard },
-    { href: '/agents', label: 'Agents', icon: Bot },
-    { href: '/teams', label: 'Teams', icon: Users },
-    { href: '/workflows', label: 'Workflows', icon: GitBranch },
-  ]},
-  { label: 'Operations', items: [
-    { href: '/mail', label: 'Mail', icon: Inbox },
-    { href: '/approvals', label: 'Approvals', icon: ShieldCheck },
-    { href: '/alerts', label: 'Alerts', icon: Bell },
-    { href: '/channels', label: 'Channels', icon: MessageSquare },
-    { href: '/message-templates', label: 'Templates', icon: Mail },
-  ]},
-  { label: 'Intelligence', items: [
-    { href: '/knowledge', label: 'Knowledge', icon: BookOpen },
-    { href: '/monitors', label: 'Monitors', icon: Eye },
-    { href: '/kpis', label: 'KPIs', icon: TrendingUp },
-    { href: '/metrics', label: 'Metrics', icon: BarChart3 },
-  ]},
-  { label: 'System', items: [
-    { href: '/settings', label: 'Settings', icon: Settings },
-    { href: '/billing', label: 'Billing', icon: CreditCard },
-    { href: '/logs', label: 'Logs', icon: ScrollText },
-  ]},
+const mainNavItems = [
+  { href: '/', label: 'Overview', icon: LayoutDashboard },
+  { href: '/agents', label: 'Agents', icon: Bot },
+  { href: '/teams', label: 'Teams', icon: Users },
+  { href: '/mail', label: 'Mail', icon: Inbox },
+  { href: '/approvals', label: 'Approvals', icon: ShieldCheck },
+  { href: '/alerts', label: 'Alerts', icon: Bell },
+  { href: '/knowledge', label: 'Knowledge', icon: BookOpen },
+  { href: '/settings', label: 'Settings', icon: Settings },
+];
+
+const advancedNavItems = [
+  { href: '/workflows', label: 'Workflows', icon: GitBranch },
+  { href: '/monitors', label: 'Monitors', icon: Eye },
+  { href: '/message-templates', label: 'Templates', icon: Mail },
+  { href: '/metrics', label: 'Metrics', icon: BarChart3 },
+  { href: '/kpis', label: 'KPIs', icon: TrendingUp },
+  { href: '/logs', label: 'Logs', icon: ScrollText },
 ];
 
 const API_BASE = process.env.NEXT_PUBLIC_ABF_API_URL ?? '';
@@ -74,6 +62,20 @@ const fetcher = (url: string) => fetch(url, {
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Persist Advanced section state in localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem('abf-sidebar-advanced');
+    if (stored === 'true') setShowAdvanced(true);
+  }, []);
+  const toggleAdvanced = () => {
+    setShowAdvanced(prev => {
+      localStorage.setItem('abf-sidebar-advanced', String(!prev));
+      return !prev;
+    });
+  };
+
   const { data: apiNav } = useSWR<NavItem[]>(`${API_BASE}/api/navigation`, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
@@ -159,13 +161,13 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             );
           })
         ) : (
-          /* Fallback: grouped nav with section headers */
-          fallbackNavGroups.map((group) => (
-            <div key={group.label} className="mb-2">
+          /* Fallback: Your Company + collapsible Advanced */
+          <>
+            <div className="mb-2">
               <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
-                {group.label}
+                Your Company
               </div>
-              {group.items.map(({ href, label, icon: Icon }) => {
+              {mainNavItems.map(({ href, label, icon: Icon }) => {
                 const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
                 const badgeCount = href === '/approvals' ? pendingApprovals
                   : href === '/alerts' ? openEscalations
@@ -201,7 +203,36 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 );
               })}
             </div>
-          ))
+            <div className="mb-2">
+              <button
+                type="button"
+                onClick={toggleAdvanced}
+                className="w-full flex items-center gap-1 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600 hover:text-slate-400 transition-colors"
+              >
+                {showAdvanced ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                Advanced
+              </button>
+              {showAdvanced && advancedNavItems.map(({ href, label, icon: Icon }) => {
+                const isActive = pathname.startsWith(href);
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={onNavigate}
+                    className={clsx(
+                      'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+                      isActive
+                        ? 'bg-sky-500/10 text-sky-400 font-medium'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800',
+                    )}
+                  >
+                    <Icon size={16} />
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          </>
         )}
       </nav>
       {bottomItems.length > 0 && (

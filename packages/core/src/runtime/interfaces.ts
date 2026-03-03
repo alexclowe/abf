@@ -54,6 +54,7 @@ export interface IDispatcher {
 	getActiveSessions(): readonly WorkSession[];
 	getAgentState(agentId: AgentId): AgentState | undefined;
 	getSessionResult(sessionId: SessionId): SessionResult | undefined;
+	getCompletedSessionsForAgent(agentId: AgentId): readonly SessionResult[];
 	getEscalations(): readonly EscalationItem[];
 	resolveEscalation(id: string): boolean;
 	getKPIHistory(agentId?: AgentId): readonly KPIReport[];

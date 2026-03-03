@@ -21,6 +21,7 @@ interface InitOptions {
 	name?: string | undefined;
 	seed?: string | undefined;
 	provider?: string | undefined;
+	interactive?: boolean | undefined;
 }
 
 const PROVIDER_MODEL_MAP: Record<string, string> = {
@@ -36,8 +37,148 @@ export async function initCommand(options: InitOptions): Promise<void> {
 		return;
 	}
 
+	// ── Interactive mode (no flags provided) ─────────────────────────
+	if (options.interactive && !options.seed && options.template === 'custom') {
+		await initInteractive(options);
+		return;
+	}
+
 	// ── Template-based init (existing behavior) ──────────────────────
 	await initFromTemplate(options);
+}
+
+// ─── Interactive init ─────────────────────────────────────────────────
+
+async function initInteractive(options: InitOptions): Promise<void> {
+	const { createInterface } = await import('node:readline');
+
+	console.log();
+	console.log(chalk.bold('  Welcome to ABF'));
+	console.log(chalk.dim('  Let\u2019s set up your AI-powered business.\n'));
+
+	const rl = createInterface({ input: process.stdin, output: process.stdout });
+	const ask = (q: string): Promise<string> =>
+		new Promise((resolve) => rl.question(q, (a) => resolve(a.trim())));
+
+	console.log('  How would you like to start?');
+	console.log(`    ${chalk.cyan('1')} Use a template (quickest)`);
+	console.log(`    ${chalk.cyan('2')} Upload a business plan document`);
+	console.log(`    ${chalk.cyan('3')} Visual setup wizard (opens browser)`);
+	console.log();
+
+	const choice = await ask('  Choose (1/2/3): ');
+	rl.close();
+
+	if (choice === '2') {
+		const { promptVisible } = await import('../utils/prompt.js');
+		const seedPath = await promptVisible('  Path to your business plan (.md, .txt, .docx, .pdf): ');
+		if (!seedPath) {
+			console.log(chalk.yellow('  No path provided. Exiting.'));
+			return;
+		}
+		await initFromSeed({ ...options, seed: seedPath });
+		return;
+	}
+
+	if (choice === '3') {
+		console.log(chalk.dim('\n  Starting setup wizard...\n'));
+		const { setupCommand } = await import('./setup.js');
+		await setupCommand();
+		return;
+	}
+
+	// Default to template (choice '1' or anything else)
+	const { createInterface: createRl2 } = await import('node:readline');
+	const rl2 = createRl2({ input: process.stdin, output: process.stdout });
+	const ask2 = (q: string): Promise<string> =>
+		new Promise((resolve) => rl2.question(q, (a) => resolve(a.trim())));
+
+	console.log();
+	console.log('  Available templates:');
+	console.log(`    ${chalk.cyan('1')} Solo Founder — 3 agents, 1 team`);
+	console.log(`    ${chalk.cyan('2')} SaaS — 5 agents, 2 teams`);
+	console.log(`    ${chalk.cyan('3')} Marketing Agency — 4 agents, 1 team`);
+	console.log();
+
+	const tplChoice = await ask2('  Choose template (1/2/3): ');
+	const templateMap: Record<string, string> = { '1': 'solo-founder', '2': 'saas', '3': 'marketing-agency' };
+	const template = templateMap[tplChoice] ?? 'solo-founder';
+
+	const projectName = await ask2(`  Project name (default: my-business): `);
+	rl2.close();
+
+	const finalName = projectName || 'my-business';
+
+	// Detect provider
+	const provider = await detectProvider(options.provider);
+
+	await initFromTemplate({ template, name: finalName, provider });
+
+	// Prompt for API key if needed (Item 10)
+	await promptForApiKeyIfNeeded(provider ?? 'anthropic');
+}
+
+// ─── Inline API key prompt (Item 10) ──────────────────────────────────
+
+const PROVIDER_KEY_URLS: Record<string, string> = {
+	anthropic: 'https://console.anthropic.com/keys',
+	openai: 'https://platform.openai.com/api-keys',
+};
+
+async function promptForApiKeyIfNeeded(provider: string): Promise<void> {
+	if (provider === 'ollama') return; // No key needed
+
+	const { createVault } = await import('@abf/core');
+	let vault: import('@abf/core').ICredentialVault;
+	try {
+		vault = await createVault();
+	} catch {
+		return; // Can't check vault, skip
+	}
+
+	// Check if key already exists
+	const envKey = provider === 'anthropic' ? process.env['ANTHROPIC_API_KEY'] : process.env['OPENAI_API_KEY'];
+	const vaultKey = await vault.get(provider, 'api_key');
+	if (envKey || vaultKey) return; // Already configured
+
+	const providerName = provider === 'anthropic' ? 'Anthropic' : provider === 'openai' ? 'OpenAI' : provider;
+	const keyUrl = PROVIDER_KEY_URLS[provider] ?? '';
+
+	console.log();
+	console.log(chalk.yellow(`  No ${providerName} API key found.`));
+	if (keyUrl) {
+		console.log(chalk.dim(`  Get one at ${chalk.cyan(keyUrl)}`));
+	}
+	console.log();
+
+	const { promptHidden } = await import('../utils/prompt.js');
+	const key = await promptHidden(`  Enter your ${providerName} API key: `);
+
+	if (!key) {
+		console.log(chalk.dim(`  Skipped. Run ${chalk.cyan(`abf auth ${provider}`)} later to configure.`));
+		return;
+	}
+
+	await vault.set(provider, 'api_key', key);
+	console.log(chalk.green('  \u2713 API key saved. Your agents are ready to run.'));
+	console.log(chalk.dim('  Stored encrypted at ~/.abf/credentials.enc'));
+	console.log();
+}
+
+async function detectProvider(explicit?: string): Promise<string | undefined> {
+	if (explicit) return explicit;
+
+	const { createVault } = await import('@abf/core');
+	let vault: import('@abf/core').ICredentialVault;
+	try {
+		vault = await createVault();
+	} catch {
+		return undefined;
+	}
+
+	if (process.env['ANTHROPIC_API_KEY'] || await vault.get('anthropic', 'api_key')) return 'anthropic';
+	if (process.env['OPENAI_API_KEY'] || await vault.get('openai', 'api_key')) return 'openai';
+	return undefined;
 }
 
 // ─── Seed-based project generation ───────────────────────────────────
@@ -566,4 +707,7 @@ async function initFromTemplate(options: InitOptions): Promise<void> {
 		console.error(error);
 		process.exit(1);
 	}
+
+	// Inline API key prompt if credentials not yet configured
+	await promptForApiKeyIfNeeded(provider);
 }

@@ -498,6 +498,13 @@ export class HttpGateway implements IGateway {
 			return c.json({ error: 'No LLM provider available to generate charter' }, 503);
 		});
 
+		// -- Agent Sessions -------------------------------------------------------
+		app.get('/api/agents/:id/sessions', (c) => {
+			const id = c.req.param('id') as AgentId;
+			if (!deps.agentsMap.has(id)) return c.json({ error: 'Agent not found' }, 404);
+			return c.json(deps.dispatcher.getCompletedSessionsForAgent(id));
+		});
+
 		// -- Sessions -------------------------------------------------------------
 		app.get('/api/sessions', (c) => {
 			return c.json(deps.dispatcher.getActiveSessions());

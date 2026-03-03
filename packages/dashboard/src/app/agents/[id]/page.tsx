@@ -8,7 +8,8 @@ import { api } from '@/lib/api';
 import { AgentStatusBadge } from '@/components/AgentStatusBadge';
 import { AgentAvatar } from '@/components/AgentAvatar';
 import { MarkdownContent } from '@/components/MarkdownContent';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, CheckCircle2, XCircle, AlertTriangle, Clock } from 'lucide-react';
+import { describeCron, snakeToTitle, providerLabel, modelLabel, formatDuration, timeAgo } from '@/lib/format';
 
 type Tab = 'overview' | 'memory' | 'sessions';
 
@@ -28,10 +29,11 @@ export default function AgentDetailPage() {
   async function handleRun() {
     if (!task.trim()) return;
     try {
-      const res = await api.agents.run(id, task);
-      setRunResult(`Session started: ${res.sessionId}`);
+      await api.agents.run(id, task);
+      setRunResult(`${config?.displayName ?? 'Agent'} is working on your task...`);
       setTask('');
       setShowRun(false);
+      setTab('sessions');
     } catch (e) {
       setRunResult(`Error: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -112,8 +114,16 @@ export default function AgentDetailPage() {
       )}
 
       {runResult && (
-        <div className="bg-sky-500/10 border border-sky-500/20 rounded-lg p-3 text-sky-400 text-sm">
-          {runResult}
+        <div className="bg-sky-500/10 border border-sky-500/20 rounded-lg p-3 text-sky-400 text-sm flex items-center justify-between">
+          <span>{runResult}</span>
+          {!runResult.startsWith('Error') && (
+            <Link
+              href={`/agents/${id}/chat`}
+              className="text-sky-400 hover:text-sky-300 underline underline-offset-2 text-xs font-medium"
+            >
+              Watch live
+            </Link>
+          )}
         </div>
       )}
 
@@ -147,11 +157,11 @@ export default function AgentDetailPage() {
               <dl className="space-y-1 text-sm">
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Provider</dt>
-                  <dd>{config.provider}</dd>
+                  <dd>{providerLabel(config.provider)}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Model</dt>
-                  <dd>{config.model}</dd>
+                  <dd>{modelLabel(config.model)}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Team</dt>
@@ -161,9 +171,9 @@ export default function AgentDetailPage() {
                   <dt className="text-slate-500">Reports to</dt>
                   <dd>{config.reportsTo ?? '-'}</dd>
                 </div>
-                <div className="flex justify-between">
+                <div>
                   <dt className="text-slate-500">Tools</dt>
-                  <dd>{config.tools.length}</dd>
+                  <dd className="text-slate-300 mt-0.5">{config.tools.length > 0 ? config.tools.map(t => snakeToTitle(t)).join(', ') : '-'}</dd>
                 </div>
               </dl>
             </div>
@@ -173,11 +183,11 @@ export default function AgentDetailPage() {
               <dl className="space-y-1 text-sm">
                 <div>
                   <dt className="text-slate-500">Allowed</dt>
-                  <dd className="text-green-400">{config.behavioralBounds.allowedActions.join(', ') || '-'}</dd>
+                  <dd className="text-green-400">{config.behavioralBounds.allowedActions.map(a => snakeToTitle(a)).join(', ') || '-'}</dd>
                 </div>
                 <div>
                   <dt className="text-slate-500">Forbidden</dt>
-                  <dd className="text-red-400">{config.behavioralBounds.forbiddenActions.join(', ') || '-'}</dd>
+                  <dd className="text-red-400">{config.behavioralBounds.forbiddenActions.map(a => snakeToTitle(a)).join(', ') || '-'}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-slate-500">Max cost/session</dt>
@@ -210,7 +220,7 @@ export default function AgentDetailPage() {
                 {config.triggers.map((t, i) => (
                   <div key={i} className="text-sm flex gap-2">
                     <span className="px-2 py-0.5 bg-slate-800 rounded text-xs font-mono">{t.type}</span>
-                    {t.schedule && <span className="text-slate-400">{t.schedule}</span>}
+                    {t.schedule && <span className="text-slate-400">{describeCron(t.schedule)}</span>}
                     {t.task && <span className="text-slate-400">-&gt; {t.task}</span>}
                     {t.from && <span className="text-slate-400">from {t.from}</span>}
                   </div>
@@ -292,20 +302,91 @@ export default function AgentDetailPage() {
       )}
 
       {tab === 'sessions' && (
-        <div role="tabpanel" id="panel-sessions" className="text-sm text-slate-500">
-          Session history is available when the agent has completed sessions.
-          {state && (
-            <div className="mt-2">
-              <span className="text-slate-400">Sessions completed: </span>
-              <span className="text-white font-medium">{state.sessionsCompleted}</span>
-              <span className="text-slate-400 ml-4">Errors: </span>
-              <span className={state.errorCount > 0 ? 'text-red-400 font-medium' : 'text-white font-medium'}>
-                {state.errorCount}
-              </span>
-            </div>
-          )}
-        </div>
+        <SessionsPanel agentId={id} />
       )}
+    </div>
+  );
+}
+
+const STATUS_ICON: Record<string, typeof CheckCircle2> = {
+  completed: CheckCircle2,
+  failed: XCircle,
+  escalated: AlertTriangle,
+  timeout: Clock,
+};
+const STATUS_COLOR: Record<string, string> = {
+  completed: 'text-green-400',
+  failed: 'text-red-400',
+  escalated: 'text-amber-400',
+  timeout: 'text-orange-400',
+};
+
+function SessionsPanel({ agentId }: { agentId: string }) {
+  const { data: sessions, error } = useSWR(
+    agentId ? `agent-sessions-${agentId}` : null,
+    () => api.agents.sessions(agentId),
+    { refreshInterval: 10_000 },
+  );
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  if (error) {
+    return (
+      <div role="tabpanel" id="panel-sessions" className="text-sm text-red-400">
+        Failed to load sessions.
+      </div>
+    );
+  }
+
+  if (!sessions) {
+    return <div role="tabpanel" id="panel-sessions" className="text-sm text-slate-500">Loading sessions...</div>;
+  }
+
+  if (sessions.length === 0) {
+    return (
+      <div role="tabpanel" id="panel-sessions" className="text-sm text-slate-500">
+        No sessions yet. Run the agent or send a task to get started.
+      </div>
+    );
+  }
+
+  return (
+    <div role="tabpanel" id="panel-sessions" className="space-y-2">
+      {sessions.map((s) => {
+        const StatusIcon = STATUS_ICON[s.status] ?? CheckCircle2;
+        const statusColor = STATUS_COLOR[s.status] ?? 'text-slate-400';
+        const duration = new Date(s.completedAt).getTime() - new Date(s.startedAt).getTime();
+        const isExpanded = expanded === s.sessionId;
+
+        return (
+          <div key={s.sessionId} className="bg-slate-900 border border-slate-800 rounded-lg">
+            <button
+              type="button"
+              onClick={() => setExpanded(isExpanded ? null : s.sessionId)}
+              className="w-full flex items-center gap-3 p-3 text-left hover:bg-slate-800/50 transition-colors rounded-lg"
+            >
+              <StatusIcon size={16} className={statusColor} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-medium capitalize">{s.status}</span>
+                  <span className="text-slate-500">{timeAgo(s.completedAt)}</span>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
+                  <span>{formatDuration(duration)}</span>
+                  {typeof s.cost === 'number' && s.cost > 0 && <span>${(s.cost / 100).toFixed(2)}</span>}
+                  <span>{s.toolCalls.length} tool call{s.toolCalls.length !== 1 ? 's' : ''}</span>
+                </div>
+              </div>
+            </button>
+            {isExpanded && s.outputText && (
+              <div className="px-3 pb-3 border-t border-slate-800">
+                <pre className="text-xs text-slate-400 mt-2 whitespace-pre-wrap max-h-64 overflow-y-auto">
+                  {s.outputText}
+                </pre>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
