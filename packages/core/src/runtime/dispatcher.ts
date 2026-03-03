@@ -165,6 +165,12 @@ export class Dispatcher implements IDispatcher {
 		return this.completedSessions.get(sessionId);
 	}
 
+	getCompletedSessionsForAgent(agentId: AgentId): readonly SessionResult[] {
+		return [...this.completedSessions.values()]
+			.filter((s) => s.agentId === agentId)
+			.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
+	}
+
 	getEscalations(): readonly EscalationItem[] {
 		return this.escalationsList;
 	}

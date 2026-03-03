@@ -996,8 +996,8 @@ function CreatingStep({
 
       <button
         type="button"
-        onClick={() => router.push('/')}
-        className="w-full px-4 py-3 bg-sky-600 hover:bg-sky-500 text-white rounded-md text-sm font-medium transition-colors"
+        onClick={() => router.push('/?fresh=1')}
+        className="w-full px-6 py-3.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-base font-semibold transition-colors"
       >
         Go to Dashboard
       </button>
@@ -1072,7 +1072,7 @@ export default function SetupPage() {
         projectName: projectName.trim(),
         provider,
       });
-      router.push('/');
+      router.push('/?fresh=1');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

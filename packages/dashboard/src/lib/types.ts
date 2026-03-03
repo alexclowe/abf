@@ -104,6 +104,7 @@ export interface SessionResult {
   tokenUsage: { inputTokens: number; outputTokens: number; totalTokens: number };
   cost: number;
   error?: string;
+  outputText?: string;
 }
 
 export interface WorkSession {

@@ -9,6 +9,21 @@ const pkg = require('../package.json') as { version: string };
 
 program.name('abf').description('ABF — Agentic Business Framework CLI').version(pkg.version);
 
+// Default action: when no subcommand is given, auto-detect what to do
+program.action(async () => {
+	const { existsSync } = await import('node:fs');
+	const { join } = await import('node:path');
+	if (existsSync(join(process.cwd(), 'abf.config.yaml'))) {
+		// Project exists — start it
+		const { devCommand } = await import('./commands/dev.js');
+		await devCommand({ port: '3000' });
+	} else {
+		// No project — run interactive init
+		const { initCommand } = await import('./commands/init.js');
+		await initCommand({ template: 'custom', interactive: true });
+	}
+});
+
 // Lazy-load commands to keep startup fast
 program
 	.command('init')
