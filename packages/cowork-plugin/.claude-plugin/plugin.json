@@ -1,0 +1,12 @@
+{
+  "name": "abf",
+  "version": "0.1.0",
+  "description": "Agentic Business Framework — build and run companies powered by AI agents. Design agent teams, analyze business plans, generate YAML configs, and manage ABF projects.",
+  "author": {
+    "name": "ABF Contributors",
+    "url": "https://github.com/alexclowe/abf"
+  },
+  "repository": "https://github.com/alexclowe/abf",
+  "license": "MIT",
+  "keywords": ["agents", "business", "ai-agents", "agentic", "yaml", "framework", "automation"]
+}
