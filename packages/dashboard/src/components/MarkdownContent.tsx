@@ -60,7 +60,7 @@ export function MarkdownContent({
 }) {
   return (
     <Streamdown
-      className="streamdown prose prose-invert prose-sm max-w-none prose-p:my-2 prose-headings:my-3 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:my-3"
+      className="streamdown prose prose-invert prose-sm max-w-none prose-p:my-1.5 prose-headings:mt-3 prose-headings:mb-1.5 prose-h1:text-base prose-h2:text-sm prose-h3:text-sm prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0 prose-pre:my-2 prose-hr:my-2"
       plugins={{ code }}
       shikiTheme={['github-dark', 'github-dark']}
       isAnimating={isStreaming}

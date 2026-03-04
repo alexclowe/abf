@@ -150,6 +150,7 @@ export default function OverviewPage() {
         name: a.config.name,
         displayName: a.config.displayName,
         errorCount: a.state?.errorCount as number,
+        lastError: (a.state as Record<string, unknown> | undefined)?.lastError as string | undefined,
       }));
   }, [agents]);
 

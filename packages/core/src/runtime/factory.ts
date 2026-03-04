@@ -34,7 +34,7 @@ import { InProcessBus } from './bus/in-process.bus.js';
 import { RedisBus } from './bus/redis.bus.js';
 import { Dispatcher } from './dispatcher.js';
 import { HttpGateway } from './gateway/http.gateway.js';
-import { InMemoryConversationStore } from './conversation-store.js';
+import type { IConversationStore } from './conversation-store.js';
 import { WorkflowRunner } from './workflow-runner.js';
 import type { IMemoryStore } from '../types/memory.js';
 import type { IBus } from '../types/message.js';
@@ -42,6 +42,7 @@ import type { RuntimeComponents } from './interfaces.js';
 import { Runtime } from './runtime.js';
 import { Scheduler } from './scheduler.js';
 import { SessionManager } from './session-manager.js';
+import { createActivationId, toISOTimestamp } from '../util/id.js';
 
 export interface CreateRuntimeOptions {
 	dashboardPort?: number | undefined;
@@ -255,6 +256,14 @@ export async function createRuntime(
 	// Session event bus (R12) — real-time observation of automated sessions
 	const sessionEventBus = new SessionEventBus();
 
+	// Conversation store for multi-turn chat (persistent SQLite)
+	const { SQLiteConversationStore } = await import('./conversation-store-sqlite.js');
+	const sqliteConvStore = new SQLiteConversationStore(
+		join(projectRoot, 'logs', 'conversations.db'),
+	);
+	await sqliteConvStore.initialize();
+	const conversationStore: IConversationStore = sqliteConvStore;
+
 	// 9. Session manager — receives shared agentsMap
 	const sessionManager = new SessionManager({
 		agents: agentsMap,
@@ -274,6 +283,7 @@ export async function createRuntime(
 		taskPlanStore,
 		sessionEventBus,
 		mailboxStore,
+		conversationStore,
 	});
 
 	// 10. Dispatcher — receives shared agentsMap
@@ -295,6 +305,32 @@ export async function createRuntime(
 			message: `${request.agentId} wants to use ${request.toolName}`,
 			severity: 'warn',
 			timestamp: request.createdAt,
+		});
+	};
+
+	approvalStore.onApproved = (request) => {
+		if (request.type === 'inquiry') return;
+		const agent = agentsMap.get(request.agentId);
+		if (!agent) return;
+
+		void dispatcher.dispatch({
+			id: createActivationId(),
+			agentId: request.agentId,
+			trigger: {
+				type: 'approval_resume' as const,
+				task: request.originalTask ?? `Execute approved tool: ${request.toolName}`,
+				approvalId: request.id,
+				toolName: request.toolName,
+				toolArguments: request.arguments,
+				conversationId: request.conversationId,
+			},
+			timestamp: toISOTimestamp(),
+			payload: {
+				approvalId: request.id,
+				toolName: request.toolName,
+				toolArguments: request.arguments,
+				conversationId: request.conversationId,
+			},
 		});
 	};
 
@@ -359,15 +395,36 @@ export async function createRuntime(
 		channelRouter.setRoutes([...config.channels]);
 	}
 
+	// OperatorChannel — unified bidirectional agent↔operator communication
+	const { OperatorChannel } = await import('../messaging/operator-channel.js');
+	const notifConfig = (config as unknown as Record<string, unknown>)['notifications'] as Record<string, unknown> | undefined;
+	const preferredChannel = (notifConfig?.['channel'] as string) ?? undefined;
+	const notificationTarget = (notifConfig?.['target'] as string) ?? undefined;
+	const operatorChannel = new OperatorChannel(
+		conversationStore,
+		operatorNotifier,
+		channelRouter,
+		preferredChannel && preferredChannel !== 'none'
+			? (preferredChannel as import('../messaging/interfaces.js').ChannelType)
+			: undefined,
+		notificationTarget,
+	);
+
+	// Wire OperatorChannel ↔ ChannelRouter (deferred injection, both need each other)
+	channelRouter.setOperatorChannel(operatorChannel);
+
+	// Wire Dispatcher → OperatorChannel (agent session output → operator)
+	dispatcher.onSessionOutputCreated = (output) => {
+		operatorChannel.send({
+			...output,
+			content: output.outputText,
+			source: 'session_output',
+		});
+	};
+
 	// Plugin registry — extension point for cloud repo and third-party plugins
 	const { PluginRegistry } = await import('./gateway/plugin-registry.js');
 	const pluginRegistry = new PluginRegistry();
-
-	// Conversation store for multi-turn chat (persists to disk)
-	const conversationStore = new InMemoryConversationStore(
-		join(projectRoot, 'logs', 'conversations.json'),
-	);
-	await conversationStore.load();
 
 	// 13. Gateway
 	const gateway = new HttpGateway(config.gateway, {
@@ -395,6 +452,7 @@ export async function createRuntime(
 		conversationStore,
 		mailboxStore,
 		mailAllowedSenders: config.mail?.allowedSenders,
+		operatorChannel,
 	});
 
 	const components: RuntimeComponents = {

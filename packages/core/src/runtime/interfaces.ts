@@ -66,12 +66,13 @@ export interface IDispatcher {
 
 /** Events emitted during streaming chat sessions. */
 export interface StreamEvent {
-	readonly type: 'token' | 'tool_use' | 'tool_result' | 'error';
+	readonly type: 'token' | 'tool_use' | 'tool_result' | 'error' | 'approval_queued';
 	readonly text?: string;
 	readonly toolName?: string;
 	readonly toolArguments?: Record<string, unknown>;
 	readonly toolOutput?: unknown;
 	readonly error?: string;
+	readonly approvalId?: string;
 }
 
 export interface ISessionManager {

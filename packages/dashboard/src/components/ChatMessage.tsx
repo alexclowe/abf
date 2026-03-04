@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { UIMessage } from 'ai';
-import { Copy, Check, ChevronDown, ChevronRight, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Copy, Check, ChevronDown, ChevronRight, ThumbsUp, ThumbsDown, AlertTriangle } from 'lucide-react';
 import { MarkdownContent } from './MarkdownContent';
 
 /** AI SDK v6: static tool parts have type "tool-{name}", dynamic ones have type "dynamic-tool" + toolName prop. */
@@ -94,11 +94,42 @@ function FeedbackButtons({ messageId, agentId }: { messageId: string; agentId?: 
   );
 }
 
+function ApprovalCard({ approval }: { approval: { toolName?: string; approvalsUrl?: string; message?: string } }) {
+  return (
+    <div className="my-2 bg-amber-500/5 border border-amber-500/20 rounded-lg p-4">
+      <div className="flex items-center gap-2">
+        <AlertTriangle size={14} className="text-amber-400" />
+        <span className="text-amber-400 font-medium text-sm">Approval Required</span>
+        {approval.toolName && (
+          <span className="px-2 py-0.5 bg-amber-500/10 text-amber-400 rounded text-xs font-mono">
+            {approval.toolName}
+          </span>
+        )}
+      </div>
+      <p className="text-sm text-slate-400 mt-1">
+        {approval.message ?? 'This tool requires your approval before the agent can proceed.'}
+      </p>
+      <a
+        href={approval.approvalsUrl ?? '/approvals'}
+        className="mt-2 inline-flex px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-md text-xs font-medium transition-colors"
+      >
+        Review &amp; Approve
+      </a>
+    </div>
+  );
+}
+
 function ToolCallBadge({ part }: { part: Record<string, unknown> }) {
   const [expanded, setExpanded] = useState(false);
   const toolName = getToolName(part);
   const state = part['state'] as string | undefined;
   const output = part['output'];
+
+  // Detect approval card in tool output
+  const isApproval = output && typeof output === 'object' && (output as Record<string, unknown>)['__abf_approval'];
+  if (isApproval) {
+    return <ApprovalCard approval={output as { toolName?: string; approvalsUrl?: string; message?: string }} />;
+  }
 
   const isDone = state === 'output-available';
   const isError = state === 'output-error';

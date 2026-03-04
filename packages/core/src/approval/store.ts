@@ -20,6 +20,9 @@ export class InMemoryApprovalStore implements IApprovalStore {
 	/** Optional callback fired when a new approval request is created (for notifications). */
 	onCreated?: ((request: ApprovalRequest) => void) | undefined;
 
+	/** Optional callback fired when an approval request is approved (for auto-resume). */
+	onApproved?: ((request: ApprovalRequest) => void) | undefined;
+
 	create(
 		request: Omit<ApprovalRequest, 'id' | 'status' | 'resolvedAt' | 'resolvedBy'>,
 	): string {
@@ -67,6 +70,7 @@ export class InMemoryApprovalStore implements IApprovalStore {
 		entry.status = 'approved';
 		entry.resolvedAt = toISOTimestamp();
 		entry.resolvedBy = resolvedBy ?? 'operator';
+		this.onApproved?.(entry);
 		return true;
 	}
 

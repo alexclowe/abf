@@ -16,6 +16,7 @@ import type { AgentNotification } from './interfaces.js';
 interface NotificationConfig {
 	readonly onApproval: boolean;
 	readonly onAlert: boolean;
+	readonly onAgentMessage: boolean;
 	readonly channel: string;
 }
 
@@ -33,6 +34,7 @@ export class OperatorNotifier {
 			// Check if notifications are enabled for this type
 			if (notification.type === 'approval_required' && !config.onApproval) return;
 			if ((notification.type === 'escalation' || notification.type === 'alert') && !config.onAlert) return;
+			if (notification.type === 'agent_message' && !config.onAgentMessage) return;
 
 			const channel = config.channel;
 			if (!channel || channel === 'none') return;
@@ -94,6 +96,7 @@ export class OperatorNotifier {
 			return {
 				onApproval: Boolean(notifications['onApproval']),
 				onAlert: Boolean(notifications['onAlert']),
+				onAgentMessage: notifications['onAgentMessage'] !== false, // default ON
 				channel: (notifications['channel'] as string) ?? 'none',
 			};
 		} catch {

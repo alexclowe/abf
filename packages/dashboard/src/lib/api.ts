@@ -89,6 +89,13 @@ export const api = {
       post<{ charter: string }>('/api/agents/generate-charter', body),
   },
 
+  conversations: {
+    get: (agentId: string, convId: string) =>
+      get<{ conversationId: string; agentId: string; messages: Array<{ role: string; content: string }> }>(
+        `/api/agents/${agentId}/conversations/${convId}`,
+      ),
+  },
+
   sessions: {
     active: () => get<WorkSession[]>('/api/sessions'),
     get: (id: string) => get<SessionResult>(`/api/sessions/${id}`),
@@ -252,6 +259,7 @@ export const api = {
     getConfig: () => get<{
       onApproval: boolean;
       onAlert: boolean;
+      onAgentMessage: boolean;
       channel: string;
       configured: boolean;
       maskedCredential: string;
@@ -259,6 +267,7 @@ export const api = {
     updateConfig: (body: {
       onApproval?: boolean;
       onAlert?: boolean;
+      onAgentMessage?: boolean;
       channel?: string;
       credential?: string;
       telegramBotToken?: string;

@@ -101,5 +101,14 @@ function buildSnapshot(deps: GatewayDeps): Record<string, unknown> {
 		agentStates: mc?.collectAgentStates() ?? [],
 		sessions: dispatcher.getActiveSessions(),
 		escalations: dispatcher.getEscalations(),
+		agentMessages: deps.operatorChannel?.getRecentMessages().map((m) => ({
+			conversationId: `agent-${m.sessionId}`,
+			agentId: m.agentId,
+			agentName: m.agentDisplayName,
+			title: m.task,
+			content: m.content.slice(0, 200),
+			timestamp: new Date(m.timestamp).getTime(),
+			source: m.source,
+		})) ?? [],
 	};
 }

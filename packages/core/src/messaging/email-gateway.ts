@@ -5,7 +5,7 @@
  */
 
 import { toISOTimestamp } from '../util/id.js';
-import type { IChannelGateway, InboundMessage } from './interfaces.js';
+import type { ChannelSendResult, IChannelGateway, InboundMessage } from './interfaces.js';
 
 /** Minimal imapflow-compatible interface (optional dependency). */
 interface ImapClient {
@@ -51,19 +51,20 @@ export class EmailGateway implements IChannelGateway {
 		this.handlers.push(handler);
 	}
 
-	async send(to: string, text: string, metadata?: Record<string, unknown>): Promise<void> {
+	async send(to: string, text: string, metadata?: Record<string, unknown>): Promise<ChannelSendResult> {
 		if (!this.transporter) {
 			throw new Error('Email transporter not initialized');
 		}
 
 		const subject = (metadata?.['subject'] as string) ?? 'Message from ABF Agent';
-		const transport = this.transporter as { sendMail: (opts: unknown) => Promise<void> };
-		await transport.sendMail({
+		const transport = this.transporter as { sendMail: (opts: unknown) => Promise<{ messageId?: string }> };
+		const info = await transport.sendMail({
 			from: this.config.from,
 			to,
 			subject,
 			text,
 		});
+		return { messageId: info.messageId };
 	}
 
 	async start(): Promise<void> {
@@ -112,7 +113,7 @@ export class EmailGateway implements IChannelGateway {
 	 * Handle an inbound email forwarded via webhook.
 	 * Useful when IMAP is not configured but a mail forwarding service is used.
 	 */
-	async handleWebhookEmail(email: { from: string; to: string; subject: string; text: string }): Promise<void> {
+	async handleWebhookEmail(email: { from: string; to: string; subject: string; text: string; inReplyTo?: string }): Promise<void> {
 		const msg: InboundMessage = {
 			channel: 'email',
 			senderId: email.from,
@@ -121,6 +122,7 @@ export class EmailGateway implements IChannelGateway {
 			metadata: {
 				subject: email.subject,
 				to: email.to,
+				inReplyTo: email.inReplyTo,
 			},
 		};
 

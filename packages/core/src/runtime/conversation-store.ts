@@ -1,9 +1,9 @@
 /**
- * InMemoryConversationStore — stores multi-turn chat history per conversation.
+ * Conversation Store — stores multi-turn chat history per conversation.
  * Used by the chat endpoint to maintain context across messages.
  *
- * Limits: 100 conversations max, 50 messages each. LRU eviction.
- * Optionally persists to disk via `logs/conversations.json` with 2s debounced saves.
+ * IConversationStore defines the contract; InMemoryConversationStore is the
+ * in-memory implementation. SQLiteConversationStore provides persistent storage.
  */
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
@@ -16,12 +16,36 @@ export interface ConversationEntry {
 	lastAccessed: number;
 }
 
+export interface ConversationMeta {
+	id: string;
+	agentId: string;
+	title: string;
+	lastAccessed: number;
+	messageCount: number;
+}
+
+export interface IConversationStore {
+	get(conversationId: string): ConversationEntry | undefined;
+	getOrCreate(conversationId: string, agentId: string): ConversationEntry;
+	append(conversationId: string, ...messages: ChatMessage[]): void;
+	delete(conversationId: string): boolean;
+	size(): number;
+	load(): Promise<void>;
+	save(): Promise<void>;
+	listByAgent(agentId: string): ConversationMeta[];
+	getMeta(conversationId: string): ConversationMeta | undefined;
+	upsertMeta(conversationId: string, agentId: string, title: string, messageCount: number): void;
+	deleteMeta(conversationId: string): void;
+}
+
 const MAX_CONVERSATIONS = 100;
 const MAX_MESSAGES_PER_CONVERSATION = 50;
+const MAX_CONVERSATION_META = 200;
 const SAVE_DEBOUNCE_MS = 2000;
 
-export class InMemoryConversationStore {
+export class InMemoryConversationStore implements IConversationStore {
 	private readonly store = new Map<string, ConversationEntry>();
+	private readonly metaStore = new Map<string, ConversationMeta>();
 	private saveTimer: ReturnType<typeof setTimeout> | undefined;
 
 	constructor(private readonly filePath?: string) {}
@@ -114,6 +138,46 @@ export class InMemoryConversationStore {
 		} catch {
 			// Non-fatal — log silently, data still in memory
 		}
+	}
+
+	// ─── Conversation Metadata ───────────────────────────────────────────
+
+	listByAgent(agentId: string): ConversationMeta[] {
+		const result: ConversationMeta[] = [];
+		for (const meta of this.metaStore.values()) {
+			if (meta.agentId === agentId) result.push(meta);
+		}
+		result.sort((a, b) => b.lastAccessed - a.lastAccessed);
+		return result;
+	}
+
+	getMeta(conversationId: string): ConversationMeta | undefined {
+		return this.metaStore.get(conversationId);
+	}
+
+	upsertMeta(conversationId: string, agentId: string, title: string, messageCount: number): void {
+		const existing = this.metaStore.get(conversationId);
+		if (existing) {
+			existing.lastAccessed = Date.now();
+			existing.messageCount = messageCount;
+		} else {
+			// Evict oldest if at capacity
+			if (this.metaStore.size >= MAX_CONVERSATION_META) {
+				const oldestKey = this.metaStore.keys().next().value;
+				if (oldestKey) this.metaStore.delete(oldestKey);
+			}
+			this.metaStore.set(conversationId, {
+				id: conversationId,
+				agentId,
+				title: title.slice(0, 50),
+				lastAccessed: Date.now(),
+				messageCount,
+			});
+		}
+	}
+
+	deleteMeta(conversationId: string): void {
+		this.metaStore.delete(conversationId);
 	}
 
 	/** Schedule a debounced save — collapses rapid mutations into one disk write. */

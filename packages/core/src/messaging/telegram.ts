@@ -4,7 +4,7 @@
  */
 
 import { toISOTimestamp } from '../util/id.js';
-import type { IChannelGateway, InboundMessage } from './interfaces.js';
+import type { ChannelSendResult, IChannelGateway, InboundMessage } from './interfaces.js';
 
 const TELEGRAM_API = 'https://api.telegram.org';
 
@@ -22,12 +22,14 @@ export class TelegramGateway implements IChannelGateway {
 		this.handlers.push(handler);
 	}
 
-	async send(chatId: string, text: string, _metadata?: Record<string, unknown>): Promise<void> {
-		await this.apiCall('sendMessage', {
+	async send(chatId: string, text: string, _metadata?: Record<string, unknown>): Promise<ChannelSendResult> {
+		const result = await this.apiCall('sendMessage', {
 			chat_id: chatId,
 			text,
 			parse_mode: 'Markdown',
 		});
+		const msgId = (result as { message_id?: number })?.message_id;
+		return { messageId: msgId ? String(msgId) : undefined };
 	}
 
 	async start(): Promise<void> {
@@ -81,6 +83,7 @@ export class TelegramGateway implements IChannelGateway {
 							metadata: {
 								messageId: update.message.message_id,
 								chatType: update.message.chat.type,
+								replyToMessageId: update.message.reply_to_message?.message_id,
 							},
 						};
 
@@ -133,5 +136,6 @@ interface TelegramUpdate {
 		from?: { first_name?: string; username?: string };
 		chat: { id: number; type: string };
 		text?: string;
+		reply_to_message?: { message_id?: number };
 	};
 }

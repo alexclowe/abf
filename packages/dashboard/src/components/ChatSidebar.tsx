@@ -112,6 +112,9 @@ export function ChatSidebar({
           >
             <div className="flex-1 min-w-0">
               <p className="text-sm text-slate-300 truncate">
+                {conv.id.startsWith('agent-') && (
+                  <span className="text-[10px] text-sky-400 font-medium mr-1">Agent</span>
+                )}
                 {conv.title || 'Untitled'}
               </p>
               <p className="text-[10px] text-slate-600">

@@ -5,7 +5,7 @@
 
 import type { AgentId, SessionId, ISOTimestamp } from '../types/common.js';
 
-export type NotificationType = 'escalation' | 'alert' | 'session_complete' | 'approval_required';
+export type NotificationType = 'escalation' | 'alert' | 'session_complete' | 'approval_required' | 'agent_message';
 export type NotificationSeverity = 'info' | 'warn' | 'error' | 'critical';
 export type MessagingPluginType = 'slack' | 'email' | 'discord';
 
@@ -77,11 +77,15 @@ export interface ChannelRoute {
 	readonly respondInChannel?: boolean | undefined;
 }
 
+export interface ChannelSendResult {
+	readonly messageId?: string | undefined;
+}
+
 export interface IChannelGateway {
 	readonly type: ChannelType;
 	start(): Promise<void>;
 	stop(): Promise<void>;
 	isConnected(): boolean;
-	send(target: string, message: string): Promise<void>;
+	send(target: string, message: string, metadata?: Record<string, unknown>): Promise<ChannelSendResult>;
 	onMessage(handler: (msg: InboundMessage) => void): void;
 }

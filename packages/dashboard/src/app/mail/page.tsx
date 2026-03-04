@@ -1,11 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
 import type { MailMessage, AgentListItem } from '@/lib/types';
 
 export default function MailPage() {
+  // Mark agent messages as seen when visiting the mail page
+  useEffect(() => {
+    localStorage.setItem('abf-agent-msg-seen', String(Date.now()));
+  }, []);
+
   const [agentFilter, setAgentFilter] = useState('');
   const [selectedThread, setSelectedThread] = useState<string | null>(null);
   const [showCompose, setShowCompose] = useState(false);

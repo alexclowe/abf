@@ -99,8 +99,6 @@ const SEED_CHECKLIST: ChecklistItem[] = [
 export function OnboardingChecklist({ data, dismissed, onDismiss, onStartPhase1, startingPhase }: OnboardingChecklistProps) {
   const [collapsed, setCollapsed] = useState(false);
 
-  if (dismissed) return null;
-
   const isSeed = data.isSeed ?? false;
   const seedChecklist = isSeed && data.hasBuildPlan
     ? SEED_CHECKLIST
@@ -115,6 +113,8 @@ export function OnboardingChecklist({ data, dismissed, onDismiss, onStartPhase1,
   useEffect(() => {
     if (allDone) setCollapsed(true);
   }, [allDone]);
+
+  if (dismissed) return null;
 
   const title = isSeed
     ? allDone ? 'Setup Complete!' : `Quick Start — ${data.companyName || 'Your Company'}`
