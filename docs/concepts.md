@@ -8,22 +8,7 @@ ABF is built on 6 primitives. Every feature in the framework -- from the seed-to
 
 An ABF project is a directory of plain files (YAML, Markdown, JSON) that define a company's AI agent workforce. The ABF runtime reads these files, creates agents, and runs them on a schedule or in response to events.
 
-```
-                     +---------+
-                     | Trigger |  (cron, event, message, webhook, manual)
-                     +----+----+
-                          |
-                          v
-  +-------+        +------+------+        +-----+
-  | Agent  | <---> | Session Mgr | <----> | Bus |
-  +-------+        +------+------+        +-----+
-       |                  |                   |
-       v                  v                   v
-   +-------+         +--------+         +---------+
-   | Tools  |         | Memory |         | Other   |
-   +-------+         +--------+         | Agents  |
-                                        +---------+
-```
+![ABF Runtime Architecture](images/runtime-architecture.png)
 
 A **Trigger** fires, activating an **Agent**. The runtime's Session Manager loads the agent's **Memory** (charter, history, decisions, knowledge), calls the LLM, and enters a **Tool** loop. During execution, the agent can send **Messages** through the **Bus** to other agents. After the session, the agent's learnings are written back to memory.
 
@@ -135,7 +120,9 @@ escalation_policy:
 
 ### How teams work
 
-The orchestrator agent coordinates work across team members. It can send messages through the bus, delegate tasks using the `delegate-task` tool, and synthesize results. Delegation is synchronous -- the orchestrator calls `delegate-task` with an agent name and task description, and the tool runs a full agent session and returns the result directly. In the Solo Founder template, Compass is the orchestrator -- it delegates research to Scout and writing to Scribe, then compiles their outputs into briefings for the founder.
+The orchestrator agent coordinates work across team members. It can send messages through the bus, delegate tasks using the `delegate-task` tool, and synthesize results. Delegation is synchronous -- the orchestrator calls `delegate-task` with an agent name and task description, and the tool runs a full agent session and returns the result directly.
+
+![delegate-task Multi-Agent Delegation](images/delegate-task-flow.png) In the Solo Founder template, Compass is the orchestrator -- it delegates research to Scout and writing to Scribe, then compiles their outputs into briefings for the founder.
 
 Team members share access to the `memory/decisions.md` file and can read each other's outputs from the `outputs/` directory. This gives agents awareness of what their teammates have produced without requiring direct message exchanges.
 

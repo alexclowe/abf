@@ -6,7 +6,7 @@
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Node.js 20+](https://img.shields.io/badge/node-%3E%3D20-green.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue.svg)
-![v1.2.0](https://img.shields.io/badge/version-1.2.0-brightgreen.svg)
+![v1.3.0](https://img.shields.io/badge/version-1.3.0-brightgreen.svg)
 
 ```bash
 npx @abf/cli init --template solo-founder --name my-business
@@ -91,14 +91,7 @@ ABF is built on **6 primitives**: [Agents](docs/concepts.md) (autonomous workers
 
 The runtime is a single Node.js process with five components:
 
-```
-  Scheduler ──> Dispatcher ──> Session Manager ──> Bus
-                                    │                │
-                                    v                v
-                              Gateway (API)     Agents (YAML)
-                              + Dashboard       + Memory (files)
-                              + SSE events      + Providers (LLM)
-```
+![ABF Runtime Architecture](docs/images/runtime-architecture.png)
 
 **Scheduler** fires triggers. **Dispatcher** spawns work sessions. **Session Manager** runs an 8-step lifecycle: load context, build prompt, call LLM, execute tools, route messages, write memory, check escalations, log results. **Bus** routes inter-agent messages. **Gateway** serves the REST API, SSE events, webhooks, and Dashboard on a single port.
 

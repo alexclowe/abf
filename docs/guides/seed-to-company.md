@@ -10,10 +10,7 @@ This guide covers all three paths and explains what happens at each stage.
 
 The pipeline has 4 stages:
 
-```
-  Parse  -->  Analyze  -->  Review  -->  Apply
-  (text)      (LLM)        (human)      (files)
-```
+![Seed-to-Company Pipeline](../images/seed-to-company-pipeline.png)
 
 1. **Parse** -- Extract plain text from your document (`.docx`, `.pdf`, `.txt`, `.md`)
 2. **Analyze** -- An LLM reads your business description and designs the optimal agent team
