@@ -250,9 +250,9 @@ export class SQLiteConversationStore implements IConversationStore {
 			role: row.role as ChatMessage['role'],
 			content: row.content_type === 'json' ? JSON.parse(row.content) : row.content,
 		};
-		if (row.tool_call_id) (msg as Record<string, unknown>).toolCallId = row.tool_call_id;
-		if (row.tool_calls) (msg as Record<string, unknown>).toolCalls = JSON.parse(row.tool_calls);
-		if (row.name) (msg as Record<string, unknown>).name = row.name;
+		if (row.tool_call_id) (msg as unknown as Record<string, unknown>).toolCallId = row.tool_call_id;
+		if (row.tool_calls) (msg as unknown as Record<string, unknown>).toolCalls = JSON.parse(row.tool_calls);
+		if (row.name) (msg as unknown as Record<string, unknown>).name = row.name;
 		return msg;
 	}
 
