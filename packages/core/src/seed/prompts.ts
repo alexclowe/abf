@@ -29,6 +29,7 @@ Available ABF built-in tools:
 - calendar: Create events, check availability, read schedules (requires datastore config)
 - privacy-ops: Manage consent records and data deletion requests for GDPR/CCPA compliance (requires datastore config)
 - plan-task: Decompose complex objectives into structured sub-tasks with dependencies
+- delegate-task: Delegate a task to another agent and wait for the result (real multi-agent orchestration)
 - ask-human: Request human input or approval inline during a session
 - app-generate: Generate UI components and web apps using v0 (supports Next.js, React, Vue, Svelte)
 - app-deploy: Deploy web applications to Vercel (create projects, deploy files, set env vars, add domains)
@@ -41,7 +42,7 @@ const AVAILABLE_ARCHETYPES = `
 Available ABF role archetypes (use as "roleArchetype" field — provides default tools, temperature, and charter template; explicit values in the agent definition always override):
 - researcher: temp 0.3, tools [web-search, knowledge-search] — information gathering and analysis
 - writer: temp 0.7, tools [knowledge-search, image-render] — content creation and copywriting
-- orchestrator: temp 0.2, tools [send-message, knowledge-search] — team coordination and task delegation
+- orchestrator: temp 0.2, tools [send-message, knowledge-search, delegate-task] — team coordination and real multi-agent task delegation
 - analyst: temp 0.2, tools [database-query, knowledge-search] — data analysis and reporting
 - customer-support: temp 0.4, tools [send-message, knowledge-search, database-query, email-send, privacy-ops] — customer help and issue resolution
 - developer: temp 0.3, tools [knowledge-search, github-ci, app-generate, app-deploy, backend-provision, code-generate] — code, PRs, deployments, and technical solutions

@@ -5,7 +5,7 @@
  */
 
 import { toISOTimestamp } from '../util/id.js';
-import type { IChannelGateway, InboundMessage } from './interfaces.js';
+import type { ChannelSendResult, IChannelGateway, InboundMessage } from './interfaces.js';
 
 export class SlackGateway implements IChannelGateway {
 	readonly type = 'slack' as const;
@@ -18,7 +18,7 @@ export class SlackGateway implements IChannelGateway {
 		this.handlers.push(handler);
 	}
 
-	async send(channel: string, text: string, _metadata?: Record<string, unknown>): Promise<void> {
+	async send(channel: string, text: string, _metadata?: Record<string, unknown>): Promise<ChannelSendResult> {
 		const res = await fetch('https://slack.com/api/chat.postMessage', {
 			method: 'POST',
 			headers: {
@@ -32,10 +32,12 @@ export class SlackGateway implements IChannelGateway {
 			throw new Error(`Slack API failed: ${res.status}`);
 		}
 
-		const data = (await res.json()) as { ok: boolean; error?: string };
+		const data = (await res.json()) as { ok: boolean; error?: string; ts?: string };
 		if (!data.ok) {
 			throw new Error(`Slack API error: ${data.error ?? 'Unknown'}`);
 		}
+
+		return { messageId: data.ts };
 	}
 
 	async start(): Promise<void> {

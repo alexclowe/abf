@@ -19,6 +19,7 @@ interface ConfigState {
   // Notification preferences (non-secret, stored in config)
   notify_on_approval: boolean;
   notify_on_alert: boolean;
+  notify_on_agent_message: boolean;
   notify_channel: string;
 }
 
@@ -49,6 +50,7 @@ function extractConfig(raw: Record<string, unknown>): ConfigState {
     session_timeout_ms: (runtime.sessionTimeoutMs as number) ?? (runtime.session_timeout_ms as number) ?? 300000,
     notify_on_approval: (notifications.onApproval as boolean) ?? false,
     notify_on_alert: (notifications.onAlert as boolean) ?? false,
+    notify_on_agent_message: notifications.onAgentMessage !== false, // default ON
     notify_channel: (notifications.channel as string) ?? 'none',
   };
 }
@@ -124,6 +126,7 @@ export default function SettingsPage() {
         notifications: {
           onApproval: config.notify_on_approval,
           onAlert: config.notify_on_alert,
+          onAgentMessage: config.notify_on_agent_message,
           channel: config.notify_channel,
         },
       };
@@ -138,6 +141,7 @@ export default function SettingsPage() {
         await api.notifications.updateConfig({
           onApproval: config.notify_on_approval,
           onAlert: config.notify_on_alert,
+          onAgentMessage: config.notify_on_agent_message,
           channel: config.notify_channel,
           ...(config.notify_channel === 'telegram'
             ? { telegramBotToken: notifyCred.telegram_bot_token || undefined, telegramChatId: notifyCred.telegram_chat_id || undefined }
@@ -148,6 +152,7 @@ export default function SettingsPage() {
         await api.notifications.updateConfig({
           onApproval: config.notify_on_approval,
           onAlert: config.notify_on_alert,
+          onAgentMessage: config.notify_on_agent_message,
           channel: config.notify_channel,
         });
       }
@@ -257,9 +262,18 @@ export default function SettingsPage() {
             />
             <span className="text-sm text-slate-300">Notify on alerts</span>
           </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={config.notify_on_agent_message}
+              onChange={(e) => update('notify_on_agent_message', e.target.checked)}
+              className="rounded border-slate-600 bg-slate-800 text-sky-500 focus:ring-sky-500 focus:ring-offset-0"
+            />
+            <span className="text-sm text-slate-300">Notify on agent messages</span>
+          </label>
         </div>
 
-        {(config.notify_on_approval || config.notify_on_alert) && (
+        {(config.notify_on_approval || config.notify_on_alert || config.notify_on_agent_message) && (
           <div className="space-y-3 pt-2 border-t border-slate-800">
             <div>
               <label className="text-sm text-slate-400 block mb-1">Notification Channel</label>

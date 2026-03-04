@@ -1,24 +1,55 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
 import { AgentStatusBadge } from '@/components/AgentStatusBadge';
 import { AgentAvatar } from '@/components/AgentAvatar';
 import { MarkdownContent } from '@/components/MarkdownContent';
-import { MessageSquare, CheckCircle2, XCircle, AlertTriangle, Clock } from 'lucide-react';
+import { MessageSquare, CheckCircle2, XCircle, AlertTriangle, Clock, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
 import { describeCron, snakeToTitle, providerLabel, modelLabel, formatDuration, timeAgo } from '@/lib/format';
 
 type Tab = 'overview' | 'memory' | 'sessions';
 
+const PREVIEW_LENGTH = 200;
+
+function HistoryEntry({ entry, defaultOpen }: { entry: { content: string; timestamp: string }; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen ?? false);
+  const isLong = entry.content.length > PREVIEW_LENGTH;
+  const preview = isLong ? entry.content.slice(0, PREVIEW_LENGTH).trimEnd() + '...' : entry.content;
+
+  return (
+    <div className="border border-slate-800 rounded-md overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-800/50 transition-colors"
+      >
+        {open ? <ChevronDown size={12} className="text-slate-500 flex-shrink-0" /> : <ChevronRight size={12} className="text-slate-500 flex-shrink-0" />}
+        <span className="text-xs text-slate-500 flex-shrink-0">{timeAgo(entry.timestamp)}</span>
+        {!open && (
+          <span className="text-xs text-slate-400 truncate">{preview.split('\n')[0]}</span>
+        )}
+      </button>
+      {open && (
+        <div className="px-3 pb-3 text-sm max-h-80 overflow-y-auto">
+          <MarkdownContent>{entry.content}</MarkdownContent>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AgentDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const initialTab = (searchParams.get('tab') as Tab) || 'overview';
   const { data: agent, error } = useSWR(id ? `agent-${id}` : null, () => api.agents.get(id), {
     refreshInterval: 10_000,
   });
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [showRun, setShowRun] = useState(false);
   const [task, setTask] = useState('');
   const [runResult, setRunResult] = useState<string | null>(null);
@@ -284,15 +315,21 @@ export default function AgentDetailPage() {
           )}
           {memory?.history && memory.history.length > 0 && (
             <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-slate-400 mb-2">Recent History</h3>
-              <div className="space-y-2">
-                {memory.history.slice(-10).map((entry, i) => (
-                  <div key={i} className="text-sm border-l-2 border-slate-700 pl-3">
-                    <div className="text-xs text-slate-500">{new Date(entry.timestamp).toLocaleString()}</div>
-                    <div className="text-slate-300">{entry.content}</div>
-                  </div>
+              <h3 className="text-sm font-medium text-slate-400 mb-2">
+                Recent History
+                <span className="ml-2 text-xs text-slate-600 font-normal">({memory.history.length} entries)</span>
+              </h3>
+              <div className="space-y-1">
+                {memory.history.slice(-10).reverse().map((entry, i) => (
+                  <HistoryEntry key={i} entry={entry} defaultOpen={i === 0} />
                 ))}
               </div>
+            </div>
+          )}
+          {memory?.decisions && memory.decisions.length > 0 && (
+            <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
+              <h3 className="text-sm font-medium text-slate-400 mb-2">Decisions</h3>
+              <MarkdownContent>{memory.decisions.map((d) => d.content).join('\n\n---\n\n')}</MarkdownContent>
             </div>
           )}
           {(!memory || (!memory.charter && memory.history.length === 0)) && (
@@ -358,7 +395,7 @@ function SessionsPanel({ agentId }: { agentId: string }) {
         const isExpanded = expanded === s.sessionId;
 
         return (
-          <div key={s.sessionId} className="bg-slate-900 border border-slate-800 rounded-lg">
+          <div key={s.sessionId} className={`bg-slate-900 border rounded-lg ${s.status === 'failed' ? 'border-red-500/30' : 'border-slate-800'}`}>
             <button
               type="button"
               onClick={() => setExpanded(isExpanded ? null : s.sessionId)}
@@ -370,6 +407,10 @@ function SessionsPanel({ agentId }: { agentId: string }) {
                   <span className="font-medium capitalize">{s.status}</span>
                   <span className="text-slate-500">{timeAgo(s.completedAt)}</span>
                 </div>
+                {/* Show error summary inline for failed sessions */}
+                {s.status === 'failed' && s.error && (
+                  <p className="text-xs text-red-400 mt-0.5 truncate">{s.error}</p>
+                )}
                 <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
                   <span>{formatDuration(duration)}</span>
                   {typeof s.cost === 'number' && s.cost > 0 && <span>${(s.cost / 100).toFixed(2)}</span>}
@@ -377,11 +418,25 @@ function SessionsPanel({ agentId }: { agentId: string }) {
                 </div>
               </div>
             </button>
-            {isExpanded && s.outputText && (
+            {isExpanded && (
               <div className="px-3 pb-3 border-t border-slate-800">
-                <pre className="text-xs text-slate-400 mt-2 whitespace-pre-wrap max-h-64 overflow-y-auto">
-                  {s.outputText}
-                </pre>
+                {/* Full error block for failed sessions */}
+                {s.status === 'failed' && s.error && (
+                  <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-300 whitespace-pre-wrap">
+                    {s.error}
+                  </div>
+                )}
+                {s.outputText && (
+                  <div className="mt-2">
+                    <MarkdownContent>{s.outputText}</MarkdownContent>
+                  </div>
+                )}
+                <Link
+                  href={`/sessions/${s.sessionId}`}
+                  className="mt-2 inline-flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300 transition-colors"
+                >
+                  Full session details <ExternalLink size={10} />
+                </Link>
               </div>
             )}
           </div>

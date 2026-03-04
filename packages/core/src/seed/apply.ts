@@ -210,7 +210,7 @@ Strategic, analytical, concise. Like a management consultant delivering a board-
  * Generate the Builder agent definition.
  *
  * The Builder reads the adaptive build plan and orchestrates product
- * construction using plan-task, sessions-spawn, and ask-human.
+ * construction using plan-task, delegate-task, and ask-human.
  */
 export function generateBuilderAgent(
 	companyName: string,
@@ -235,8 +235,7 @@ You orchestrate the construction of the product described in the build plan (kno
 2. Create a plan-task from the phases and steps in the build plan.
 3. For each step in order (respecting dependencies):
    a. If the step requires approval: use ask-human with the approval question. Then reschedule to check back for the answer.
-   b. If approved (or no approval needed): use sessions-spawn to activate the assigned agent with the task description.
-   c. For long-running tasks, use wait: false with sessions-spawn and reschedule to check back later.
+   b. If approved (or no approval needed): use delegate-task to activate the assigned agent with the task description. The result is returned directly.
 4. After each step completes, update the plan-task status and move to the next step.
 5. If a step fails, escalate to human with the error details.
 6. When all phases are complete, send a summary report.
@@ -246,7 +245,6 @@ You orchestrate the construction of the product described in the build plan (kno
 - NEVER skip approval steps — they exist for safety (infrastructure, deployment, payments).
 - If a step's output reveals new requirements, note them but continue the current plan. Flag gaps for human review.
 - Use reschedule (5 minute delay) for continuity between sessions.
-- Read teammate outputs to check on spawned work before marking steps complete.
 
 ## Behavioral Rules
 - Never execute infrastructure or deployment actions directly — always delegate to the assigned agent.
@@ -263,7 +261,7 @@ Efficient, organized, status-focused. Like a project manager running a standup.`
 		reportsTo: null,
 		tools: [
 			'plan-task',
-			'sessions-spawn',
+			'delegate-task',
 			'ask-human',
 			'reschedule',
 			'knowledge-search',

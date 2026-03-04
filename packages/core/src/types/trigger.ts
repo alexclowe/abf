@@ -53,6 +53,15 @@ export interface ProactiveTrigger {
 	readonly threshold?: number | undefined;
 }
 
+export interface ApprovalResumeTrigger {
+	readonly type: 'approval_resume';
+	readonly task: string;
+	readonly approvalId: string;
+	readonly toolName: string;
+	readonly toolArguments: Readonly<Record<string, unknown>>;
+	readonly conversationId?: string | undefined;
+}
+
 export type TriggerConfig =
 	| CronTrigger
 	| EventTrigger
@@ -60,7 +69,8 @@ export type TriggerConfig =
 	| WebhookTrigger
 	| ManualTrigger
 	| HeartbeatTrigger
-	| ProactiveTrigger;
+	| ProactiveTrigger
+	| ApprovalResumeTrigger;
 
 // ─── Activation ───────────────────────────────────────────────────────
 // An activation is the runtime event that fires when a trigger condition is met.

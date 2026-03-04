@@ -23,6 +23,10 @@ export interface OnboardingData {
   buildPlanReviewed?: boolean;
   firstTaskSent?: boolean;
   companyName?: string;
+  orchestratorChatHref?: string;
+  orchestratorDisplayName?: string;
+  firstAgentChatHref?: string;
+  firstAgentDisplayName?: string;
 }
 
 interface OnboardingChecklistProps {
@@ -34,45 +38,52 @@ interface OnboardingChecklistProps {
   startingPhase?: boolean;
 }
 
-const DEFAULT_CHECKLIST: ChecklistItem[] = [
-  {
-    id: 'provider',
-    label: 'Connect an AI provider',
-    description: 'Set up Anthropic, OpenAI, or Ollama to power your agents.',
-    href: '/settings/providers',
-    check: (d) => d.hasProvider,
-  },
-  {
-    id: 'agent',
-    label: 'Create your first agent',
-    description: 'Define an agent with a role, tools, and charter.',
-    href: '/agents/new',
-    check: (d) => d.agentCount > 0,
-  },
-  {
-    id: 'run',
-    label: 'Run an agent',
-    description: 'Trigger your first agent session to see it in action.',
-    href: '/agents',
-    check: (d) => d.hasRun,
-  },
-  {
-    id: 'knowledge',
-    label: 'Add knowledge files',
-    description: 'Upload company docs, brand guidelines, or SOPs to the knowledge base.',
-    href: '/knowledge',
-    check: (d) => d.knowledgeCount > 0,
-  },
-  {
-    id: 'channel',
-    label: 'Connect a channel',
-    description: 'Wire up Slack, Discord, Telegram, or email for agent communication.',
-    href: '/channels',
-    check: (d) => d.hasChannel,
-  },
-];
+function buildDefaultChecklist(data: OnboardingData): ChecklistItem[] {
+  const chatLabel = data.firstAgentDisplayName
+    ? `Chat with ${data.firstAgentDisplayName}`
+    : 'Chat with an agent';
+  const chatHref = data.firstAgentChatHref || '/agents';
+  return [
+    {
+      id: 'provider',
+      label: 'Connect an AI provider',
+      description: 'Set up Anthropic, OpenAI, or Ollama to power your agents.',
+      href: '/settings/providers',
+      check: (d) => d.hasProvider,
+    },
+    {
+      id: 'agent',
+      label: 'Create your first agent',
+      description: 'Define an agent with a role, tools, and charter.',
+      href: '/agents/new',
+      check: (d) => d.agentCount > 0,
+    },
+    {
+      id: 'chat',
+      label: chatLabel,
+      description: 'Start a conversation to see your agent in action.',
+      href: chatHref,
+      check: (d) => d.hasRun,
+    },
+    {
+      id: 'knowledge',
+      label: 'Add knowledge files',
+      description: 'Upload company docs, brand guidelines, or SOPs to the knowledge base.',
+      href: '/knowledge',
+      check: (d) => d.knowledgeCount > 0,
+    },
+    {
+      id: 'channel',
+      label: 'Connect a channel',
+      description: 'Wire up Slack, Discord, Telegram, or email for agent communication.',
+      href: '/channels',
+      check: (d) => d.hasChannel,
+    },
+  ];
+}
 
-const SEED_CHECKLIST: ChecklistItem[] = [
+/** Seed project WITH a build plan: review plan → start phase 1. */
+const SEED_BUILD_CHECKLIST: ChecklistItem[] = [
   {
     id: 'agents-ready',
     label: 'Your agents are ready',
@@ -96,18 +107,46 @@ const SEED_CHECKLIST: ChecklistItem[] = [
   },
 ];
 
+/** Seed project WITHOUT a build plan (services, consulting, etc): operational next steps. */
+function buildSeedOpsChecklist(data: OnboardingData): ChecklistItem[] {
+  const chatLabel = data.orchestratorDisplayName
+    ? `Chat with ${data.orchestratorDisplayName}`
+    : 'Chat with your team';
+  const chatHref = data.orchestratorChatHref || '/agents';
+  return [
+    {
+      id: 'agents-ready',
+      label: 'Your agents are ready',
+      description: 'Agents were generated from your seed document.',
+      href: '/agents',
+      check: (d) => d.agentCount > 0,
+    },
+    {
+      id: 'chat',
+      label: chatLabel,
+      description: 'Start a conversation with your team lead to get things moving.',
+      href: chatHref,
+      check: (d) => d.hasRun,
+    },
+    {
+      id: 'channel',
+      label: 'Connect a channel',
+      description: 'Wire up Slack, Discord, Telegram, or email for agent communication.',
+      href: '/channels',
+      check: (d) => d.hasChannel,
+    },
+  ];
+}
+
 export function OnboardingChecklist({ data, dismissed, onDismiss, onStartPhase1, startingPhase }: OnboardingChecklistProps) {
   const [collapsed, setCollapsed] = useState(false);
 
-  if (dismissed) return null;
-
   const isSeed = data.isSeed ?? false;
-  const seedChecklist = isSeed && data.hasBuildPlan
-    ? SEED_CHECKLIST
+  const checklist = isSeed && data.hasBuildPlan
+    ? SEED_BUILD_CHECKLIST
     : isSeed
-      ? SEED_CHECKLIST.filter((item) => item.id !== 'build-plan')
-      : null;
-  const checklist = seedChecklist ?? DEFAULT_CHECKLIST;
+      ? buildSeedOpsChecklist(data)
+      : buildDefaultChecklist(data);
   const completedCount = checklist.filter((item) => item.check(data)).length;
   const allDone = completedCount === checklist.length;
 
@@ -115,6 +154,8 @@ export function OnboardingChecklist({ data, dismissed, onDismiss, onStartPhase1,
   useEffect(() => {
     if (allDone) setCollapsed(true);
   }, [allDone]);
+
+  if (dismissed) return null;
 
   const title = isSeed
     ? allDone ? 'Setup Complete!' : `Quick Start — ${data.companyName || 'Your Company'}`

@@ -7,6 +7,7 @@ import { Bot, LayoutDashboard, Users, Bell, ScrollText, Layers, GitBranch, Trend
 import clsx from 'clsx';
 import useSWR from 'swr';
 import { getIcon } from '../lib/icon-map';
+import { useEventStream } from '@/lib/event-stream-provider';
 
 interface NavItem {
   href: string;
@@ -98,6 +99,15 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pendingApprovals = Array.isArray(approvals) ? approvals.length : 0;
   const openEscalations = Array.isArray(escalations) ? escalations.filter((e: Record<string, unknown>) => !e.resolved).length : 0;
 
+  // Agent message badge — count messages newer than last seen timestamp
+  const { data: stream } = useEventStream();
+  const [lastSeenTs, setLastSeenTs] = useState(0);
+  useEffect(() => {
+    setLastSeenTs(Number(localStorage.getItem('abf-agent-msg-seen') ?? '0'));
+  }, []);
+  const unreadAgentMsgs = (stream?.agentMessages ?? [])
+    .filter(m => m.timestamp > lastSeenTs).length;
+
   // If API returned data, use it (resolving icon strings); otherwise fall back to static
   const navItems = apiNav
     ? apiNav.map(item => ({
@@ -171,6 +181,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
                 const badgeCount = href === '/approvals' ? pendingApprovals
                   : href === '/alerts' ? openEscalations
+                  : href === '/mail' ? unreadAgentMsgs
                   : 0;
                 return (
                   <Link

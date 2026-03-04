@@ -72,4 +72,6 @@ export interface AgentState {
 	readonly totalCost: USDCents;
 	readonly sessionsCompleted: number;
 	readonly errorCount: number;
+	/** Most recent error message from a failed session (if any). */
+	readonly lastError?: string | undefined;
 }

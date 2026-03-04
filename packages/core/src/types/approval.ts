@@ -25,6 +25,10 @@ export interface ApprovalRequest {
 	answer?: string | undefined;
 	/** Why this approval was created. 'unlisted_action' = tool not in allowedActions. */
 	readonly escalationReason?: 'requires_approval' | 'unlisted_action' | undefined;
+	/** Conversation ID for auto-resume after approval (chat sessions). */
+	readonly conversationId?: string | undefined;
+	/** Original task description for context when auto-resuming. */
+	readonly originalTask?: string | undefined;
 }
 
 export interface IApprovalStore {

@@ -101,6 +101,29 @@ export default function OverviewPage() {
     const agentCount = agents?.length ?? 0;
     const hasRun = agents?.some((a) => (a.state?.sessionsCompleted ?? 0) > 0) ?? false;
     const knowledgeCount = knowledgeFiles?.length ?? 0;
+
+    // Find the orchestrator agent (team lead) for seed projects
+    let orchestratorChatHref: string | undefined;
+    let orchestratorDisplayName: string | undefined;
+    if (teams && agents) {
+      const orchestratorName = teams[0]?.orchestrator;
+      if (orchestratorName) {
+        const orchAgent = agents.find(a => a.config.name === orchestratorName);
+        if (orchAgent) {
+          orchestratorChatHref = `/agents/${orchAgent.config.id}/chat`;
+          orchestratorDisplayName = orchAgent.config.displayName || orchAgent.config.name;
+        }
+      }
+    }
+
+    // Find the first agent for default (non-seed) projects
+    let firstAgentChatHref: string | undefined;
+    let firstAgentDisplayName: string | undefined;
+    if (agents?.[0]) {
+      firstAgentChatHref = `/agents/${agents[0].config.id}/chat`;
+      firstAgentDisplayName = agents[0].config.displayName || agents[0].config.name;
+    }
+
     return {
       hasProvider, agentCount, hasRun, hasChannel: false, knowledgeCount,
       isSeed,
@@ -108,8 +131,12 @@ export default function OverviewPage() {
       buildPlanReviewed: onboardingState.build_plan_reviewed,
       firstTaskSent: onboardingState.first_task_sent,
       companyName: typeof projectConfig?.name === 'string' ? projectConfig.name : seedMeta?.name,
+      orchestratorChatHref,
+      orchestratorDisplayName,
+      firstAgentChatHref,
+      firstAgentDisplayName,
     };
-  }, [authStatus, agents, knowledgeFiles, isSeed, buildPlanFile, onboardingState, seedMeta]);
+  }, [authStatus, agents, knowledgeFiles, isSeed, buildPlanFile, onboardingState, seedMeta, teams, projectConfig]);
 
   const [startingPhase, setStartingPhase] = useState(false);
 
@@ -150,6 +177,7 @@ export default function OverviewPage() {
         name: a.config.name,
         displayName: a.config.displayName,
         errorCount: a.state?.errorCount as number,
+        lastError: (a.state as Record<string, unknown> | undefined)?.lastError as string | undefined,
       }));
   }, [agents]);
 

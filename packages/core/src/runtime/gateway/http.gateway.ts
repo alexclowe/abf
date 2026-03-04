@@ -61,10 +61,11 @@ export interface GatewayDeps {
 	readonly billingLedger?: import('../../billing/types.js').IBillingLedger | undefined;
 	readonly pluginRegistry?: import('./plugin-registry.js').PluginRegistry | undefined;
 	readonly sessionManager?: ISessionManager | undefined;
-	readonly conversationStore?: import('../conversation-store.js').InMemoryConversationStore | undefined;
+	readonly conversationStore?: import('../conversation-store.js').IConversationStore | undefined;
 	readonly mailboxStore?: import('../../mailbox/types.js').IMailboxStore | undefined;
 	/** Glob patterns for allowed external mail senders (from config.mail.allowedSenders). */
 	readonly mailAllowedSenders?: readonly string[] | undefined;
+	readonly operatorChannel?: import('../../messaging/operator-channel.js').OperatorChannel | undefined;
 }
 
 /** @deprecated Use GatewayDeps instead. Kept for backwards compatibility. */
@@ -597,6 +598,7 @@ export class HttpGateway implements IGateway {
 
 				let onApproval = false;
 				let onAlert = false;
+				let onAgentMessage = true; // default ON
 				let channel = 'none';
 
 				try {
@@ -606,6 +608,7 @@ export class HttpGateway implements IGateway {
 					const notifications = (parsed?.['notifications'] ?? {}) as Record<string, unknown>;
 					onApproval = Boolean(notifications['onApproval']);
 					onAlert = Boolean(notifications['onAlert']);
+					onAgentMessage = notifications['onAgentMessage'] !== false;
 					channel = (notifications['channel'] as string) ?? 'none';
 				} catch {
 					// No config or parse error — return defaults
@@ -640,13 +643,14 @@ export class HttpGateway implements IGateway {
 					}
 				}
 
-				return c.json({ onApproval, onAlert, channel, configured, maskedCredential });
+				return c.json({ onApproval, onAlert, onAgentMessage, channel, configured, maskedCredential });
 			});
 
 			app.put('/api/notifications/config', async (c) => {
 				const body = await c.req.json<{
 					onApproval?: boolean;
 					onAlert?: boolean;
+					onAgentMessage?: boolean;
 					channel?: string;
 					credential?: string;
 					telegramBotToken?: string;
@@ -669,6 +673,7 @@ export class HttpGateway implements IGateway {
 					parsed['notifications'] = {
 						onApproval: body.onApproval ?? false,
 						onAlert: body.onAlert ?? false,
+						onAgentMessage: body.onAgentMessage !== false, // default ON
 						channel: body.channel ?? 'none',
 					};
 
@@ -816,12 +821,10 @@ export class HttpGateway implements IGateway {
 			{ href: '/monitors', label: 'Monitors', icon: 'Eye' },
 			{ href: '/message-templates', label: 'Templates', icon: 'Mail' },
 			{ href: '/approvals', label: 'Approvals', icon: 'ShieldCheck' },
-			{ href: '/escalations', label: 'Escalations', icon: 'AlertTriangle' },
+			{ href: '/alerts', label: 'Alerts', icon: 'AlertTriangle' },
 			{ href: '/mail', label: 'Mail', icon: 'Inbox' },
-			{ href: '/channels', label: 'Channels', icon: 'MessageSquare' },
 			{ href: '/metrics', label: 'Metrics', icon: 'BarChart3' },
 			{ href: '/kpis', label: 'KPIs', icon: 'TrendingUp' },
-			{ href: '/billing', label: 'Billing', icon: 'CreditCard' },
 			{ href: '/settings', label: 'Settings', icon: 'Settings' },
 			{ href: '/logs', label: 'Logs', icon: 'ScrollText' },
 		];

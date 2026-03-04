@@ -141,6 +141,7 @@ export interface SessionManagerDeps {
 	readonly taskPlanStore?: import('../types/task-plan.js').ITaskPlanStore | undefined;
 	readonly sessionEventBus?: import('./session-events.js').SessionEventBus | undefined;
 	readonly mailboxStore?: import('../mailbox/types.js').IMailboxStore | undefined;
+	readonly conversationStore?: import('./conversation-store.js').IConversationStore | undefined;
 }
 
 export class SessionManager implements ISessionManager {
@@ -389,6 +390,56 @@ export class SessionManager implements ISessionManager {
 			}
 		}
 
+		// Handle approval_resume — inject conversation context and resume instruction
+		if (activation.trigger.type === 'approval_resume') {
+			const trigger = activation.trigger;
+			let resumeContext = '';
+
+			if (trigger.conversationId && this.deps.conversationStore) {
+				const conv = this.deps.conversationStore.get(trigger.conversationId);
+				if (conv) {
+					resumeContext = conv.messages
+						.filter((m) => m.role !== 'system')
+						.map((m) => `${m.role}: ${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`)
+						.join('\n');
+				}
+			}
+
+			const resumeMsg = [
+				`APPROVAL RESUME: The operator approved your use of "${trigger.toolName}".`,
+				`Arguments: ${JSON.stringify(trigger.toolArguments)}`,
+				`Original task: ${trigger.task}`,
+				resumeContext ? `\nConversation context:\n${resumeContext}` : '',
+				'\nProceed with executing the approved tool and completing the original task.',
+			].filter(Boolean).join('\n');
+
+			messages.push({ role: 'user', content: resumeMsg });
+		}
+
+		// Load conversation context for channel replies (operator replied on Slack/Discord/etc.)
+		if (
+			activation.trigger.type !== 'approval_resume' &&
+			activation.payload?.['conversationId'] &&
+			this.deps.conversationStore
+		) {
+			const convId = activation.payload['conversationId'] as string;
+			const conv = this.deps.conversationStore.get(convId);
+			if (conv && conv.messages.length > 0) {
+				const context = conv.messages
+					.filter((m) => m.role !== 'system')
+					.map((m) => `${m.role}: ${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`)
+					.join('\n');
+				// Replace the last user message with one that includes conversation context
+				const lastUserIdx = messages.length - 1;
+				if (messages[lastUserIdx]?.role === 'user') {
+					messages[lastUserIdx] = {
+						role: 'user',
+						content: `Previous conversation:\n${context}\n\nOperator's new message: ${activation.trigger.task}`,
+					};
+				}
+			}
+		}
+
 		// Step 3: Get provider + tools
 		const provider = this.deps.providerRegistry.getBySlug(agent.provider);
 		if (!provider) {
@@ -467,18 +518,42 @@ export class SessionManager implements ISessionManager {
 			});
 
 			// Execute tool calls with streaming events
+			const payloadConvId = (activation.payload as Record<string, unknown> | undefined)?.['conversationId'];
+			const approvalMeta: { conversationId?: string; originalTask?: string } = {
+				originalTask: activation.trigger.task,
+			};
+			if (typeof payloadConvId === 'string') approvalMeta.conversationId = payloadConvId;
+			let approvalUsed = false;
+
 			for (const tc of pendingToolCalls) {
 				const tool = this.deps.toolRegistry.get(tc.name as import('../types/common.js').ToolId);
 				if (!tool) continue;
 
 				const parsedArgs = JSON.parse(tc.arguments) as Record<string, unknown>;
 
-				// Behavioral bounds enforcement (R3)
-				const boundsMsg = await this.checkAndEnforceBounds(tc.name, agent, sessionId, totalCost, parsedArgs);
-				if (boundsMsg) {
-					emitChunk({ type: 'tool_result', toolName: tc.name, toolOutput: boundsMsg });
-					messages.push({ role: 'tool', content: boundsMsg, toolCallId: tc.id });
-					continue;
+				// Skip bounds check for the specific tool that was just approved (one-time)
+				const isApprovedTool = !approvalUsed
+					&& activation.trigger.type === 'approval_resume'
+					&& tc.name === activation.trigger.toolName;
+
+				if (isApprovedTool) {
+					approvalUsed = true;
+				} else {
+					// Behavioral bounds enforcement (R3)
+					const boundsResult = await this.checkAndEnforceBounds(tc.name, agent, sessionId, totalCost, parsedArgs, approvalMeta);
+					if (boundsResult) {
+						if (boundsResult.approvalId) {
+							emitChunk({
+								type: 'approval_queued',
+								toolName: tc.name,
+								toolArguments: parsedArgs,
+								approvalId: boundsResult.approvalId,
+							});
+						}
+						emitChunk({ type: 'tool_result', toolName: tc.name, toolOutput: boundsResult.message });
+						messages.push({ role: 'tool', content: boundsResult.message, toolCallId: tc.id });
+						continue;
+					}
 				}
 
 				emitChunk({
@@ -559,6 +634,16 @@ export class SessionManager implements ISessionManager {
 		// Emit session end for streaming sessions (R12)
 		this.deps.sessionEventBus?.emitSessionEnd(activation.agentId, sessionId, 'completed', outputText);
 
+		// Append both sides to conversation for channel replies
+		const streamConvId = activation.payload?.['conversationId'] as string | undefined;
+		if (streamConvId && this.deps.conversationStore && outputText) {
+			this.deps.conversationStore.append(
+				streamConvId,
+				{ role: 'user', content: activation.trigger.task },
+				{ role: 'assistant', content: outputText },
+			);
+		}
+
 		return Ok({
 			sessionId,
 			agentId: activation.agentId,
@@ -574,6 +659,7 @@ export class SessionManager implements ISessionManager {
 			cost: totalCost,
 			memoryUpdates: [],
 			outputText,
+			task: activation.trigger.task,
 		});
 	}
 
@@ -649,6 +735,56 @@ export class SessionManager implements ISessionManager {
 
 		// Step 2: Build prompt
 		const messages: ChatMessage[] = this.buildPrompt(agent, memory, activation, mergedKnowledge, teammateOutputs, inboxItems, unreadMail);
+
+		// Handle approval_resume — inject conversation context and resume instruction
+		if (activation.trigger.type === 'approval_resume') {
+			const trigger = activation.trigger;
+			let resumeContext = '';
+
+			// Load conversation history from store
+			if (trigger.conversationId && this.deps.conversationStore) {
+				const conv = this.deps.conversationStore.get(trigger.conversationId);
+				if (conv) {
+					resumeContext = conv.messages
+						.filter((m) => m.role !== 'system')
+						.map((m) => `${m.role}: ${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`)
+						.join('\n');
+				}
+			}
+
+			const resumeMsg = [
+				`APPROVAL RESUME: The operator approved your use of "${trigger.toolName}".`,
+				`Arguments: ${JSON.stringify(trigger.toolArguments)}`,
+				`Original task: ${trigger.task}`,
+				resumeContext ? `\nConversation context:\n${resumeContext}` : '',
+				'\nProceed with executing the approved tool and completing the original task.',
+			].filter(Boolean).join('\n');
+
+			messages.push({ role: 'user', content: resumeMsg });
+		}
+
+		// Load conversation context for channel replies (operator replied on Slack/Discord/etc.)
+		if (
+			activation.trigger.type !== 'approval_resume' &&
+			activation.payload?.['conversationId'] &&
+			this.deps.conversationStore
+		) {
+			const convId = activation.payload['conversationId'] as string;
+			const conv = this.deps.conversationStore.get(convId);
+			if (conv && conv.messages.length > 0) {
+				const context = conv.messages
+					.filter((m) => m.role !== 'system')
+					.map((m) => `${m.role}: ${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`)
+					.join('\n');
+				const lastUserIdx = messages.length - 1;
+				if (messages[lastUserIdx]?.role === 'user') {
+					messages[lastUserIdx] = {
+						role: 'user',
+						content: `Previous conversation:\n${context}\n\nOperator's new message: ${activation.trigger.task}`,
+					};
+				}
+			}
+		}
 
 		// Step 3: Execute LLM call
 		const provider = this.deps.providerRegistry.getBySlug(agent.provider);
@@ -726,17 +862,42 @@ export class SessionManager implements ISessionManager {
 			});
 
 			// Execute tool calls
+			const payloadConvIdNS = (activation.payload as Record<string, unknown> | undefined)?.['conversationId'];
+			const approvalMetaNonStream: { conversationId?: string; originalTask?: string } = {
+				originalTask: activation.trigger.task,
+			};
+			if (typeof payloadConvIdNS === 'string') approvalMetaNonStream.conversationId = payloadConvIdNS;
+			let approvalUsedNonStream = false;
+
 			for (const tc of pendingToolCalls) {
 				const tool = this.deps.toolRegistry.get(tc.name as import('../types/common.js').ToolId);
 				if (!tool) continue;
 
 				const parsedArgs = JSON.parse(tc.arguments) as Record<string, unknown>;
 
-				// Behavioral bounds enforcement (R3)
-				const boundsMsg = await this.checkAndEnforceBounds(tc.name, agent, sessionId, totalCost, parsedArgs);
-				if (boundsMsg) {
-					messages.push({ role: 'tool', content: boundsMsg, toolCallId: tc.id });
-					continue;
+				// Skip bounds check for the specific tool that was just approved (one-time)
+				const isApprovedToolNS = !approvalUsedNonStream
+					&& activation.trigger.type === 'approval_resume'
+					&& tc.name === activation.trigger.toolName;
+
+				if (isApprovedToolNS) {
+					approvalUsedNonStream = true;
+				} else {
+					// Behavioral bounds enforcement (R3)
+					const boundsResult = await this.checkAndEnforceBounds(tc.name, agent, sessionId, totalCost, parsedArgs, approvalMetaNonStream);
+					if (boundsResult) {
+						// Emit approval_queued event for non-streaming sessions (R12)
+						if (boundsResult.approvalId) {
+							this.deps.sessionEventBus?.emitStreamEvent(activation.agentId, sessionId, {
+								type: 'approval_queued',
+								toolName: tc.name,
+								toolArguments: parsedArgs,
+								approvalId: boundsResult.approvalId,
+							});
+						}
+						messages.push({ role: 'tool', content: boundsResult.message, toolCallId: tc.id });
+						continue;
+					}
 				}
 
 				const call: ToolCall = {
@@ -914,6 +1075,16 @@ export class SessionManager implements ISessionManager {
 		const finalStatus = escalations.length > 0 ? 'escalated' as SessionStatus : status;
 		this.deps.sessionEventBus?.emitSessionEnd(activation.agentId, sessionId, finalStatus, outputText);
 
+		// Append both sides to conversation for channel replies
+		const nonStreamConvId = activation.payload?.['conversationId'] as string | undefined;
+		if (nonStreamConvId && this.deps.conversationStore && outputText) {
+			this.deps.conversationStore.append(
+				nonStreamConvId,
+				{ role: 'user', content: activation.trigger.task },
+				{ role: 'assistant', content: outputText },
+			);
+		}
+
 		return Ok({
 			sessionId,
 			agentId: activation.agentId,
@@ -929,6 +1100,7 @@ export class SessionManager implements ISessionManager {
 			cost: totalCost,
 			memoryUpdates: [],
 			outputText,
+			task: activation.trigger.task,
 			rescheduleIn,
 		});
 	}
@@ -943,7 +1115,7 @@ export class SessionManager implements ISessionManager {
 
 	/**
 	 * Check behavioral bounds before tool execution.
-	 * Returns a message to push to the LLM if blocked, or null to proceed.
+	 * Returns { message, approvalId? } if blocked/queued, or null to proceed.
 	 */
 	private async checkAndEnforceBounds(
 		toolName: string,
@@ -951,7 +1123,8 @@ export class SessionManager implements ISessionManager {
 		sessionId: SessionId,
 		totalCost: USDCents,
 		toolArgs?: Record<string, unknown>,
-	): Promise<string | null> {
+		approvalMeta?: { conversationId?: string; originalTask?: string },
+	): Promise<{ message: string; approvalId?: string } | null> {
 		const result = checkBounds({
 			action: toolName,
 			bounds: agent.behavioralBounds,
@@ -968,7 +1141,7 @@ export class SessionManager implements ISessionManager {
 				details: { tool: toolName, reason: 'cost_limit_exceeded', error: result.error.message },
 				severity: 'warn',
 			});
-			return `[BLOCKED] Cost limit exceeded: ${result.error.message}`;
+			return { message: `[BLOCKED] Cost limit exceeded: ${result.error.message}` };
 		}
 
 		const check = result.value;
@@ -982,13 +1155,14 @@ export class SessionManager implements ISessionManager {
 				details: { tool: toolName, reason: check.reason, blocked: true },
 				severity: 'warn',
 			});
-			return `[BLOCKED] Behavioral bounds: ${check.reason}`;
+			return { message: `[BLOCKED] Behavioral bounds: ${check.reason}` };
 		}
 
 		if (check.allowed === 'requires_approval') {
 			const isUnlisted = !!check.reason; // reason is set when tool wasn't in allowedActions
+			let approvalId: string | undefined;
 			if (this.deps.approvalStore) {
-				this.deps.approvalStore.create({
+				approvalId = this.deps.approvalStore.create({
 					agentId: agent.id,
 					sessionId,
 					toolId: toolName as import('../types/common.js').ToolId,
@@ -996,6 +1170,8 @@ export class SessionManager implements ISessionManager {
 					arguments: toolArgs ?? {},
 					createdAt: toISOTimestamp(),
 					escalationReason: isUnlisted ? 'unlisted_action' : 'requires_approval',
+					conversationId: approvalMeta?.conversationId,
+					originalTask: approvalMeta?.originalTask,
 				});
 			}
 			const auditReason = check.reason ?? 'requires_approval';
@@ -1007,7 +1183,11 @@ export class SessionManager implements ISessionManager {
 				details: { tool: toolName, reason: auditReason, queued: true },
 				severity: 'info',
 			});
-			return `[QUEUED] Tool "${toolName}" requires approval. It has been queued for human review.`;
+			const result: { message: string; approvalId?: string } = {
+				message: `[QUEUED] Tool "${toolName}" requires approval. It has been queued for human review.`,
+			};
+			if (approvalId) result.approvalId = approvalId;
+			return result;
 		}
 
 		return null; // Proceed

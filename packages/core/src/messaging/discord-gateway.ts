@@ -5,7 +5,7 @@
  */
 
 import { toISOTimestamp } from '../util/id.js';
-import type { IChannelGateway, InboundMessage } from './interfaces.js';
+import type { ChannelSendResult, IChannelGateway, InboundMessage } from './interfaces.js';
 
 export class DiscordGateway implements IChannelGateway {
 	readonly type = 'discord' as const;
@@ -21,7 +21,7 @@ export class DiscordGateway implements IChannelGateway {
 		this.handlers.push(handler);
 	}
 
-	async send(channelId: string, text: string, _metadata?: Record<string, unknown>): Promise<void> {
+	async send(channelId: string, text: string, _metadata?: Record<string, unknown>): Promise<ChannelSendResult> {
 		// If webhook URL is configured, use that (simpler, no bot token needed for outbound)
 		if (this.webhookUrl) {
 			const res = await fetch(this.webhookUrl, {
@@ -30,7 +30,8 @@ export class DiscordGateway implements IChannelGateway {
 				body: JSON.stringify({ content: text }),
 			});
 			if (!res.ok) throw new Error(`Discord webhook failed: ${res.status}`);
-			return;
+			const data = (await res.json()) as { id?: string };
+			return { messageId: data.id };
 		}
 
 		// Otherwise use Bot API to send to specific channel
@@ -46,6 +47,9 @@ export class DiscordGateway implements IChannelGateway {
 		if (!res.ok) {
 			throw new Error(`Discord API failed: ${res.status}`);
 		}
+
+		const data = (await res.json()) as { id?: string };
+		return { messageId: data.id };
 	}
 
 	async start(): Promise<void> {
@@ -90,6 +94,7 @@ export class DiscordGateway implements IChannelGateway {
 			metadata: {
 				messageId: event.id,
 				guildId: event.guild_id,
+				replyTo: event.message_reference?.message_id,
 			},
 		};
 
@@ -109,4 +114,5 @@ interface DiscordEvent {
 	author?: { id: string; username?: string; bot?: boolean };
 	channel_id?: string;
 	guild_id?: string;
+	message_reference?: { message_id?: string };
 }

@@ -28,6 +28,17 @@ export class Dispatcher implements IDispatcher {
 	/** Optional callback fired when an escalation is created (for notifications). */
 	onEscalationCreated?: ((escalation: EscalationItem) => void) | undefined;
 
+	/** Optional callback fired when an automated session produces meaningful output for the operator. */
+	onSessionOutputCreated?: ((output: {
+		agentId: string;
+		agentName: string;
+		agentDisplayName: string;
+		sessionId: string;
+		task: string;
+		outputText: string;
+		timestamp: string;
+	}) => void) | undefined;
+
 	constructor(
 		private readonly sessionManager: ISessionManager,
 		maxConcurrentSessions: number,
@@ -242,6 +253,7 @@ export class Dispatcher implements IDispatcher {
 			totalCost: ((current.totalCost as number) + (result.cost as number)) as USDCents,
 			sessionsCompleted: current.sessionsCompleted + 1,
 			errorCount: result.status === 'failed' ? current.errorCount + 1 : current.errorCount,
+			lastError: result.status === 'failed' ? (result.error ?? 'Session failed') : current.lastError,
 		});
 	}
 
@@ -251,7 +263,10 @@ export class Dispatcher implements IDispatcher {
 		if (result.ok) {
 			this.onSessionComplete(activation.agentId, result.value);
 		} else {
-			this.updateAgentState(activation.agentId, { status: 'error' });
+			this.updateAgentState(activation.agentId, {
+				status: 'error',
+				lastError: result.error.message,
+			});
 		}
 
 		this.activeSessions.delete(sessionId);
@@ -310,6 +325,7 @@ export class Dispatcher implements IDispatcher {
 			totalCost: ((current.totalCost as number) + (result.cost as number)) as USDCents,
 			sessionsCompleted: current.sessionsCompleted + 1,
 			errorCount: result.status === 'failed' ? current.errorCount + 1 : current.errorCount,
+			lastError: result.status === 'failed' ? (result.error ?? 'Session failed') : current.lastError,
 		});
 
 		// Re-schedule: either from an explicit reschedule tool call (result.rescheduleIn)
@@ -326,6 +342,22 @@ export class Dispatcher implements IDispatcher {
 			} else if (heartbeatTrigger) {
 				// No explicit reschedule — re-run heartbeat at its configured interval.
 				this.scheduleHeartbeat(agentId, heartbeatTrigger.interval, heartbeatTrigger.task);
+			}
+		}
+
+		// Notify operator of meaningful agent output (min 20 chars, non-trivial)
+		if (result.outputText && result.outputText.trim().length > 20) {
+			const outputAgent = agent ?? this.agents.get(agentId);
+			if (outputAgent) {
+				this.onSessionOutputCreated?.({
+					agentId,
+					agentName: outputAgent.name,
+					agentDisplayName: outputAgent.displayName,
+					sessionId: result.sessionId,
+					task: result.task ?? 'Agent task',
+					outputText: result.outputText,
+					timestamp: result.completedAt,
+				});
 			}
 		}
 	}
@@ -353,7 +385,7 @@ export class Dispatcher implements IDispatcher {
 		this.heartbeatTimers.set(agentId, timer);
 	}
 
-	private updateAgentState(agentId: AgentId, updates: Partial<Pick<AgentState, 'status'>>): void {
+	private updateAgentState(agentId: AgentId, updates: Partial<Pick<AgentState, 'status' | 'lastError'>>): void {
 		const current = this.agentStates.get(agentId);
 		if (!current) return;
 

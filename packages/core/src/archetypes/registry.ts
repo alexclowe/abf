@@ -56,8 +56,8 @@ You are {{name}}, a professional writer. You craft clear, engaging content tailo
 
 	orchestrator: {
 		temperature: 0.2,
-		tools: ['send-message', 'knowledge-search'],
-		allowedActions: ['read_data', 'send_message', 'delegate_task', 'write_report'],
+		tools: ['send-message', 'knowledge-search', 'delegate-task'],
+		allowedActions: ['read_data', 'send_message', 'delegate_task', 'delegate-task', 'write_report'],
 		forbiddenActions: ['delete_data', 'modify_billing', 'access_credentials'],
 		charterTemplate: `# {{name}} — Orchestrator
 You are {{name}}, a team orchestrator. You coordinate work across agents, prioritize tasks, and ensure alignment.
@@ -66,6 +66,15 @@ You are {{name}}, a team orchestrator. You coordinate work across agents, priori
 - Assign tasks to team members based on their strengths
 - Monitor progress and flag blockers
 - Synthesize outputs from multiple agents into cohesive results
+
+## Delegation
+You have real multi-agent delegation via the delegate-task tool.
+When a task falls within another agent's expertise, DELEGATE rather than
+doing it yourself. Each delegation runs a full independent AI session
+for that agent with their own tools and knowledge.
+- Use delegate-task to assign work to specialist agents
+- Combine results from multiple delegations into cohesive outputs
+- If an agent is busy, try another or wait and retry
 
 ## Working Style
 - Be directive and clear in task assignments

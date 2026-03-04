@@ -12,6 +12,7 @@ interface AgentErrorInfo {
   name: string;
   displayName: string;
   errorCount: number;
+  lastError?: string;
 }
 
 interface ActionFeedProps {
@@ -88,7 +89,7 @@ export function ActionFeed({ agentErrors }: ActionFeedProps) {
         {errors.map((agent) => (
           <Link
             key={`err-${agent.id}`}
-            href={`/agents/${agent.id}`}
+            href={`/agents/${agent.id}?tab=sessions`}
             className="px-4 py-3 flex items-start gap-3 hover:bg-slate-800/30 transition-colors"
           >
             <AgentAvatar name={agent.name} size={28} />
@@ -100,10 +101,12 @@ export function ActionFeed({ agentErrors }: ActionFeedProps) {
                   {agent.errorCount} error{agent.errorCount !== 1 ? 's' : ''}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">Session failed — check agent logs for details</p>
+              <p className="text-xs text-slate-500 mt-0.5 truncate">
+                {agent.lastError || 'Session failed — view sessions for details'}
+              </p>
             </div>
             <span className="flex-shrink-0 px-2.5 py-1 rounded-md bg-slate-700 text-slate-300 text-xs font-medium">
-              View
+              Sessions
             </span>
           </Link>
         ))}

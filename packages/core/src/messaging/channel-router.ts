@@ -10,14 +10,20 @@ import type { AgentId } from '../types/common.js';
 import type { IDispatcher } from '../runtime/interfaces.js';
 import { createActivationId, toISOTimestamp } from '../util/id.js';
 import type { ChannelRoute, ChannelType, IChannelGateway, InboundMessage } from './interfaces.js';
+import type { OperatorChannel } from './operator-channel.js';
 
 export class ChannelRouter {
 	private readonly gateways = new Map<ChannelType, IChannelGateway>();
 	private routes: ChannelRoute[] = [];
 	private dispatcher: IDispatcher | undefined;
+	private operatorChannel: OperatorChannel | undefined;
 
 	setDispatcher(dispatcher: IDispatcher): void {
 		this.dispatcher = dispatcher;
+	}
+
+	setOperatorChannel(oc: OperatorChannel): void {
+		this.operatorChannel = oc;
 	}
 
 	setRoutes(routes: ChannelRoute[]): void {
@@ -63,13 +69,18 @@ export class ChannelRouter {
 	private async handleInbound(msg: InboundMessage): Promise<void> {
 		if (!this.dispatcher) return;
 
-		// Find matching route
+		// Check if this is a reply to a known agent message
+		const replyRef = this.extractReplyRef(msg);
+		const replyMapping = this.operatorChannel?.resolveReply(msg.channel, replyRef);
+
+		// Find matching route (reply mapping overrides route for agent targeting)
 		const route = this.findRoute(msg);
-		if (!route) return;
+		const targetAgent = replyMapping?.agentId ?? route?.agent;
+		if (!targetAgent) return;
 
 		const activation = {
 			id: createActivationId(),
-			agentId: route.agent as AgentId,
+			agentId: targetAgent as AgentId,
 			trigger: {
 				type: 'event' as const,
 				event: `channel:${msg.channel}`,
@@ -80,7 +91,7 @@ export class ChannelRouter {
 				channel: msg.channel,
 				senderId: msg.senderId,
 				senderName: msg.senderName,
-				conversationId: msg.conversationId,
+				conversationId: replyMapping?.conversationId ?? msg.conversationId,
 				text: msg.text,
 				metadata: msg.metadata,
 			},
@@ -89,7 +100,8 @@ export class ChannelRouter {
 		const result = await this.dispatcher.dispatch(activation);
 
 		// If configured to respond in-channel, send the agent's output back
-		if (route.respondInChannel && result.ok) {
+		const respondInChannel = route?.respondInChannel ?? !!replyMapping;
+		if (respondInChannel && result.ok) {
 			const sessionResult = this.dispatcher.getSessionResult(result.value);
 			if (sessionResult?.outputText) {
 				const gw = this.gateways.get(msg.channel);
@@ -98,6 +110,19 @@ export class ChannelRouter {
 					await gw.send(target, sessionResult.outputText);
 				}
 			}
+		}
+	}
+
+	/** Extract reply reference from inbound message metadata (per-channel). */
+	private extractReplyRef(msg: InboundMessage): string | undefined {
+		const meta = msg.metadata;
+		if (!meta) return undefined;
+		switch (msg.channel) {
+			case 'slack': return meta['threadTs'] as string | undefined;
+			case 'discord': return meta['replyTo'] as string | undefined;
+			case 'telegram': return meta['replyToMessageId'] ? String(meta['replyToMessageId']) : undefined;
+			case 'email': return meta['inReplyTo'] as string | undefined;
+			default: return undefined;
 		}
 	}
 

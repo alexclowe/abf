@@ -13,7 +13,7 @@ import type { AgentId } from '../../types/common.js';
 import type { ChatMessage, ContentPart } from '../../types/provider.js';
 import { createActivationId, toISOTimestamp } from '../../util/id.js';
 import type { GatewayDeps } from './http.gateway.js';
-import type { InMemoryConversationStore } from '../conversation-store.js';
+import type { IConversationStore } from '../conversation-store.js';
 import type { ISessionManager, StreamEvent } from '../interfaces.js';
 
 /** Shape of a UI Message part sent by the AI SDK client. */
@@ -34,7 +34,7 @@ interface UIMessage {
 
 export interface ChatRoutesDeps extends GatewayDeps {
 	readonly sessionManager: ISessionManager;
-	readonly conversationStore: InMemoryConversationStore;
+	readonly conversationStore: IConversationStore;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────
@@ -97,40 +97,6 @@ function toChatMessages(messages: readonly UIMessage[]) {
 const feedbackStore = new Map<string, { messageId: string; feedback: string; timestamp: number }>();
 const MAX_FEEDBACK = 1000;
 
-// ─── Conversation Metadata Store (for sidebar) ──────────────────────
-
-interface ConversationMeta {
-	id: string;
-	agentId: string;
-	title: string;
-	lastAccessed: number;
-	messageCount: number;
-}
-
-const conversationMeta = new Map<string, ConversationMeta>();
-const MAX_CONVERSATION_META = 200;
-
-function upsertConversationMeta(convId: string, agentId: string, userText: string, msgCount: number) {
-	const existing = conversationMeta.get(convId);
-	if (existing) {
-		existing.lastAccessed = Date.now();
-		existing.messageCount = msgCount;
-	} else {
-		// Evict oldest if at capacity — Map preserves insertion order, so first key is oldest
-		if (conversationMeta.size >= MAX_CONVERSATION_META) {
-			const oldestKey = conversationMeta.keys().next().value;
-			if (oldestKey) conversationMeta.delete(oldestKey);
-		}
-		conversationMeta.set(convId, {
-			id: convId,
-			agentId,
-			title: userText.slice(0, 50),
-			lastAccessed: Date.now(),
-			messageCount: msgCount,
-		});
-	}
-}
-
 // ─── Route Registration ─────────────────────────────────────────────
 
 export function registerChatRoutes(app: Hono, deps: ChatRoutesDeps): void {
@@ -146,6 +112,7 @@ export function registerChatRoutes(app: Hono, deps: ChatRoutesDeps): void {
 		// Support both AI SDK format { id, messages[] } and legacy { message, conversationId }
 		let userText: string;
 		let conversationHistory: { role: string; content: ChatMessage['content'] }[];
+		let conversationId: string;
 
 		if (Array.isArray(body['messages'])) {
 			// AI SDK DefaultChatTransport format
@@ -156,14 +123,14 @@ export function registerChatRoutes(app: Hono, deps: ChatRoutesDeps): void {
 			// All messages except the last user message become conversation history
 			conversationHistory = toChatMessages(messages.slice(0, -1));
 
-			// Track conversation metadata for sidebar
-			const convId = typeof body['id'] === 'string' ? body['id'] : nanoid();
-			upsertConversationMeta(convId, agentId, userText, messages.length);
+			// Track conversation metadata for sidebar (persisted in store)
+			conversationId = typeof body['id'] === 'string' ? body['id'] : nanoid();
+			deps.conversationStore.upsertMeta(conversationId, agentId, userText, messages.length);
 		} else {
 			// Legacy format: { message: string, conversationId?: string }
 			userText = typeof body['message'] === 'string' ? (body['message'] as string) : '';
-			const convId = (body['conversationId'] as string) || nanoid();
-			const conv = deps.conversationStore.getOrCreate(convId, agentId);
+			conversationId = (body['conversationId'] as string) || nanoid();
+			const conv = deps.conversationStore.getOrCreate(conversationId, agentId);
 			conversationHistory = [...conv.messages];
 		}
 
@@ -191,7 +158,7 @@ export function registerChatRoutes(app: Hono, deps: ChatRoutesDeps): void {
 			agentId,
 			trigger: { type: 'manual' as const, task: userText.trim() },
 			timestamp: toISOTimestamp(),
-			payload: { message: userText.trim() } as Record<string, unknown>,
+			payload: { message: userText.trim(), conversationId } as Record<string, unknown>,
 		};
 
 		// Create SSE stream with UI Message Stream v1 protocol
@@ -303,6 +270,33 @@ export function registerChatRoutes(app: Hono, deps: ChatRoutesDeps): void {
 							write({ type: 'text-delta', id: blockId, delta: output });
 						}
 
+					} else if (event.type === 'approval_queued' && event.approvalId) {
+						// Emit approval card as a tool output with special metadata
+						const approvalTcId = `approval-${event.approvalId}`;
+						write({
+							type: 'tool-input-start',
+							toolCallId: approvalTcId,
+							toolName: event.toolName ?? 'approval',
+						});
+						write({
+							type: 'tool-input-available',
+							toolCallId: approvalTcId,
+							toolName: event.toolName ?? 'approval',
+							input: event.toolArguments ?? {},
+						});
+						write({
+							type: 'tool-output-available',
+							toolCallId: approvalTcId,
+							output: {
+								__abf_approval: true,
+								approvalId: event.approvalId,
+								status: 'pending',
+								toolName: event.toolName,
+								message: `Tool "${event.toolName}" requires approval.`,
+								approvalsUrl: '/approvals',
+							},
+						});
+
 					} else if (event.type === 'error' && event.error) {
 						// Close any open text block before error
 						if (textBlockId) {
@@ -328,6 +322,15 @@ export function registerChatRoutes(app: Hono, deps: ChatRoutesDeps): void {
 				// (session counting, escalation tracking, KPI accumulation)
 				if (result.ok) {
 					deps.dispatcher.recordExternalSession(activation.agentId, result.value);
+
+					// Persist user + assistant messages for conversation history
+					const assistantText = result.value.outputText ?? '';
+					deps.conversationStore.getOrCreate(conversationId, activation.agentId);
+					deps.conversationStore.append(
+						conversationId,
+						{ role: 'user', content: userText.trim() },
+						...(assistantText ? [{ role: 'assistant' as const, content: assistantText }] : []),
+					);
 				}
 
 				// Close any open text block
@@ -395,30 +398,25 @@ export function registerChatRoutes(app: Hono, deps: ChatRoutesDeps): void {
 	// GET /api/agents/:id/conversations — list conversations for an agent
 	app.get('/api/agents/:id/conversations', (c) => {
 		const agentId = c.req.param('id');
-		const convs: ConversationMeta[] = [];
-		for (const meta of conversationMeta.values()) {
-			if (meta.agentId === agentId) convs.push(meta);
-		}
-		convs.sort((a, b) => b.lastAccessed - a.lastAccessed);
-		return c.json(convs);
+		return c.json(deps.conversationStore.listByAgent(agentId));
 	});
 
 	// DELETE /api/agents/:id/conversations/:cid — delete conversation
 	app.delete('/api/agents/:id/conversations/:cid', (c) => {
 		const cid = c.req.param('cid');
-		conversationMeta.delete(cid);
-		deps.conversationStore.delete(cid);
+		deps.conversationStore.deleteMeta(cid);
 		return c.json({ ok: true });
 	});
 
 	// PUT /api/agents/:id/conversations/:cid — rename conversation
 	app.put('/api/agents/:id/conversations/:cid', async (c) => {
 		const cid = c.req.param('cid');
+		const agentId = c.req.param('id');
 		const body: Record<string, unknown> = await c.req.json<Record<string, unknown>>().catch(() => ({}));
 		const title = typeof body['title'] === 'string' ? body['title'] : '';
-		const meta = conversationMeta.get(cid);
+		const meta = deps.conversationStore.getMeta(cid);
 		if (!meta) return c.json({ error: 'Conversation not found' }, 404);
-		meta.title = title.slice(0, 50);
+		deps.conversationStore.upsertMeta(cid, agentId, title, meta.messageCount);
 		return c.json({ ok: true });
 	});
 

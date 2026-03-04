@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import useSWR from 'swr';
@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Download,
   MessageSquare,
+  Loader2,
 } from 'lucide-react';
 
 const BASE = process.env.NEXT_PUBLIC_ABF_API_URL ?? '';
@@ -81,25 +82,47 @@ function getSuggestedPrompts(role?: string): string[] {
 // ─── ChatBody ────────────────────────────────────────────────────────
 
 function ChatBody({ agentId, onClear }: { agentId: string; onClear: () => void }) {
+  // Mark agent messages as seen when visiting chat page
+  useEffect(() => {
+    localStorage.setItem('abf-agent-msg-seen', String(Date.now()));
+  }, []);
+
   const { data: agent } = useSWR(agentId ? `agent-${agentId}` : null, () => api.agents.get(agentId));
   const scrollRef = useRef<HTMLDivElement>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
 
-  const { messages, sendMessage, setMessages, status, error, stop } = useChat({
-    transport: new DefaultChatTransport({
-      api: `${BASE}/api/agents/${agentId}/chat`,
-      headers: API_KEY ? { Authorization: `Bearer ${API_KEY}` } : undefined,
-    }),
-  });
+  // Memoize transport so useChat doesn't get a new instance every render
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: `${BASE}/api/agents/${agentId}/chat`,
+        headers: API_KEY ? { Authorization: `Bearer ${API_KEY}` } : undefined,
+      }),
+    [agentId],
+  );
+
+  const chatOptions = activeConversationId
+    ? { id: activeConversationId, transport }
+    : { transport };
+  const { messages, sendMessage, setMessages, status, error, stop } = useChat(chatOptions);
   const isLoading = status === 'submitted' || status === 'streaming';
+  const isStreaming = status === 'streaming';
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll: scroll on new messages AND while streaming (content growing)
   const messageCount = messages.length;
+  const lastMsg = messages[messages.length - 1];
+  const lastMsgPartsLen = lastMsg?.parts?.length ?? 0;
+  // Track a content fingerprint that changes as streaming text grows
+  const contentFingerprint = lastMsg?.parts
+    ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+    .reduce((len, p) => len + (p.text?.length ?? 0), 0) ?? 0;
+
   useEffect(() => {
-    if (messageCount > 0 && scrollRef.current) {
+    if (scrollRef.current && (messageCount > 0 || isLoading)) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messageCount]);
+  }, [messageCount, lastMsgPartsLen, contentFingerprint, isLoading]);
 
   const handleSend = useCallback(
     (text: string, files?: Array<{ type: 'file'; mediaType: string; url: string }>) => {
@@ -164,8 +187,9 @@ function ChatBody({ agentId, onClear }: { agentId: string; onClear: () => void }
   }
 
   // Check if last message is an assistant message (for regenerate button)
-  const lastMsg = messages[messages.length - 1];
   const showRegenerate = !isLoading && lastMsg?.role === 'assistant';
+  // Show a standalone thinking indicator when we're loading but no assistant message yet
+  const showThinking = isLoading && (!lastMsg || lastMsg.role === 'user');
 
   const suggestedPrompts = getSuggestedPrompts(agent?.config.role);
 
@@ -175,11 +199,30 @@ function ChatBody({ agentId, onClear }: { agentId: string; onClear: () => void }
       {sidebarOpen && (
         <ChatSidebar
           agentId={agentId}
-          onSelectConversation={() => {
-            // For v1: start new conversation (full reload with message history is v2)
+          onSelectConversation={(convId) => {
+            setActiveConversationId(convId);
+            // Fetch conversation messages and populate chat
+            const fetchHeaders: Record<string, string> = {};
+            if (API_KEY) fetchHeaders['Authorization'] = `Bearer ${API_KEY}`;
+            fetch(`${BASE}/api/agents/${agentId}/conversations/${convId}`, { headers: fetchHeaders })
+              .then((r) => r.json())
+              .then((data: { messages?: Array<{ role: string; content: string }> }) => {
+                const uiMessages = (data.messages ?? [])
+                  .filter((m) => m.role === 'user' || m.role === 'assistant')
+                  .map((m, i) => ({
+                    id: `restored-${i}`,
+                    role: m.role as 'user' | 'assistant',
+                    parts: [{ type: 'text' as const, text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }],
+                    createdAt: new Date(),
+                  }));
+                setMessages(uiMessages);
+              })
+              .catch(() => {});
+          }}
+          onNewConversation={() => {
+            setActiveConversationId(null);
             onClear();
           }}
-          onNewConversation={onClear}
           onClose={() => setSidebarOpen(false)}
         />
       )}
@@ -267,6 +310,18 @@ function ChatBody({ agentId, onClear }: { agentId: string; onClear: () => void }
               agentId={agentId}
             />
           ))}
+
+          {/* Thinking indicator — shown before first token arrives */}
+          {showThinking && (
+            <div className="flex justify-start">
+              <div className="bg-slate-800 border border-slate-700 rounded-lg px-4 py-3">
+                <div className="flex items-center gap-2 text-slate-400 text-sm">
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Thinking...</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Regenerate button */}
           {showRegenerate && (

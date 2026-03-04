@@ -65,6 +65,8 @@ export interface SessionResult {
 	readonly cost: USDCents;
 	readonly memoryUpdates: readonly string[];
 	readonly outputText?: string | undefined;
+	/** The task that triggered this session (from activation trigger). */
+	readonly task?: string | undefined;
 	/** Seconds to wait before re-running this agent (set by the reschedule tool). */
 	readonly rescheduleIn?: number | undefined;
 	readonly error?: string | undefined;
