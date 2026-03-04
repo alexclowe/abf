@@ -349,6 +349,10 @@ export async function createRuntime(
 	const { createSessionsSpawnTool } = await import('../tools/builtin/sessions-spawn.js');
 	toolRegistry.register(createSessionsSpawnTool(toolContext, { dispatcher, agentsMap }));
 
+	// Register delegate-task tool (real multi-agent orchestration via dispatchAndWait)
+	const { createDelegateTaskTool } = await import('../tools/builtin/delegate-task.js');
+	toolRegistry.register(createDelegateTaskTool(toolContext, { dispatcher, agentsMap }));
+
 	// Proactive evaluator (R9)
 	const { ProactiveEvaluator } = await import('./proactive-evaluator.js');
 	const proactiveEvaluator = new ProactiveEvaluator(providerRegistry);

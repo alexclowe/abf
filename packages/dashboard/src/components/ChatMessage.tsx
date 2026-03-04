@@ -94,27 +94,145 @@ function FeedbackButtons({ messageId, agentId }: { messageId: string; agentId?: 
   );
 }
 
-function ApprovalCard({ approval }: { approval: { toolName?: string; approvalsUrl?: string; message?: string } }) {
+interface ApprovalOutput {
+  approvalId?: string;
+  toolName?: string;
+  approvalsUrl?: string;
+  message?: string;
+  status?: string;
+}
+
+function ApprovalCard({ approval, toolInput }: { approval: ApprovalOutput; toolInput?: Record<string, unknown> }) {
+  const [state, setState] = useState<'pending' | 'approving' | 'rejecting' | 'approved' | 'rejected'>('pending');
+  const [error, setError] = useState<string | null>(null);
+  const [showArgs, setShowArgs] = useState(false);
+
+  const approvalId = approval.approvalId;
+
+  async function handleApprove() {
+    if (!approvalId) return;
+    setState('approving');
+    setError(null);
+    try {
+      const BASE = process.env.NEXT_PUBLIC_ABF_API_URL ?? '';
+      const API_KEY = process.env.NEXT_PUBLIC_ABF_API_KEY;
+      const res = await fetch(`${BASE}/api/approvals/${approvalId}/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
+        },
+      });
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      setState('approved');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed');
+      setState('pending');
+    }
+  }
+
+  async function handleReject() {
+    if (!approvalId) return;
+    setState('rejecting');
+    setError(null);
+    try {
+      const BASE = process.env.NEXT_PUBLIC_ABF_API_URL ?? '';
+      const API_KEY = process.env.NEXT_PUBLIC_ABF_API_KEY;
+      const res = await fetch(`${BASE}/api/approvals/${approvalId}/reject`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
+        },
+      });
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      setState('rejected');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed');
+      setState('pending');
+    }
+  }
+
+  // Summarize tool arguments for display
+  const argSummary = toolInput
+    ? Object.entries(toolInput)
+        .filter(([, v]) => v !== undefined && v !== null)
+        .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+    : null;
+
+  const resolved = state === 'approved' || state === 'rejected';
+
   return (
-    <div className="my-2 bg-amber-500/5 border border-amber-500/20 rounded-lg p-4">
+    <div className={`my-2 rounded-lg p-4 ${resolved ? 'bg-slate-800/30 border border-slate-700/50' : 'bg-amber-500/5 border border-amber-500/20'}`}>
       <div className="flex items-center gap-2">
-        <AlertTriangle size={14} className="text-amber-400" />
-        <span className="text-amber-400 font-medium text-sm">Approval Required</span>
+        {resolved ? (
+          <Check size={14} className={state === 'approved' ? 'text-green-400' : 'text-red-400'} />
+        ) : (
+          <AlertTriangle size={14} className="text-amber-400" />
+        )}
+        <span className={`font-medium text-sm ${resolved ? (state === 'approved' ? 'text-green-400' : 'text-red-400') : 'text-amber-400'}`}>
+          {resolved ? (state === 'approved' ? 'Approved' : 'Rejected') : 'Approval Required'}
+        </span>
         {approval.toolName && (
           <span className="px-2 py-0.5 bg-amber-500/10 text-amber-400 rounded text-xs font-mono">
             {approval.toolName}
           </span>
         )}
       </div>
-      <p className="text-sm text-slate-400 mt-1">
-        {approval.message ?? 'This tool requires your approval before the agent can proceed.'}
-      </p>
-      <a
-        href={approval.approvalsUrl ?? '/approvals'}
-        className="mt-2 inline-flex px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-md text-xs font-medium transition-colors"
-      >
-        Review &amp; Approve
-      </a>
+
+      {/* Tool arguments summary */}
+      {argSummary && argSummary.length > 0 && (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => setShowArgs(!showArgs)}
+            className="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1 transition-colors"
+          >
+            {showArgs ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+            Details
+          </button>
+          {showArgs && (
+            <pre className="mt-1 text-xs text-slate-400 bg-slate-800/50 rounded px-2 py-1.5 overflow-x-auto max-h-32">
+              {argSummary.join('\n')}
+            </pre>
+          )}
+        </div>
+      )}
+
+      {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
+
+      {/* Action buttons */}
+      {!resolved && approvalId && (
+        <div className="flex items-center gap-2 mt-3">
+          <button
+            type="button"
+            onClick={handleApprove}
+            disabled={state !== 'pending'}
+            className="px-4 py-1.5 bg-green-600 hover:bg-green-500 disabled:opacity-60 text-white rounded-md text-xs font-medium transition-colors flex items-center gap-1.5"
+          >
+            <Check size={12} />
+            {state === 'approving' ? 'Approving...' : 'Approve'}
+          </button>
+          <button
+            type="button"
+            onClick={handleReject}
+            disabled={state !== 'pending'}
+            className="px-4 py-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-60 text-slate-300 rounded-md text-xs font-medium transition-colors"
+          >
+            {state === 'rejecting' ? 'Rejecting...' : 'Reject'}
+          </button>
+        </div>
+      )}
+
+      {/* Fallback if no approvalId (shouldn't happen, but safe) */}
+      {!resolved && !approvalId && (
+        <a
+          href={approval.approvalsUrl ?? '/approvals'}
+          className="mt-2 inline-flex px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-md text-xs font-medium transition-colors"
+        >
+          Review &amp; Approve
+        </a>
+      )}
     </div>
   );
 }
@@ -128,7 +246,8 @@ function ToolCallBadge({ part }: { part: Record<string, unknown> }) {
   // Detect approval card in tool output
   const isApproval = output && typeof output === 'object' && (output as Record<string, unknown>)['__abf_approval'];
   if (isApproval) {
-    return <ApprovalCard approval={output as { toolName?: string; approvalsUrl?: string; message?: string }} />;
+    const toolInput = part['input'] as Record<string, unknown> | undefined;
+    return <ApprovalCard approval={output as ApprovalOutput} toolInput={toolInput} />;
   }
 
   const isDone = state === 'output-available';
