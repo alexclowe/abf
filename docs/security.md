@@ -154,10 +154,13 @@ The runtime only provides these tools to the agent during sessions. Even if the 
 
 **What it does**: Sensitive actions are queued for human review instead of being executed immediately.
 
+![Inline Approval Flow](images/approval-flow.png)
+
 **How it works**: When an agent's behavioral bounds include `requires_approval` for an action, the runtime intercepts the tool call and places it in an approval queue. The agent receives a message saying the action has been queued, and the session continues with other work.
 
 You review and approve or reject pending actions through:
-- The **Approvals** page in the Dashboard
+- **Inline in agent chat** -- Approval cards appear directly in the conversation with Approve/Reject buttons and expandable details showing exactly what the agent wants to do
+- The **Approvals** page in the Dashboard for a full queue view
 - The `GET /api/approvals` API endpoint
 
 **For operators**: Start with `requires_approval` on high-impact actions like `publish_content`, `send_client_email`, `database-write`, and `social-publish`. As you build confidence in an agent's judgment, you can selectively remove approval requirements.
