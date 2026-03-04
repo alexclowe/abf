@@ -10,12 +10,13 @@ A Next.js 15 application that provides:
 - **Agent Management** -- View, configure, and trigger agents; send tasks to inboxes
 - **Team View** -- Team composition and orchestrator relationships
 - **Workflow Visualization** -- Visual workflow management with execution state
-- **Approval Queue** -- Review and approve/reject agent actions that require human authorization
+- **Approval Queue** -- Review and approve/reject agent actions inline in chat or via the dedicated approvals page
 - **Escalation Handling** -- Manage human-in-the-loop escalations
 - **Metrics Dashboard** -- Runtime metrics with auto-refresh (every 5 seconds)
 - **KPI Tracking** -- Per-agent performance tracking with target vs. actual gauges
 - **Session Logs** -- Browse session logs and audit trail
 - **Setup Wizard** -- 6-step onboarding: provider selection, API key, company type (interview / document / template), plan review (agents, teams, knowledge, tool gaps, build plan), project creation
+- **Dynamic Onboarding Checklist** -- Context-aware next steps: "Chat with [Agent Name]" links to agent chat pages, adapts for seed vs. default projects
 
 ## How It Works
 

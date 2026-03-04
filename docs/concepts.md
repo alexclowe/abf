@@ -81,6 +81,8 @@ charter: |
 
 ABF includes 10 built-in archetypes that provide sensible defaults for common roles: `researcher`, `writer`, `orchestrator`, `analyst`, `customer-support`, `developer`, `marketer`, `finance`, `monitor`, and `generalist`. When you set `role_archetype` in the YAML, the archetype's defaults (temperature, tools, behavioral bounds, charter template) are merged with your explicit values. Your values always win.
 
+The `orchestrator` archetype includes `delegate-task` in its default tools, enabling real multi-agent delegation out of the box -- orchestrators can assign work to specialist agents and receive results synchronously.
+
 ```bash
 abf agent add --name analyst --archetype analyst --team founders
 ```
@@ -133,7 +135,7 @@ escalation_policy:
 
 ### How teams work
 
-The orchestrator agent coordinates work across team members. It can send messages to other agents through the bus, delegate tasks, and synthesize results. In the Solo Founder template, Compass is the orchestrator -- it delegates research to Scout and writing to Scribe, then compiles their outputs into briefings for the founder.
+The orchestrator agent coordinates work across team members. It can send messages through the bus, delegate tasks using the `delegate-task` tool, and synthesize results. Delegation is synchronous -- the orchestrator calls `delegate-task` with an agent name and task description, and the tool runs a full agent session and returns the result directly. In the Solo Founder template, Compass is the orchestrator -- it delegates research to Scout and writing to Scribe, then compiles their outputs into briefings for the founder.
 
 Team members share access to the `memory/decisions.md` file and can read each other's outputs from the `outputs/` directory. This gives agents awareness of what their teammates have produced without requiring direct message exchanges.
 
@@ -265,7 +267,7 @@ When an LLM requests a tool call during a session:
 
 1. The runtime checks the tool is in the agent's allowed tool list
 2. The runtime validates the call against behavioral bounds
-3. If the tool requires approval, the call is queued (not executed)
+3. If the tool requires approval, the call is queued (not executed) -- the operator sees an inline Approve/Reject card in the agent's chat interface
 4. Otherwise, the handler executes with the provided parameters
 5. The result is returned to the LLM for the next iteration of the tool loop
 

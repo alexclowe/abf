@@ -101,7 +101,7 @@ datastore:
 
 ## 4. Agent Roles as Archetypes (Framework Feature: Role Templates)
 
-> **Status: Implemented** — `packages/core/src/archetypes/registry.ts`. 10 built-in archetypes: researcher, writer, orchestrator, analyst, customer-support, developer, marketer, finance, monitor, generalist. Agent YAML `role_archetype` field merges defaults. `abf agent add --archetype <type>`.
+> **Status: Implemented** — `packages/core/src/archetypes/registry.ts`. 10 built-in archetypes: researcher, writer, orchestrator, analyst, customer-support, developer, marketer, finance, monitor, generalist. Agent YAML `role_archetype` field merges defaults. `abf agent add --archetype <type>`. The `orchestrator` archetype includes `delegate-task` for synchronous multi-agent delegation.
 
 **What CiteRank needs:** 17 agents, but they fall into ~8 archetypes that repeat across any business:
 

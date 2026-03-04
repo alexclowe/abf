@@ -238,6 +238,7 @@ Generated from a seed document via the Seed-to-Company pipeline. The reference a
 - `abf agent add --name <name> --archetype <type> --team <team>` scaffolds new agents
 - Gateway route: `GET /api/archetypes` lists all archetypes
 - Charter templates use `{{name}}` placeholder, auto-expanded
+- `orchestrator` archetype includes `delegate-task` in default tools for real multi-agent delegation
 
 ### Cross-Agent Memory (Outputs)
 - `OutputsManager` writes session outputs to `outputs/<agentName>/` as timestamped `.md` files
@@ -362,6 +363,35 @@ The core differentiator: start a company from just an idea or a business plan do
 - Analyzer compares seed doc capabilities against available ABF tools
 - `ToolGap`: capability, mentionedIn, suggestion, priority (required/important/nice-to-have)
 - Surfaced in CLI summary, dashboard PlanReview (colored priority badges), and `knowledge/tool-gaps.md`
+
+## P4 Framework Features (Completed)
+
+### Multi-Agent Delegation (`delegate-task`)
+- `delegate-task` tool: synchronous delegation — orchestrator calls with agent name + task, gets result back directly
+- Replaces fire-and-forget `sessions-spawn` for orchestration patterns
+- Builder agent charter updated to use `delegate-task` instead of `sessions-spawn`
+- Orchestrator archetype includes `delegate-task` in default tools
+- Key file: `packages/core/src/tools/builtin/delegate-task.ts`
+
+### Inline Chat Approvals
+- Approval cards in agent chat have inline Approve/Reject buttons (no redirect to `/approvals`)
+- Cards show expandable "Details" section with tool arguments
+- Resolved cards dim out with green checkmark (approved) or red X (rejected)
+- Fallback to link if `approvalId` is missing
+- Key file: `packages/dashboard/src/components/ChatMessage.tsx` (`ApprovalCard` component)
+
+### Dynamic Onboarding Checklists
+- Checklist items use real agent names and link to chat pages
+- Seed + no build plan: "Chat with [Orchestrator Name]" → orchestrator's chat page
+- Default (no seed): "Chat with [First Agent]" → first agent's chat page
+- Overview page computes orchestrator from `teams[0].orchestrator` → matching agent
+- Key files: `OnboardingChecklist.tsx`, `packages/dashboard/src/app/page.tsx`
+
+### Operator Communication Layer
+- `OperatorChannel` mediator routes agent output to operators via SQLite conversations, SSE, and external channels
+- Reply mapping with TTL links external channel replies back to originating conversation
+- Conversation persistence: chat sidebar loads history from server
+- Key files: `packages/core/src/messaging/operator-channel.ts`, `packages/core/src/runtime/conversation-store-sqlite.ts`
 
 ## Key Design Decisions
 - Files are the underlying API (YAML, Markdown, JSON) — git-trackable, inspectable

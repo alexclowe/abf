@@ -6,11 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [1.3.0] — 2026-03-04
+
+### Added
+- **`delegate-task` tool** — Synchronous multi-agent delegation. An orchestrator calls `delegate-task` with an agent name and task description; the tool dispatches a full agent session and returns the result directly. Replaces the fire-and-forget `sessions-spawn` pattern for orchestration use cases.
+- **Inline chat approvals** — Approval cards in agent chat now have Approve and Reject buttons that call the API directly, replacing the old "Review & Approve" link to `/approvals`. Operators can also expand a "Details" section to see exactly what the agent is trying to do before deciding.
+- **Operator communication layer** — `OperatorChannel` mediator routes agent session output to operators via conversation persistence (SQLite), SSE streaming, and external channels (Slack/Discord/Telegram/Email). Reply mapping with TTL links external channel replies back to the originating conversation.
+- **Dynamic onboarding checklists** — Checklist items now use real agent names and link to chat pages: "Chat with Atlas" instead of "Run an agent". Seed projects show "Chat with [Orchestrator Name]" for the team lead. Default projects show "Chat with [First Agent]".
+
+### Changed
+- **Builder agent upgraded** — Charter and tools updated from `sessions-spawn` to `delegate-task`. The "How You Work" section now references synchronous delegation instead of fire-and-forget spawning with polling.
+- **Orchestrator archetype** — Default tools now include `delegate-task`. Charter template updated with a "Delegation" section explaining multi-agent coordination.
+- Analyzer system prompt: `delegate-task` added to available tools list; orchestrator archetype description updated to reference real multi-agent delegation.
+- Conversation persistence: chat sidebar loads history from server, supports multi-turn context in `executeStreaming()`.
+
+### Fixed
+- Strict typecheck error in `conversation-store-sqlite.ts` — `ChatMessage` cast through `unknown` before `Record<string, unknown>` to satisfy TS2352.
+- `useChat` hook crash when `id: undefined` was passed — now conditionally builds options.
+- Sidebar hydration error (React #418) — `localStorage` read deferred from `useState` initializer to `useEffect`.
+
+---
+
 ## [1.2.0] — 2026-03-01
 
 ### Added
 - **Adaptive build plan generation** — The seed-to-company analyzer now generates an optional `buildPlan` when the seed document describes a product to build (SaaS, marketplace, platform). The plan includes phases, steps with agent assignments, dependency ordering, complexity ratings, and human approval checkpoints.
-- **Builder agent** — Auto-injected meta-agent (alongside the existing Company Architect) that orchestrates product construction using `plan-task`, `sessions-spawn`, `ask-human`, and `reschedule`. Activates on a 5-minute heartbeat and works through build plan phases with human-in-the-loop approval for infrastructure, deployment, and payment configuration.
+- **Builder agent** — Auto-injected meta-agent (alongside the existing Company Architect) that orchestrates product construction using `plan-task`, `delegate-task`, `ask-human`, and `reschedule`. Activates on a 5-minute heartbeat and works through build plan phases with human-in-the-loop approval for infrastructure, deployment, and payment configuration.
 - **Enhanced interview engine** — Product build questions added to the interview flow: product type (web app/mobile/API), MVP features, payment model, and authentication requirements. Generates an "MVP Technical Requirements" section in the seed document when applicable. Questions are conditionally skipped for pure services/consulting businesses.
 - **Build plan validation** — `validateBuildPlanShape()` cross-validates agent names in build steps against the agents array. Malformed build plans are stripped with a warning rather than failing the entire analysis.
 - **Dashboard build plan review** — New expandable "Build Plan" section in the setup wizard's PlanReview step. Shows phases with step counts, complexity badges (low/medium/high), approval-required markers with lock icons, agent assignments, and tool requirements per step.
@@ -152,6 +173,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Message bus schema**: `{ from, to, type, priority, context, payload, timestamp, deadline }`. Types: REQUEST, RESPONSE, ALERT, ESCALATION, STATUS, BROADCAST.
 - Input pipeline for prompt injection defense: source tagging, content isolation, injection detection, output validation.
 
+[1.3.0]: https://github.com/alexclowe/abf/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/alexclowe/abf/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/alexclowe/abf/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/alexclowe/abf/compare/v0.3.0...v1.0.0

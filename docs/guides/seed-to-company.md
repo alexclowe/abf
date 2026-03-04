@@ -123,8 +123,8 @@ When the seed document describes a product that needs to be built (SaaS, marketp
 
 - Reads `knowledge/build-plan.md` on activation (5-minute heartbeat)
 - Creates a structured plan-task from the build phases and steps
-- For each step: requests human approval (for infrastructure, deployment, payments), then spawns the assigned agent to execute
-- Uses `sessions-spawn` to delegate work to developer, marketer, and other agents
+- For each step: requests human approval (for infrastructure, deployment, payments), then delegates to the assigned agent
+- Uses `delegate-task` to send work to developer, marketer, and other agents -- the result is returned directly (synchronous delegation, no polling)
 - Tracks progress across sessions using `plan-task` and `reschedule`
 
 The build plan is adaptive -- the LLM generates it based on what your specific business needs:
