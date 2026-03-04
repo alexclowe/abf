@@ -10,6 +10,7 @@ next-env.d.ts
 # OS
 .DS_Store
 Thumbs.db
+*:Zone.Identifier
 
 # IDE
 .vscode/
@@ -27,6 +28,19 @@ Thumbs.db
 
 # Coverage
 coverage/
+
+# Credentials & secrets
+*.enc
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+
+# Local databases
+*.sqlite
+*.sqlite3
+*.db
 
 # ABF runtime
 memory/agents/*/history.md
