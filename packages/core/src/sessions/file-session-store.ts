@@ -65,7 +65,7 @@ export class FileSessionStore implements ISessionStore {
 			return []; // directory doesn't exist yet
 		}
 
-		let jsonlFiles = files.filter((f) => f.endsWith('.jsonl'));
+		const jsonlFiles = files.filter((f) => f.endsWith('.jsonl'));
 		// Newest files first
 		jsonlFiles.sort().reverse();
 
