@@ -87,7 +87,9 @@ export class Runtime implements IRuntime {
 			agentsMap.set(agent.id, agent);
 			// Register with scheduler (for cron triggers) and dispatcher (for state tracking)
 			this.components.scheduler.registerAgent(agent);
-			this.components.dispatcher.registerAgent(agent);
+			// Load persisted stats (cost, session count) so they survive restarts
+			const stats = await this.components.sessionStore?.getAgentStats(agent.id);
+			this.components.dispatcher.registerAgent(agent, stats);
 		}
 
 		return Ok(agents);

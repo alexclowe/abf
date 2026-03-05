@@ -79,6 +79,10 @@ export async function createRuntime(
 	// 4. Audit store
 	const auditStore = new FileAuditStore(join(projectRoot, config.logsDir));
 
+	// 4b. Session store (persists session results for stats recovery across restarts)
+	const { FileSessionStore } = await import('../sessions/file-session-store.js');
+	const sessionStore = new FileSessionStore(join(projectRoot, config.logsDir));
+
 	// 5. Message bus
 	let bus: IBus;
 	if (config.bus.backend === 'redis') {
@@ -286,11 +290,12 @@ export async function createRuntime(
 		conversationStore,
 	});
 
-	// 10. Dispatcher — receives shared agentsMap
+	// 10. Dispatcher — receives shared agentsMap + session store for persistence
 	const dispatcher = new Dispatcher(
 		sessionManager,
 		config.runtime.maxConcurrentSessions,
 		agentsMap,
+		sessionStore,
 	);
 
 	// Operator notifications — fire when approvals/escalations are created
@@ -472,6 +477,7 @@ export async function createRuntime(
 		dispatcher,
 		sessionManager,
 		gateway,
+		sessionStore,
 		monitorRunner,
 		channelRouter,
 		pluginRegistry,

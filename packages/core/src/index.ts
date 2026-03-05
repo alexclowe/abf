@@ -93,6 +93,10 @@ export type { IInbox, InboxItem, InboxItemPriority, InboxItemSource } from './ty
 export { OutputsManager } from './memory/outputs.js';
 export type { OutputEntry } from './memory/outputs.js';
 
+// ─── Sessions ─────────────────────────────────────────────────────────
+export { FileSessionStore } from './sessions/file-session-store.js';
+export type { ISessionStore, AgentStats } from './sessions/file-session-store.js';
+
 // ─── Monitors ────────────────────────────────────────────────────────
 export { MonitorRunner } from './monitor/index.js';
 export type { MonitorDefinition, MonitorSnapshot } from './types/monitor.js';
