@@ -1,5 +1,6 @@
 {
   "name": "abf",
+  "description": "ABF (Agentic Business Framework) is an open-source framework for building companies that run on AI agents. Define agent teams in YAML, connect them to any LLM, and manage everything through a web dashboard or CLI.",
   "private": true,
   "type": "module",
   "engines": {
