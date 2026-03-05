@@ -5,7 +5,7 @@
  */
 
 import type { AgentConfig, AgentState } from '../types/agent.js';
-import type { AgentId, HealthStatus, ISOTimestamp, SessionId } from '../types/common.js';
+import type { AgentId, HealthStatus, ISOTimestamp, SessionId, USDCents } from '../types/common.js';
 import type { AbfConfig } from '../types/config.js';
 import type { ABFError, Result } from '../types/errors.js';
 import type { IMemoryStore } from '../types/memory.js';
@@ -48,7 +48,7 @@ export interface IDispatcher {
 	dispatch(activation: Activation): Promise<Result<SessionId, ABFError>>;
 	/** Dispatch and wait for the session to complete, returning the result. */
 	dispatchAndWait(activation: Activation, timeoutMs?: number): Promise<Result<SessionResult, ABFError>>;
-	registerAgent(agent: AgentConfig): void;
+	registerAgent(agent: AgentConfig, stats?: { totalCost: USDCents; sessionsCompleted: number; errorCount: number; lastActive?: ISOTimestamp }): void;
 	/** Record a session executed externally (e.g. streaming chat) for bookkeeping. */
 	recordExternalSession(agentId: AgentId, result: SessionResult): void;
 	getActiveSessions(): readonly WorkSession[];
@@ -112,6 +112,7 @@ export interface RuntimeComponents {
 	readonly approvalStore?: IApprovalStore | undefined;
 	readonly datastore?: IDatastore | undefined;
 	readonly inbox?: import('../types/inbox.js').IInbox | undefined;
+	readonly sessionStore?: import('../sessions/file-session-store.js').ISessionStore | undefined;
 	readonly monitorRunner?: import('../monitor/runner.js').MonitorRunner | undefined;
 	readonly channelRouter?: import('../messaging/channel-router.js').ChannelRouter | undefined;
 	readonly pluginRegistry?: import('./gateway/plugin-registry.js').PluginRegistry | undefined;

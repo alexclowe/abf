@@ -5,13 +5,14 @@
 
 import { nanoid } from 'nanoid';
 import type { AgentConfig, AgentState } from '../types/agent.js';
-import type { AgentId, SessionId, USDCents } from '../types/common.js';
+import type { AgentId, ISOTimestamp, SessionId, USDCents } from '../types/common.js';
 import type { ABFError, Result } from '../types/errors.js';
 import { ABFError as ABFErrorClass, Err, Ok } from '../types/errors.js';
 import type { KPIReport, SessionResult, WorkSession } from '../types/session.js';
 import type { Activation, HeartbeatTrigger } from '../types/trigger.js';
 import { createActivationId, createSessionId, toISOTimestamp } from '../util/id.js';
 import type { EscalationItem, IDispatcher, ISessionManager } from './interfaces.js';
+import type { ISessionStore } from '../sessions/file-session-store.js';
 
 export class Dispatcher implements IDispatcher {
 	private readonly activeSessions = new Map<string, WorkSession>();
@@ -44,19 +45,25 @@ export class Dispatcher implements IDispatcher {
 		maxConcurrentSessions: number,
 		/** Shared agents map — populated by Runtime.loadAgents() */
 		private readonly agents: Map<string, AgentConfig>,
+		/** Optional persistent session store — persists results to disk for stats recovery across restarts. */
+		private readonly sessionStore?: ISessionStore | undefined,
 	) {
 		this.maxConcurrent = maxConcurrentSessions;
 	}
 
-	registerAgent(agent: AgentConfig): void {
+	registerAgent(
+		agent: AgentConfig,
+		stats?: { totalCost: USDCents; sessionsCompleted: number; errorCount: number; lastActive?: ISOTimestamp },
+	): void {
 		// agents map is shared — caller writes to it, we just track state
 		this.agentStates.set(agent.id, {
 			id: agent.id,
 			status: 'idle',
 			currentSessionCost: 0 as USDCents,
-			totalCost: 0 as USDCents,
-			sessionsCompleted: 0,
-			errorCount: 0,
+			totalCost: (stats?.totalCost ?? 0) as USDCents,
+			sessionsCompleted: stats?.sessionsCompleted ?? 0,
+			errorCount: stats?.errorCount ?? 0,
+			lastActive: stats?.lastActive,
 		});
 
 		// Start heartbeat loop for agents with a heartbeat trigger.
@@ -255,6 +262,9 @@ export class Dispatcher implements IDispatcher {
 			errorCount: result.status === 'failed' ? current.errorCount + 1 : current.errorCount,
 			lastError: result.status === 'failed' ? (result.error ?? 'Session failed') : current.lastError,
 		});
+
+		// Persist to disk (fire-and-forget)
+		void this.sessionStore?.persist(result);
 	}
 
 	private async executeSession(activation: Activation, sessionId: SessionId): Promise<void> {
@@ -327,6 +337,9 @@ export class Dispatcher implements IDispatcher {
 			errorCount: result.status === 'failed' ? current.errorCount + 1 : current.errorCount,
 			lastError: result.status === 'failed' ? (result.error ?? 'Session failed') : current.lastError,
 		});
+
+		// Persist to disk (fire-and-forget)
+		void this.sessionStore?.persist(result);
 
 		// Re-schedule: either from an explicit reschedule tool call (result.rescheduleIn)
 		// or from the agent's heartbeat trigger configuration.

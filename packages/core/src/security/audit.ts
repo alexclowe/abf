@@ -51,14 +51,16 @@ export class FileAuditStore implements IAuditStore {
 				jsonlFiles = jsonlFiles.filter((f) => f.slice(0, 10) >= sinceDate);
 			}
 
-			// Sort by date — most recent last (natural order for collecting results)
-			jsonlFiles.sort();
+			// Sort by date — most recent first so limit returns newest entries
+			jsonlFiles.sort().reverse();
 
 			const entries: AuditEntry[] = [];
 
 			for (const file of jsonlFiles) {
 				const content = await readFile(join(this.dir, file), 'utf-8');
 				const lines = content.trim().split('\n').filter(Boolean);
+				// Newest entries first within each file
+				lines.reverse();
 
 				for (const line of lines) {
 					const entry = JSON.parse(line) as AuditEntry;
