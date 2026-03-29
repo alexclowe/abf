@@ -48,7 +48,7 @@
     "mammoth": "^1.11.0",
     "marked": "^17.0.3",
     "nanoid": "^5.1.0",
-    "nodemailer": "^8.0.1",
+    "nodemailer": "^8.0.4",
     "openai": "^6.24.0",
     "pdf-parse": "^2.4.5",
     "pg": "^8.18.0",
